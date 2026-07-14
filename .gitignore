@@ -1,0 +1,24 @@
+# Entornos virtuales de Python
+.venv/
+venv/
+env/
+ENV/
+
+# Archivos de caché de Python (esos que Pylance crea)
+__pycache__/
+*.py[cod]
+*$py.class
+
+
+# Bases de datos locales
+*.sqlite3
+# Variables de entorno
+.env
+.env.local
+
+# Docker logs y otros
+*.log
+.DS_Store
+
+node_modules/
+dist/

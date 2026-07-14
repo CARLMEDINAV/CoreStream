@@ -1,0 +1,33 @@
+# Framework y Servidor
+fastapi
+uvicorn[standard]
+
+# Validación y Configuraciones (Pydantic V2)
+pydantic[email]
+pydantic-settings
+email-validator>=2.0,<3.0
+
+# Base de datos
+sqlalchemy
+asyncpg
+alembic
+
+# Redis + async task queue
+redis
+arq
+
+# Seguridad y Autenticación
+passlib[bcrypt]
+python-jose[cryptography]
+python-multipart
+passlib==1.7.4
+bcrypt==4.0.1
+
+psycopg2-binary==2.9.9
+
+# Cliente HTTP async (usado por translation_service para llamar a Azure Translator)
+httpx
+
+# Extracción de texto para traducción de documentos binarios
+pypdf2
+python-docx
