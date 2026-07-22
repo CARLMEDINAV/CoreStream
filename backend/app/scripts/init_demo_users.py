@@ -19,7 +19,6 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy import select
 
 from app.models import User, Role
-from app.models.role import UserRole
 from app.services.auth_service import auth_service
 from app.config import get_settings
 from app.schemas import UserCreate
@@ -41,7 +40,7 @@ async def init_demo_users():
         try:
             # Verificar si ya existen usuarios
             result = await session.execute(select(User).limit(1))
-            existing_user = result.scalar_one_or_none()
+            result.scalar_one_or_none()
             
             # if existing_user:
                 # print("✓ La base de datos ya tiene usuarios. Saltando inicialización.")

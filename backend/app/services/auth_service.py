@@ -29,7 +29,7 @@ from app.middleware.auth import (
     verify_token
 )
 
-from app.models.role import Role, UserRole
+
 
 # Configuración del contexto de encriptación de contraseñas
 # Se utiliza bcrypt como algoritmo de hashing para máxima seguridad
@@ -160,7 +160,7 @@ class AuthService:
                 'role': role_str,
                 'active': user.is_active
             }
-        except Exception as e:
+        except Exception:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Error durante la autenticación"
@@ -200,7 +200,7 @@ class AuthService:
                     detail="El correo electrónico ya está registrado"
                 )
             
-            specialty = getattr(user_data, 'specialty', 'Developer')
+            getattr(user_data, 'specialty', 'Developer')
 
             requested_role_name = (getattr(user_data, 'role', None) or 'DEVELOPER').upper()
             role_stmt = select(Role).where(Role.name == requested_role_name)
@@ -254,7 +254,7 @@ class AuthService:
         
         try:
             stmt = select(User).where(
-                (User.email == email) & (User.is_active == True)
+                (User.email == email) & (User.is_active)
             )
             result = await db.execute(stmt)
             user = result.scalars().first()
@@ -270,7 +270,7 @@ class AuthService:
                 'active': user.is_active,
                 'created_at': user.created_at.isoformat()
             }
-        except Exception as e:
+        except Exception:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Error al buscar usuario por email"
@@ -284,7 +284,7 @@ class AuthService:
         """Busca un usuario por su identificador único (UUID)."""
         try:
             stmt = select(User).where(
-                (User.id == UUID(user_id)) & (User.is_active == True)
+                (User.id == UUID(user_id)) & (User.is_active)
             )
             result = await db.execute(stmt)
             user = result.scalars().first()
@@ -305,7 +305,7 @@ class AuthService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="ID de usuario inválido"
             )
-        except Exception as e:
+        except Exception:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Error al buscar usuario por ID"
@@ -361,7 +361,7 @@ class AuthService:
             }
         except HTTPException:
             raise
-        except Exception as e:
+        except Exception:
             await db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

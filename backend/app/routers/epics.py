@@ -8,7 +8,7 @@ Gestiona el ciclo de vida de épicas:
 - Épicas contienen tickets que son los elementos de trabajo reales
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, text, delete as sa_delete
 from sqlalchemy.orm import selectinload
@@ -16,7 +16,7 @@ from typing import List
 from uuid import UUID
 
 from app.database import get_db
-from app.models import Epic, Application, Ticket, TicketStatus, User
+from app.models import Epic, Application, Ticket, User
 from app.schemas import EpicResponse, EpicCreate, EpicUpdate
 # Aún no creado
 # from app.schemas import DocumentResponse
@@ -480,7 +480,7 @@ async def reorder_epic(
         epic_reloaded = result.unique().scalar_one()
         try:
             return EpicResponse.model_validate(epic_reloaded)
-        except Exception as ser_err:
+        except Exception:
             import traceback
             print(f"[REORDER] Serialization error: {traceback.format_exc()}")
             return {"status": "ok", "id": str(epic_id)}

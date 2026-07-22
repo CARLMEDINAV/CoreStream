@@ -9,10 +9,14 @@
     <div v-if="isSidebarOpen" @click="toggleSidebar" class="fixed inset-0 bg-black/50 z-40 md:hidden"></div>
 
     <!-- Sidebar -->
-    <aside :class="[
+    <aside 
+      id="admin-sidebar"
+      :class="[
       'bg-[var(--bg-sidebar)] border-r border-[var(--border-subtle)] z-50 fixed md:relative h-full transition-transform duration-300 w-64',
       isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-    ]">
+    ]"
+    aria-label="Navegación principal"
+    >
       <nav class="p-6 space-y-4">
         <h2 class="font-bold text-lg text-[var(--text-primary)] mb-6">
           {{ t('nav.administration') }}
@@ -40,6 +44,20 @@
         </router-link>
 
         <router-link
+          to="/admin/incidents"
+          class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)] text-red-600 dark:text-red-400 font-medium"
+        >
+          Incidentes
+        </router-link>
+
+        <router-link
+          to="/admin/meetings"
+          class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
+        >
+          Reuniones
+        </router-link>
+
+        <router-link
           to="/admin/team"
           class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
         >
@@ -60,8 +78,14 @@
     <main class="flex-1 overflow-auto">
       <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-subtle)] bg-[color-mix(in_srgb,var(--bg-header)_80%,transparent)] backdrop-blur">
         <div class="flex items-center gap-4">
-          <button @click="toggleSidebar" class="md:hidden p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-800 text-[var(--text-primary)]">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+          <button 
+            @click="toggleSidebar" 
+            class="md:hidden p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-800 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]"
+            aria-label="Alternar menú de navegación"
+            :aria-expanded="isSidebarOpen"
+            aria-controls="admin-sidebar"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
           </button>
           <div>
             <p class="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">CoreStream</p>

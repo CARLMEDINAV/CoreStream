@@ -29,7 +29,7 @@
 
         <!-- Icono de ajustes -->
         <button
-          @click="navigateToSettings"
+          @click="openSettingsModal"
           class="p-2 hover:bg-[var(--bg-panel)] rounded-lg transition-colors"
           title="Ajustes"
         >
@@ -273,10 +273,7 @@ const i18n = useI18n()
 const { t } = i18n
 const router = useRouter()
 
-function navigateToSettings() {
-  const role = localStorage.getItem('userRole') || authStore.user?.role
-  router.push({ name: role === 'ADMIN' ? 'AdminSettings' : 'DevSettings' })
-}
+
 
 /**
  * Obtener el idioma actual con tipado correcto
@@ -476,10 +473,10 @@ const saveSettings = async () => {
   try {
     // 1. Extraemos los true/false + tema seleccionado
     const prefsToSave = {
-      email: notifications.email.enabled,
-      push: notifications.push.enabled,
-      mobile: notifications.mobile.enabled,
-      reminders: notifications.reminders.enabled,
+      email: notifEnabled.email,
+      push: notifEnabled.push,
+      mobile: notifEnabled.mobile,
+      reminders: notifEnabled.reminders,
       theme: themeStore.getTheme()
     };
 

@@ -19,7 +19,7 @@ from sqlalchemy.future import select
 from fastapi import HTTPException, status
 from uuid import UUID
 
-from app.models import TicketEvent, Ticket, User, Epic, Application, TicketStatus, TicketEventType, Role
+from app.models import TicketEvent, Ticket, User, Epic, TicketStatus, Role
 
 
 # Tipos de evento que NO representan trabajo real sobre un ticket, sino acciones de
@@ -328,7 +328,8 @@ class AnalyticsService:
             end_date = epic.due_date if epic.due_date else (start_date + timedelta(days=14))
             
             total_days = (end_date - start_date).days
-            if total_days <= 0: total_days = 1
+            if total_days <= 0:
+                total_days = 1
 
             ideal_points = []
             actual_points = []
@@ -338,7 +339,6 @@ class AnalyticsService:
             # Si no lo tienen, puedes usar la fecha de actualización (updated_at)
             completed_tickets = [t for t in tickets if t.status == TicketStatus.COMPLETED and t.completed_at is not None]
             
-            current_remaining = total_tickets
             
             for day in range(total_days + 1):
                 current_date = start_date + timedelta(days=day)

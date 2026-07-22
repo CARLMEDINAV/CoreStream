@@ -169,7 +169,7 @@ const daysOfWeek = computed(() => [
 ])
 
 // Lista de desarrolladores formateada con nombres e iniciales para los avatares
-const heatmapDevelopers = computed(() => {
+const heatmapDevelopers = computed<{name: string, avatarInitials: string}[]>(() => {
   const raw = (analyticsStore.heatmapData || []) as any
   const devArray = Array.isArray(raw) ? raw : (raw.developers || raw.heatmap?.developers || [])
   

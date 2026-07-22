@@ -25,9 +25,9 @@ services:
       POSTGRES_USER: corestream
       # Contraseña para el usuario
       POSTGRES_PASSWORD: corestream
-    ports:
+    # ports:
       # Puerto expuesto para conexiones externas
-      - "5432:5432"
+      # - "5432:5432"
     volumes:
       # Persistencia de datos entre reinicios del contenedor
       - postgres-data:/var/lib/postgresql/data
@@ -53,9 +53,10 @@ services:
   redis:
     image: redis:7-alpine
     container_name: corestream-redis
-    ports:
+    # ports:
       # Puerto para conexiones al cache
-      - "6379:6379"
+      # - "6379:6379"
+      # - "6379:6379"
     networks:
       - corestream-network
     # Comando para persistencia (AOF - Append Only File)

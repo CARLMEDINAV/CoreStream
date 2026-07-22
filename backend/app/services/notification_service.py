@@ -18,9 +18,8 @@ from uuid import UUID
 
 from arq import ArqRedis
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
-from app.models import Notification, NotificationType, User
+from app.models import Notification, NotificationType
 
 logger = logging.getLogger(__name__)
 

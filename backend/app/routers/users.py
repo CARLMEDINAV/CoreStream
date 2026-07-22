@@ -117,7 +117,7 @@ async def list_users(
         result = await db.execute(
             select(User)
             .options(selectinload(User.role))
-            .where(User.is_active == True)
+            .where(User.is_active)
             .order_by(User.created_at.desc())
             .offset(skip)
             .limit(limit)
@@ -290,7 +290,7 @@ async def delete_user(
             select(func.count(User.id))
             .select_from(User)
             .join(Role)
-            .where(Role.name == UserRole.ADMIN.value, User.is_active == True)
+            .where(Role.name == UserRole.ADMIN.value, User.is_active)
         )
         admin_total = int(admin_count.scalar() or 0)
         if admin_total <= 1:

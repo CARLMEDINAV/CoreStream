@@ -16,7 +16,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from uuid import UUID
-from datetime import datetime, timezone
 
 from app.database import get_db
 from app.models import (

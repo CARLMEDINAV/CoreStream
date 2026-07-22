@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     
     # Configuración de CORS
     # Acepta lista CSV, JSON array, o "*" para todos los orígenes.
-    # En Railway: ALLOWED_ORIGINS=https://corestream.vercel.app,http://localhost:5173
+    # En Railway: ALLOWED_ORIGINS=https://dominio-produccion.com,http://localhost:5173
     ALLOWED_ORIGINS: Union[list[str], str] = ["http://localhost:5173"]
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
@@ -95,6 +95,9 @@ class Settings(BaseSettings):
     # Modo debug - activa información detallada de errores y recarga automática
     # IMPORTANTE: Desactivar en producción por razones de seguridad
     DEBUG: bool = True
+
+    # Nivel de log para la aplicación
+    LOG_LEVEL: str = "info"
 
     # Configuración de Azure Cognitive Services Translator
     # La empresa debe proveer estos valores al desplegar en producción

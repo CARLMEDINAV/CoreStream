@@ -1031,6 +1031,70 @@ export interface SupportSummary {
 }
 
 /**
+ * Representa un Incidente Crítico (P1, P2, P3)
+ */
+export interface Incident {
+  id: string
+  title: string
+  description: string
+  applicationId?: string
+  status: TicketStatus
+  severity: string
+  affectedEnvironment: string
+  createdAt: string
+  updatedAt: string
+  createdById: string
+  assignedToId?: string
+  mitigationTimeSeconds?: number
+  isMitigated: boolean
+  mitigatedAt?: string
+  rootCauseAnalysis?: string
+  postMortemLink?: string
+}
+
+/**
+ * Tipos de reuniones (Ceremonias ágiles)
+ */
+export enum MeetingType {
+  DAILY = 'DAILY',
+  PLANNING = 'PLANNING',
+  RETROSPECTIVE = 'RETROSPECTIVE',
+  REFINEMENT = 'REFINEMENT',
+  OTHER = 'OTHER'
+}
+
+/**
+ * Representa la asistencia de un usuario a una reunión
+ */
+export interface MeetingAttendance {
+  id: string
+  meetingId: string
+  userId: string
+  isPresent: boolean
+  notes?: string
+  createdAt: string
+  updatedAt: string
+  user?: User
+}
+
+/**
+ * Representa una reunión (Ceremonia)
+ */
+export interface Meeting {
+  id: string
+  title: string
+  meetingType: MeetingType
+  applicationId?: string
+  scheduledAt: string
+  durationMinutes: number
+  summaryMarkdown?: string
+  createdAt: string
+  updatedAt: string
+  createdById: string
+  attendances?: MeetingAttendance[]
+}
+
+/**
  * ENTIDADES DE AUTENTICACIÓN
  * ==========================
  */

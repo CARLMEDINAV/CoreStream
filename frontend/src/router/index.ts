@@ -159,6 +159,34 @@ const routes: RouteRecordRaw[] = [
 
       {
         /**
+         * Panel de control de Incidentes (P1, P2, P3)
+         */
+        path: 'incidents',
+        name: 'AdminIncidents',
+        component: () => import('@/views/admin/IncidentsView.vue'),
+        meta: {
+          requiresAuth: true,
+          requiredRoles: ['ADMIN'],
+          title: 'Incidentes - CoreStream Admin'
+        }
+      },
+
+      {
+        /**
+         * Calendario y Ceremonias
+         */
+        path: 'meetings',
+        name: 'AdminMeetings',
+        component: () => import('@/views/admin/MeetingsView.vue'),
+        meta: {
+          requiresAuth: true,
+          requiredRoles: ['ADMIN'],
+          title: 'Reuniones - CoreStream Admin'
+        }
+      },
+
+      {
+        /**
          * Vista de documentación de código
          * Gestión de especificaciones, documentos técnicos
          */

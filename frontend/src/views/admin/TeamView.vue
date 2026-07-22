@@ -381,7 +381,7 @@ const loadRealStats = async () => {
     const response = await api.tickets.list({ limit: 500 } as any)
     
     // Manejamos la estructura de respuesta según FastAPI
-    const allTickets = Array.isArray(response) ? response : (response.items || response.data || [])
+    const allTickets = Array.isArray(response) ? response : ((response as any).items || (response as any).data || [])
     
     const stats: Record<string, { completed: number; pending: number; blocked: number }> = {}
     
@@ -448,6 +448,7 @@ const editMember = (member: User) => {
     fullName: member.fullName,
     email: member.email,
     specialty: member.specialty || '',
+    role: member.role,
   }
   showEditModal.value = true
 }

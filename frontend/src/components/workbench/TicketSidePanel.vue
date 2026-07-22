@@ -313,7 +313,7 @@ import ConfettiAnimation from '@/components/shared/ConfettiAnimation.vue'
 import { useTicketTimer } from '@/composables/useTicketTimer'
 import { useTicketsStore } from '@/stores/tickets'
 import { useAuthStore } from '@/stores/auth'
-import apiClient from '@/services/api'
+import { api } from '@/services/api'
 import { TicketStatus, TicketPriority, UserRole } from '@/types'
 import type { Ticket, Subtask, User } from '@/types'
 
@@ -432,7 +432,7 @@ watch(() => props.ticket.id, () => {
 
 const loadTeamMembers = async () => {
   try {
-    teamMembers.value = await apiClient.tickets.getTeamMembers()
+    teamMembers.value = await api.tickets.getTeamMembers()
   } catch (error) {
     console.error('Error al cargar miembros del equipo:', error)
   }
@@ -441,9 +441,9 @@ const loadTeamMembers = async () => {
 const saveAssignee = async () => {
   try {
     if (editedAssignee.value) {
-      await apiClient.team.assignTicket(props.ticket.id, editedAssignee.value)
+      await api.team.assignTicket(props.ticket.id, editedAssignee.value)
     } else {
-      await apiClient.team.unassignTicket(props.ticket.id)
+      await api.team.unassignTicket(props.ticket.id)
     }
     emit('ticketUpdated', { ticketId: props.ticket.id, action: 'assigned', data: { assigneeId: editedAssignee.value } })
     setTimeout(() => loadTicketEvents(), 200)
@@ -661,7 +661,7 @@ const handleSubtaskPromote = async (subtask: any) => {
 // =====================================================================
 const handleStart = async () => {
   try {
-    await apiClient.tickets.start(props.ticket.id)
+    await api.tickets.start(props.ticket.id)
     currentStatus.value = TicketStatus.IN_PROGRESS
     emit('ticketUpdated', { ticketId: props.ticket.id, action: 'start', data: {} })
     setTimeout(() => loadTicketEvents(), 200)
@@ -679,7 +679,7 @@ const handleComplete = async () => {
 
   try {
     // 2. ¡EL ARREGLO ESTÁ AQUÍ! Usamos la ruta oficial de tu API
-    await apiClient.tickets.complete(props.ticket.id, editedPrLink.value);
+    await api.tickets.complete(props.ticket.id, editedPrLink.value);
 
     // 3. Si el backend dice "OK", disparamos la magia visual
     confettiRef.value?.fireConfetti();
@@ -704,7 +704,7 @@ const handleComplete = async () => {
 
 const handleQuestion = async (question: string) => {
   try {
-    await apiClient.post(`/tickets/${props.ticket.id}/question`, { question_text: question })
+    await api.tickets.raiseQuestion(props.ticket.id, question)
     currentStatus.value = TicketStatus.BLOCKED_QUESTION
     emit('ticketUpdated', { ticketId: props.ticket.id, action: 'question', data: { question } })
     setTimeout(() => loadTicketEvents(), 200)
@@ -726,7 +726,7 @@ const handleRedirect = (data: { toUserId: string; reason: string }) => {
 
 const handleResolve = async (resolution: string) => {
   try {
-    await apiClient.tickets.resolveQuestion(props.ticket.id, undefined, resolution)
+    await api.tickets.resolveQuestion(props.ticket.id, undefined, resolution)
     currentStatus.value = TicketStatus.IN_PROGRESS
     emit('ticketUpdated', { ticketId: props.ticket.id, action: 'resolve', data: { resolution } })
     setTimeout(() => loadTicketEvents(), 200)
@@ -751,7 +751,7 @@ const resolveQuestion = async () => {
   isResolvingQuestion.value = true
   try {
     // Llamar API para resolver la pregunta del ticket bloqueado
-    await apiClient.tickets.resolveQuestion(props.ticket.id, undefined, resolutionAnswer.value)
+    await api.tickets.resolveQuestion(props.ticket.id, undefined, resolutionAnswer.value)
 
     // Actualizar estado del ticket a IN_PROGRESS
     currentStatus.value = TicketStatus.IN_PROGRESS

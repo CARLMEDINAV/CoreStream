@@ -105,13 +105,13 @@ export function useDragDrop() {
    * Clase CSS para zonas de drop válidas
    * Aplicada al elemento sobre el cual se arrastra
    */
-  const DROP_ZONE_CLASS = 'border-2 border-blue-400 bg-blue-50'
+  const DROP_ZONE_CLASS = 'border-2 border-primary/50 bg-primary/10'
 
   /**
    * Clase CSS para elementos siendo eliminados
    * Aplicada cuando el arrastre indica una eliminación
    */
-  const DROP_DELETE_CLASS = 'border-2 border-red-400 bg-red-50'
+  const DROP_DELETE_CLASS = 'border-2 border-red-500/50 bg-red-500/10'
 
   // =========================================================================
   // MÉTODOS PÚBLICOS - API del composable de drag & drop
@@ -128,10 +128,13 @@ export function useDragDrop() {
    */
   function dragStart(item: DraggableItem, type: 'epic' | 'ticket', event?: DragEvent): void {
     // Retrasar la aplicación de la clase visual para que el navegador capture
-    // el elemento original sin la opacidad para su "ghost image"
-    setTimeout(() => {
-      isDraggingGlobal.value = true
-    }, 0)
+    // el elemento original sin la opacidad para su "ghost image".
+    // Usamos requestAnimationFrame para evitar parpadeos y ghosting en vez de setTimeout(..., 0)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        isDraggingGlobal.value = true
+      })
+    })
 
     // Guardar el item y su tipo para posterior referencia
     dragItemGlobal.value = item

@@ -18,7 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi import HTTPException, status
 from uuid import UUID
-import json
 
 from app.models import Ticket
 from app.redis_client import set_cached_value, get_cached_value, delete_cached_value

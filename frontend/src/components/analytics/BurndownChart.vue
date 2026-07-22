@@ -31,7 +31,7 @@
       <div class="flex gap-2 w-full md:w-auto">
         <select 
           v-model="selectedEpic"
-          @change="onEpicChange"
+
           class="w-full md:w-64 px-4 py-2 border border-[var(--border-subtle)] rounded-lg bg-[var(--bg-panel)] text-[var(--text-primary)] text-sm font-medium hover:border-[var(--teal)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20 transition-colors"
         >
           <option value="">{{ t('analytics.selectEpic') || 'Seleccione una épica...' }}</option>

@@ -3,7 +3,7 @@ Endpoint de login simplificado sin async/greenlet issues
 """
 import psycopg2
 from fastapi import APIRouter, HTTPException, status, Header
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPBearer
 from datetime import datetime, timedelta, timezone
 from jose import jwt
 from app.config import get_settings

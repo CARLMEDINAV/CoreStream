@@ -5,18 +5,17 @@ import re
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
-from typing import Optional, List, Any
+from typing import List, Any
 
-from pydantic import BaseModel, HttpUrl, field_validator
+from pydantic import BaseModel, field_validator
+
+from app.schemas.user import UserResponse
+from app.schemas.subtask import SubtaskResponse
 
 _PLACEHOLDER_PR = re.compile(
     r'github\.com/owner/repo/|gitlab\.com/owner/repo/|bitbucket\.org/owner/repo/',
     re.IGNORECASE,
 )
-
-from app.schemas.user import UserResponse
-from app.schemas.subtask import SubtaskResponse
-
 
 class TicketCreate(BaseModel):
     """

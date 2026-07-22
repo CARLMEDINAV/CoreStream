@@ -220,7 +220,7 @@ function formatNotificationMessage(msg: string): string {
     'DONE': t('statuses.done'),
   }
   return Object.entries(replacements).reduce(
-    (s, [code, label]) => s.replaceAll(code, label),
+    (s, [code, label]) => s.split(code).join(label),
     msg
   )
 }

@@ -8,7 +8,6 @@ para permitir la prueba completa del workbench.
 from __future__ import annotations
 
 from uuid import uuid4
-from datetime import datetime
 
 import psycopg2
 

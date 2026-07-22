@@ -35,6 +35,9 @@ import type {
   RegisterRequest,
   TicketFilters,
   PaginatedResponse,
+  Incident,
+  Meeting,
+  MeetingAttendance,
   UserPerformance,
   HeatmapData,
   BurndownData,
@@ -131,6 +134,50 @@ const toApplication = (raw: any): Application => ({
   delayedCount: raw.delayedCount ?? raw.delayed_count ?? 0,
   createdAt: raw.createdAt ?? raw.created_at,
   updatedAt: raw.updatedAt ?? raw.updated_at,
+})
+
+const toIncident = (raw: any): Incident => ({
+  id: raw.id,
+  title: raw.title,
+  description: raw.description,
+  applicationId: raw.applicationId ?? raw.application_id ?? undefined,
+  status: raw.status,
+  severity: raw.severity,
+  affectedEnvironment: raw.affectedEnvironment ?? raw.affected_environment,
+  createdAt: raw.createdAt ?? raw.created_at,
+  updatedAt: raw.updatedAt ?? raw.updated_at,
+  createdById: raw.createdById ?? raw.created_by_id,
+  assignedToId: raw.assignedToId ?? raw.assigned_to_id ?? undefined,
+  mitigationTimeSeconds: raw.mitigationTimeSeconds ?? raw.mitigation_time_seconds ?? undefined,
+  isMitigated: raw.isMitigated ?? raw.is_mitigated ?? false,
+  mitigatedAt: raw.mitigatedAt ?? raw.mitigated_at ?? undefined,
+  rootCauseAnalysis: raw.rootCauseAnalysis ?? raw.root_cause_analysis ?? undefined,
+  postMortemLink: raw.postMortemLink ?? raw.post_mortem_link ?? undefined,
+})
+
+const toMeetingAttendance = (raw: any): MeetingAttendance => ({
+  id: raw.id,
+  meetingId: raw.meetingId ?? raw.meeting_id,
+  userId: raw.userId ?? raw.user_id,
+  isPresent: raw.isPresent ?? raw.is_present ?? false,
+  notes: raw.notes ?? undefined,
+  createdAt: raw.createdAt ?? raw.created_at,
+  updatedAt: raw.updatedAt ?? raw.updated_at,
+  user: raw.user ? mapUserFromApi(raw.user) : undefined,
+})
+
+const toMeeting = (raw: any): Meeting => ({
+  id: raw.id,
+  title: raw.title,
+  meetingType: raw.meetingType ?? raw.meeting_type,
+  applicationId: raw.applicationId ?? raw.application_id ?? undefined,
+  scheduledAt: raw.scheduledAt ?? raw.scheduled_at,
+  durationMinutes: raw.durationMinutes ?? raw.duration_minutes,
+  summaryMarkdown: raw.summaryMarkdown ?? raw.summary_markdown ?? undefined,
+  createdAt: raw.createdAt ?? raw.created_at,
+  updatedAt: raw.updatedAt ?? raw.updated_at,
+  createdById: raw.createdById ?? raw.created_by_id,
+  attendances: Array.isArray(raw.attendances) ? raw.attendances.map(toMeetingAttendance) : undefined,
 })
 
 /**
@@ -1756,6 +1803,79 @@ const realApi = {
       const response = await apiClient.get<any[]>('/tickets/', { params: { limit: 100 } })
       return Array.isArray(response.data) ? response.data.map(toTicket) : []
     },
+  },
+
+  /**
+   * ========================================
+   * MÓDULO DE INCIDENTES
+   * ========================================
+   */
+  incidents: {
+    list: async (filters?: { page?: number, limit?: number, application_id?: string, status?: string }): Promise<PaginatedResponse<Incident>> => {
+      const response = await apiClient.get<PaginatedResponse<Incident>>('/incidents/', { params: filters })
+      const data = response.data as any
+      return {
+        ...data,
+        items: Array.isArray(data.items) ? data.items.map(toIncident) : []
+      }
+    },
+    
+    getById: async (incidentId: string): Promise<Incident> => {
+      const response = await apiClient.get<any>(`/incidents/${incidentId}`)
+      return toIncident(response.data)
+    },
+    
+    create: async (data: any): Promise<Incident> => {
+      const response = await apiClient.post<any>('/incidents/', data)
+      return toIncident(response.data)
+    },
+    
+    update: async (incidentId: string, data: any): Promise<Incident> => {
+      const response = await apiClient.put<any>(`/incidents/${incidentId}`, data)
+      return toIncident(response.data)
+    },
+    
+    mitigate: async (incidentId: string, data: any): Promise<Incident> => {
+      const response = await apiClient.post<any>(`/incidents/${incidentId}/mitigate`, data)
+      return toIncident(response.data)
+    }
+  },
+
+  /**
+   * ========================================
+   * MÓDULO DE REUNIONES
+   * ========================================
+   */
+  meetings: {
+    list: async (filters?: { limit?: number, application_id?: string }): Promise<Meeting[]> => {
+      const response = await apiClient.get<any[]>('/meetings/', { params: filters })
+      return Array.isArray(response.data) ? response.data.map(toMeeting) : []
+    },
+    
+    getById: async (meetingId: string): Promise<Meeting> => {
+      const response = await apiClient.get<any>(`/meetings/${meetingId}`)
+      return toMeeting(response.data)
+    },
+    
+    create: async (data: any): Promise<Meeting> => {
+      const response = await apiClient.post<any>('/meetings/', data)
+      return toMeeting(response.data)
+    },
+    
+    update: async (meetingId: string, data: any): Promise<Meeting> => {
+      const response = await apiClient.put<any>(`/meetings/${meetingId}`, data)
+      return toMeeting(response.data)
+    },
+    
+    setAttendance: async (meetingId: string, data: any[]): Promise<MeetingAttendance[]> => {
+      const response = await apiClient.post<any[]>(`/meetings/${meetingId}/attendance`, data)
+      return Array.isArray(response.data) ? response.data.map(toMeetingAttendance) : []
+    },
+    
+    updateSummary: async (meetingId: string, summary: string): Promise<Meeting> => {
+      const response = await apiClient.patch<any>(`/meetings/${meetingId}/summary`, { summary_markdown: summary })
+      return toMeeting(response.data)
+    }
   },
 }
 

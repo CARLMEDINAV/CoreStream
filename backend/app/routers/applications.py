@@ -7,13 +7,12 @@ Maneja operaciones CRUD para aplicaciones del sistema:
 - Requiere permisos de ADMIN para crear, actualizar y eliminar
 """
 
-from typing import List, Optional
+from typing import List
 from uuid import UUID
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, delete as sa_delete
-from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.models import Application, Epic, Ticket, TicketStatus
 from app.schemas import ApplicationResponse, ApplicationCreate, ApplicationUpdate

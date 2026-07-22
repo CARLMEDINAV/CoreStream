@@ -13,8 +13,7 @@ El cliente se conecta a /ws/{user_id}?token=JWT_TOKEN y recibe eventos
 cada vez que hay actividad relevante para ese usuario.
 """
 
-from fastapi import APIRouter, WebSocketDisconnect, HTTPException, status, WebSocket, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, WebSocketDisconnect, HTTPException, status, WebSocket, Query
 from sqlalchemy import select
 import asyncio
 import json
@@ -26,7 +25,6 @@ from jose import JWTError, jwt
 
 from app.database import async_session_maker
 from app.models import User
-from app.middleware.auth import get_current_user
 from app.config import get_settings
 
 # Configurar logging para WebSocket
@@ -146,7 +144,7 @@ class ConnectionManager:
                     # Intentar desconectar si hay error
                     try:
                         self.disconnect(connection, user_id)
-                    except:
+                    except Exception:
                         pass
 
     async def init_redis(self):
@@ -367,7 +365,7 @@ async def websocket_notifications(websocket: WebSocket, user_id: str, token: Opt
         logger.error(f"Error en conexión WebSocket: {str(e)}")
         try:
             await websocket.close(code=status.WS_1011_SERVER_ERROR)
-        except:
+        except Exception:
             pass
     finally:
         # Limpiar recursos
@@ -377,7 +375,7 @@ async def websocket_notifications(websocket: WebSocket, user_id: str, token: Opt
         if pubsub:
             try:
                 await pubsub.close()
-            except:
+            except Exception:
                 pass
 
 

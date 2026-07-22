@@ -19,7 +19,7 @@ from typing import List
 from datetime import datetime
 
 from app.database import get_db
-from app.models import Notification, User, NotificationType
+from app.models import Notification, User
 from app.schemas import NotificationResponse
 from app.middleware.auth import get_current_user
 
@@ -60,7 +60,7 @@ async def get_user_notifications(
 
     # Filtrar por estado de lectura si se solicita
     if unread_only:
-        query = query.where(Notification.is_read == False)
+        query = query.where(not Notification.is_read)
 
     # Ordenar por fecha de creación descendente (más recientes primero)
     result = await db.execute(
@@ -97,7 +97,7 @@ async def get_unread_count(
         select(func.count(Notification.id)).where(
             and_(
                 Notification.user_id == current_user.id,
-                Notification.is_read == False
+                not Notification.is_read
             )
         )
     )
@@ -203,7 +203,7 @@ async def mark_all_notifications_as_read(
             select(Notification).where(
                 and_(
                     Notification.user_id == current_user.id,
-                    Notification.is_read == False
+                    not Notification.is_read
                 )
             )
         )

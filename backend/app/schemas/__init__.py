@@ -60,6 +60,19 @@ from app.schemas.ticket_redirection import (
     TicketStatusChangedNotification,
     TimerSyncNotification,
 )
+from app.schemas.incident import (
+    IncidentCreate,
+    IncidentUpdate,
+    IncidentStatusUpdate,
+    IncidentResponse,
+)
+from app.schemas.meeting import (
+    MeetingAttendanceCreate,
+    MeetingAttendanceResponse,
+    MeetingCreate,
+    MeetingUpdate,
+    MeetingResponse,
+)
 
 __all__ = [
     # Esquemas de Usuario
@@ -112,4 +125,15 @@ __all__ = [
     "TicketAssignedNotification",
     "TicketStatusChangedNotification",
     "TimerSyncNotification",
+    # Esquemas de Incidentes
+    "IncidentCreate",
+    "IncidentUpdate",
+    "IncidentStatusUpdate",
+    "IncidentResponse",
+    # Esquemas de Reuniones
+    "MeetingAttendanceCreate",
+    "MeetingAttendanceResponse",
+    "MeetingCreate",
+    "MeetingUpdate",
+    "MeetingResponse",
 ]

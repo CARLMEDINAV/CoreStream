@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from app.database import get_db
 from app.models import (
     Ticket, User, Epic, TicketStatus, TicketEvent,
-    TicketEventType, Subtask, Role
+    TicketEventType, Role
 )
 from app.schemas.ticket import (
     TicketResponse, TicketCreate, TicketUpdate, TicketMoveEpic,
@@ -564,7 +564,7 @@ async def move_ticket_to_epic(
     if hasattr(new_epic, 'is_archived') and new_epic.is_archived:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"No se puede mover ticket a épica archivada"
+            detail="No se puede mover ticket a épica archivada"
         )
 
     # 5️⃣ VALIDACIÓN: Advertencia si movimiento de ticket completado
@@ -607,7 +607,7 @@ async def move_ticket_to_epic(
         ticket_final = result_final.scalar_one()
         try:
             return TicketResponse.model_validate(ticket_final)
-        except Exception as ser_err:
+        except Exception:
             import traceback
             print(f"[MOVE] Serialization error: {traceback.format_exc()}")
             return {"status": "ok", "id": str(ticket_id)}

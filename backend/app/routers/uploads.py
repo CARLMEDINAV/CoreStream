@@ -3,8 +3,6 @@ Router para manejo de carga y descarga de archivos (código y documentación).
 Endpoints para upload, download, listado y eliminación de archivos.
 """
 
-from typing import Optional
-from uuid import UUID
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, status
 from fastapi.responses import FileResponse

@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.config import get_settings
-from app.models.base import Base
 
 # Obtener la URL de conexión de la configuración
 settings = get_settings()

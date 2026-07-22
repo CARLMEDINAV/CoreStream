@@ -21,10 +21,11 @@ import type {
   PaginatedResponse,
   UserPerformance,
   HeatmapData,
-  BurndownData,
   SupportSummary,
+  BurndownData,
 } from '@/types'
 import { UserRole, TicketStatus, NotificationType, DocumentType } from '@/types'
+import type { Incident, Meeting, MeetingAttendance } from '@/types'
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -652,5 +653,121 @@ export const mockApi = {
       await delay(300)
       return mockDataService.updateTicket(ticketId, { assigneeId: undefined })
     },
+  },
+
+  /**
+   * ========================================
+   * SOPORTE (MOCK)
+   * ========================================
+   */
+  supportTickets: {
+    list: async (filters?: { status?: string; severity?: string; assigneeId?: string; skip?: number; limit?: number }): Promise<Ticket[]> => {
+      await delay(300)
+      return []
+    },
+    getById: async (ticketId: string): Promise<Ticket> => {
+      await delay(300)
+      throw new Error("Not implemented in mock")
+    },
+    create: async (data: any): Promise<Ticket> => {
+      await delay(300)
+      throw new Error("Not implemented in mock")
+    },
+    update: async (ticketId: string, data: any): Promise<Ticket> => {
+      await delay(300)
+      throw new Error("Not implemented in mock")
+    },
+    delete: async (ticketId: string): Promise<void> => {
+      await delay(300)
+      throw new Error("Not implemented in mock")
+    },
+    updateStatus: async (ticketId: string, status: string): Promise<Ticket> => {
+      await delay(300)
+      throw new Error("Not implemented in mock")
+    },
+    addMessage: async (ticketId: string, data: { text: string }): Promise<Ticket> => {
+      await delay(300)
+      throw new Error("Not implemented in mock")
+    },
+    assign: async (ticketId: string, assigneeId: string): Promise<Ticket> => {
+      await delay(300)
+      throw new Error("Not implemented in mock")
+    },
+    investigate: async (ticketId: string): Promise<Ticket> => {
+      await delay(300)
+      throw new Error("Not implemented in mock")
+    },
+    resolve: async (ticketId: string, prLink?: string): Promise<Ticket> => {
+      await delay(300)
+      throw new Error("Not implemented in mock")
+    },
+    getEvents: async (ticketId: string): Promise<any[]> => {
+      await delay(300)
+      return []
+    },
+    listLinkableTickets: async (): Promise<Ticket[]> => {
+      await delay(300)
+      return []
+    }
+  },
+
+  /**
+   * ========================================
+   * MÓDULO DE INCIDENTES (MOCK)
+   * ========================================
+   */
+  incidents: {
+    list: async (filters?: { page?: number, limit?: number, application_id?: string, status?: string }): Promise<PaginatedResponse<Incident>> => {
+      await delay(300)
+      return { items: [], total: 0, page: 1, limit: filters?.limit || 10, totalPages: 0 }
+    },
+    getById: async (incidentId: string): Promise<Incident> => {
+      await delay(300)
+      throw new Error("Not implemented in mock")
+    },
+    create: async (data: any): Promise<Incident> => {
+      await delay(300)
+      throw new Error("Not implemented in mock")
+    },
+    update: async (incidentId: string, data: any): Promise<Incident> => {
+      await delay(300)
+      throw new Error("Not implemented in mock")
+    },
+    mitigate: async (incidentId: string, data: any): Promise<Incident> => {
+      await delay(300)
+      throw new Error("Not implemented in mock")
+    }
+  },
+
+  /**
+   * ========================================
+   * MÓDULO DE REUNIONES (MOCK)
+   * ========================================
+   */
+  meetings: {
+    list: async (filters?: { limit?: number, application_id?: string }): Promise<Meeting[]> => {
+      await delay(300)
+      return []
+    },
+    getById: async (meetingId: string): Promise<Meeting> => {
+      await delay(300)
+      throw new Error("Not implemented in mock")
+    },
+    create: async (data: any): Promise<Meeting> => {
+      await delay(300)
+      throw new Error("Not implemented in mock")
+    },
+    update: async (meetingId: string, data: any): Promise<Meeting> => {
+      await delay(300)
+      throw new Error("Not implemented in mock")
+    },
+    setAttendance: async (meetingId: string, data: any[]): Promise<MeetingAttendance[]> => {
+      await delay(300)
+      throw new Error("Not implemented in mock")
+    },
+    updateSummary: async (meetingId: string, summary: string): Promise<Meeting> => {
+      await delay(300)
+      throw new Error("Not implemented in mock")
+    }
   },
 }

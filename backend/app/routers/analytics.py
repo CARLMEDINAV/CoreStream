@@ -20,7 +20,7 @@ import csv
 import io
 
 from app.database import get_db
-from app.models import Application, Ticket, User, TicketEvent, Epic, TicketStatus, TicketType, SupportSeverity
+from app.models import Application, Ticket, User, Epic, TicketStatus, TicketType, SupportSeverity
 from app.schemas.analytics import SupportSummarySchema
 from app.services.analytics_service import analytics_service
 from app.middleware.auth import get_current_user, require_role
@@ -384,7 +384,8 @@ async def get_heatmap_data(
 
     # Función auxiliar para sacar iniciales del avatar (ej: "Ana García" -> "AG")
     def get_initials(name: str) -> str:
-        if not name: return "U"
+        if not name:
+            return "U"
         parts = [n for n in name.split() if n]
         return "".join([p for p in parts]).upper()[:2]
 

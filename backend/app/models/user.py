@@ -15,7 +15,6 @@ if TYPE_CHECKING:
     from app.models.role import Role
     from app.models.ticket import Ticket
     from app.models.ticket_event import TicketEvent
-    from app.models.role import Role    
 
 from .base import Base, BaseEntity
 

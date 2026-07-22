@@ -58,13 +58,14 @@ vi.mock('@/services/api', () => ({
 
 import { useTicketsStore } from '@/stores/tickets'
 import type { Ticket } from '@/types'
+import { TicketStatus } from '@/types'
 
 // Helper para crear tickets de prueba
 const makeTicket = (overrides: Partial<Ticket> = {}): Ticket => ({
   id: 'ticket-1',
   title: 'Test Ticket',
   description: '',
-  status: 'TODO',
+  status: TicketStatus.TODO,
   priority: 'MEDIUM',
   epicId: 'epic-1',
   epicTitle: 'Test Epic',
@@ -150,9 +151,9 @@ describe('useTicketsStore', () => {
     it('devuelve todos los tickets con statusFilter = all', () => {
       const store = useTicketsStore()
       store.myWorkbench = [
-        makeTicket({ id: '1', status: 'TODO' }),
-        makeTicket({ id: '2', status: 'IN_PROGRESS' }),
-        makeTicket({ id: '3', status: 'COMPLETED' }),
+        makeTicket({ id: '1', status: TicketStatus.TODO }),
+        makeTicket({ id: '2', status: TicketStatus.IN_PROGRESS }),
+        makeTicket({ id: '3', status: TicketStatus.COMPLETED }),
       ]
       store.setStatusFilter('all')
       expect(store.filteredTickets).toHaveLength(3)
@@ -161,8 +162,8 @@ describe('useTicketsStore', () => {
     it('filtra por status todo', () => {
       const store = useTicketsStore()
       store.myWorkbench = [
-        makeTicket({ id: '1', status: 'TODO' }),
-        makeTicket({ id: '2', status: 'IN_PROGRESS' }),
+        makeTicket({ id: '1', status: TicketStatus.TODO }),
+        makeTicket({ id: '2', status: TicketStatus.IN_PROGRESS }),
       ]
       store.setStatusFilter('todo')
       const result = store.filteredTickets
@@ -172,9 +173,9 @@ describe('useTicketsStore', () => {
     it('filtra por status in_progress', () => {
       const store = useTicketsStore()
       store.myWorkbench = [
-        makeTicket({ id: '1', status: 'TODO' }),
-        makeTicket({ id: '2', status: 'IN_PROGRESS' }),
-        makeTicket({ id: '3', status: 'IN_PROGRESS' }),
+        makeTicket({ id: '1', status: TicketStatus.TODO }),
+        makeTicket({ id: '2', status: TicketStatus.IN_PROGRESS }),
+        makeTicket({ id: '3', status: TicketStatus.IN_PROGRESS }),
       ]
       store.setStatusFilter('in_progress')
       expect(store.filteredTickets).toHaveLength(2)
@@ -183,9 +184,9 @@ describe('useTicketsStore', () => {
     it('filtra por status bloqueado (BLOCKED y BLOCKED_QUESTION)', () => {
       const store = useTicketsStore()
       store.myWorkbench = [
-        makeTicket({ id: '1', status: 'BLOCKED' }),
-        makeTicket({ id: '2', status: 'BLOCKED_QUESTION' }),
-        makeTicket({ id: '3', status: 'TODO' }),
+        makeTicket({ id: '1', status: TicketStatus.BLOCKED }),
+        makeTicket({ id: '2', status: TicketStatus.BLOCKED_QUESTION }),
+        makeTicket({ id: '3', status: TicketStatus.TODO }),
       ]
       store.setStatusFilter('blocked')
       expect(store.filteredTickets).toHaveLength(2)
@@ -194,9 +195,9 @@ describe('useTicketsStore', () => {
     it('filtra por status completado', () => {
       const store = useTicketsStore()
       store.myWorkbench = [
-        makeTicket({ id: '1', status: 'COMPLETED' }),
-        makeTicket({ id: '2', status: 'DONE' }),
-        makeTicket({ id: '3', status: 'TODO' }),
+        makeTicket({ id: '1', status: TicketStatus.COMPLETED }),
+        makeTicket({ id: '2', status: TicketStatus.COMPLETED }),
+        makeTicket({ id: '3', status: TicketStatus.TODO }),
       ]
       store.setStatusFilter('completed')
       const result = store.filteredTickets
@@ -214,9 +215,9 @@ describe('useTicketsStore', () => {
     it('completedCount cuenta solo los completados (COMPLETED)', () => {
       const store = useTicketsStore()
       store.tickets = [
-        makeTicket({ id: '1', status: 'COMPLETED' }),
-        makeTicket({ id: '2', status: 'COMPLETED' }),
-        makeTicket({ id: '3', status: 'TODO' }),
+        makeTicket({ id: '1', status: TicketStatus.COMPLETED }),
+        makeTicket({ id: '2', status: TicketStatus.COMPLETED }),
+        makeTicket({ id: '3', status: TicketStatus.TODO }),
       ]
       expect(store.completedCount).toBe(2)
     })
@@ -224,9 +225,9 @@ describe('useTicketsStore', () => {
     it('blockedCount cuenta solo BLOCKED (no BLOCKED_QUESTION)', () => {
       const store = useTicketsStore()
       store.tickets = [
-        makeTicket({ id: '1', status: 'BLOCKED' }),
-        makeTicket({ id: '2', status: 'BLOCKED' }),
-        makeTicket({ id: '3', status: 'TODO' }),
+        makeTicket({ id: '1', status: TicketStatus.BLOCKED }),
+        makeTicket({ id: '2', status: TicketStatus.BLOCKED }),
+        makeTicket({ id: '3', status: TicketStatus.TODO }),
       ]
       expect(store.blockedCount).toBe(2)
     })
@@ -234,8 +235,8 @@ describe('useTicketsStore', () => {
     it('inProgressTickets filtra IN_PROGRESS', () => {
       const store = useTicketsStore()
       store.tickets = [
-        makeTicket({ id: '1', status: 'IN_PROGRESS' }),
-        makeTicket({ id: '2', status: 'TODO' }),
+        makeTicket({ id: '1', status: TicketStatus.IN_PROGRESS }),
+        makeTicket({ id: '2', status: TicketStatus.TODO }),
       ]
       expect(store.inProgressTickets).toHaveLength(1)
     })
@@ -243,9 +244,9 @@ describe('useTicketsStore', () => {
     it('todoTickets filtra TODO', () => {
       const store = useTicketsStore()
       store.tickets = [
-        makeTicket({ id: '1', status: 'TODO' }),
-        makeTicket({ id: '2', status: 'TODO' }),
-        makeTicket({ id: '3', status: 'IN_PROGRESS' }),
+        makeTicket({ id: '1', status: TicketStatus.TODO }),
+        makeTicket({ id: '2', status: TicketStatus.TODO }),
+        makeTicket({ id: '3', status: TicketStatus.IN_PROGRESS }),
       ]
       expect(store.todoTickets).toHaveLength(2)
     })
@@ -266,8 +267,8 @@ describe('useTicketsStore', () => {
     it('retorna 100 cuando todos están COMPLETED', () => {
       const store = useTicketsStore()
       store.tickets = [
-        makeTicket({ id: '1', status: 'COMPLETED' }),
-        makeTicket({ id: '2', status: 'COMPLETED' }),
+        makeTicket({ id: '1', status: TicketStatus.COMPLETED }),
+        makeTicket({ id: '2', status: TicketStatus.COMPLETED }),
       ]
       expect(store.epicProgress).toBe(100)
     })
@@ -275,8 +276,8 @@ describe('useTicketsStore', () => {
     it('calcula el progreso parcial correctamente (1 de 2)', () => {
       const store = useTicketsStore()
       store.tickets = [
-        makeTicket({ id: '1', status: 'COMPLETED' }),
-        makeTicket({ id: '2', status: 'TODO' }),
+        makeTicket({ id: '1', status: TicketStatus.COMPLETED }),
+        makeTicket({ id: '2', status: TicketStatus.TODO }),
       ]
       expect(store.epicProgress).toBe(50)
     })
@@ -339,14 +340,14 @@ describe('useTicketsStore', () => {
   describe('overdueTickets', () => {
     it('no incluye tickets sin dueDate', () => {
       const store = useTicketsStore()
-      store.myWorkbench = [makeTicket({ dueDate: null, status: 'TODO' })]
+      store.myWorkbench = [makeTicket({ dueDate: undefined, status: TicketStatus.TODO })]
       expect(store.overdueTickets).toHaveLength(0)
     })
 
     it('no incluye tickets completados aunque estén vencidos', () => {
       const store = useTicketsStore()
       store.myWorkbench = [
-        makeTicket({ dueDate: '2000-01-01', status: 'COMPLETED' }),
+        makeTicket({ dueDate: '2000-01-01', status: TicketStatus.COMPLETED }),
       ]
       expect(store.overdueTickets).toHaveLength(0)
     })
@@ -355,8 +356,8 @@ describe('useTicketsStore', () => {
       const store = useTicketsStore()
       // overdueTickets lee de store.tickets
       store.tickets = [
-        makeTicket({ id: '1', dueDate: '2000-01-01T00:00:00', status: 'TODO' }),
-        makeTicket({ id: '2', dueDate: '2099-12-31T00:00:00', status: 'TODO' }),
+        makeTicket({ id: '1', dueDate: '2000-01-01T00:00:00', status: TicketStatus.TODO }),
+        makeTicket({ id: '2', dueDate: '2099-12-31T00:00:00', status: TicketStatus.TODO }),
       ]
       expect(store.overdueTickets).toHaveLength(1)
       expect(store.overdueTickets[0].id).toBe('1')

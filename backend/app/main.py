@@ -2,8 +2,7 @@
 # Configura la aplicación, middleware, rutas, eventos de startup/shutdown y WebSockets
 
 from contextlib import asynccontextmanager
-from typing import Optional
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, status
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -24,22 +23,21 @@ from app.routers import (
     ticket_redirection,
     uploads,
     support_tickets,
+    incidents,
+    meetings,
 )
 
 from arq import create_pool
 from arq.connections import RedisSettings
 
 from app.config import get_settings
-from app.database import engine, Base, get_db, async_session_maker
+from app.database import engine, Base
 from app.redis_client import (
     init_redis,
     close_redis,
     subscribe_channel,
-    publish_message,
 )
 from app.services.notification_service import set_arq_pool
-from app.middleware import get_current_user
-from app.schemas import TokenPayload
 from app.scripts.seed_persistent_users import seed_persistent_users
 from app.scripts.seed_demo_tickets import seed_demo_tickets
 from app.scripts.setup_applications import setup_applications_and_epics
@@ -189,6 +187,8 @@ app.include_router(notifications.router, prefix="/api/notifications")
 app.include_router(websocket.router, prefix="/api")  # WebSocket endpoints: /api/ws/...
 app.include_router(uploads.router)  # prefijo embebido en el router: /api/uploads
 app.include_router(support_tickets.router, prefix="/api/support-tickets")
+app.include_router(incidents.router, prefix="/api")
+app.include_router(meetings.router, prefix="/api")
 
 
 # Endpoint raíz de salud — Railway lo usa como healthcheck en /health

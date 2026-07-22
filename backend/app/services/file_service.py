@@ -3,8 +3,6 @@ Servicio para gestionar carga de archivos de código y documentación.
 Maneja almacenamiento, validación y metadatos de archivos.
 """
 
-import os
-import shutil
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
@@ -90,12 +88,12 @@ class FileService:
                         # Limpiar archivo incompleto
                         file_path.unlink(missing_ok=True)
                         raise ValueError(
-                            f"Archivo excede tamaño máximo de 50 MB"
+                            "Archivo excede tamaño máximo de 50 MB"
                         )
 
                     f.write(chunk)
 
-        except Exception as e:
+        except Exception:
             # Limpiar en caso de error
             file_path.unlink(missing_ok=True)
             raise

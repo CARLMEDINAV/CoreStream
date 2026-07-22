@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import Optional, List
 from uuid import UUID
 
-from pydantic import BaseModel, field_validator, ConfigDict, Field
+from pydantic import BaseModel, field_validator, ConfigDict
 
 from app.schemas.ticket import TicketResponse
 

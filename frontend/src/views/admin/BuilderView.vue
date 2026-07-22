@@ -5,7 +5,7 @@
 
     <!-- Page header with title and controls -->
     <div class="border-b border-[var(--border-subtle)] bg-[var(--bg-app)] backdrop-blur">
-      <div class="mx-auto flex max-w-[1800px] flex-col gap-4 px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
+      <div class="mx-auto flex w-full flex-col gap-4 px-4 py-5 lg:px-8 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p class="text-[11px] uppercase tracking-[0.32em] text-[var(--teal-30)]/80">CoreStream Builder</p>
           <h1 class="mt-1 text-3xl font-semibold text-[var(--text-primary)]">{{ t('builderView.title') }}</h1>
@@ -43,7 +43,7 @@
       </div>
     </div>
 
-    <div class="mx-auto grid max-w-[1800px] gap-0 lg:grid-cols-[21rem_1fr]">
+    <div class="mx-auto grid w-full gap-0 lg:grid-cols-[16rem_1fr] xl:grid-cols-[20rem_1fr]">
       <aside class="border-r border-[var(--border-subtle)] bg-[var(--bg-panel)] p-4 lg:min-h-[calc(100vh-96px)]">
         <div class="mb-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] p-4">
           <div class="flex items-center justify-between gap-3">
@@ -461,7 +461,8 @@
       </main>
     </div>
 
-    <div v-if="showAppModal" class="fixed inset-0 z-50 flex items-center justify-center bg-[var(--bg-app)] px-4 backdrop-blur-sm">
+    <Teleport to="body">
+      <div v-if="showAppModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-[var(--bg-app)]/80 px-4 backdrop-blur-sm">
       <div class="w-full max-w-xl rounded-[2rem] border border-[var(--border-subtle)] bg-[var(--bg-app)] p-6 shadow-2xl shadow-black/40">
         <div class="flex items-start justify-between gap-4">
           <div>
@@ -568,8 +569,10 @@
         </form>
       </div>
     </div>
+    </Teleport>
 
-    <div v-if="showEpicModal" class="fixed inset-0 z-50 flex items-center justify-center bg-[var(--bg-app)] px-4 backdrop-blur-sm">
+    <Teleport to="body">
+      <div v-if="showEpicModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-[var(--bg-app)]/80 px-4 backdrop-blur-sm">
       <div class="w-full max-w-2xl rounded-[2rem] border border-[var(--border-subtle)] bg-[var(--bg-app)] p-6 shadow-2xl shadow-black/40">
         <div class="flex items-start justify-between gap-4">
           <div>
@@ -612,6 +615,7 @@
         </form>
       </div>
     </div>
+    </Teleport>
   
   <TicketSidePanel
   v-if="selectedTicket"
@@ -1196,7 +1200,13 @@ const handleTicketAction = async (payload: any) => {
     // (estado ya cambiado) y corrompería el ticketsStore.error global.
     // Solo 'complete' y 'redirect' necesitan la llamada al store aquí.
     if (action === 'complete') {
-      await ticketsStore.completeTicket(ticketId, data.prUrl)
+      const prUrl = data?.prUrl || (selectedTicket.value ? selectedTicket.value.prLink : '')
+      const prUrlRegex = /^https?:\/\/(github\.com|gitlab\.com|bitbucket\.org)\//i
+      if (!prUrl || !prUrlRegex.test(prUrl)) {
+        alert('El enlace de PR debe ser válido (GitHub, GitLab o Bitbucket) antes de completar el ticket.')
+        return
+      }
+      await ticketsStore.completeTicket(ticketId, prUrl)
     } else if (action === 'redirect') {
       await ticketsStore.redirectTicket(ticketId, data.toUserId, data.reason)
     }

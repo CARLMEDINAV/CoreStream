@@ -11,13 +11,13 @@ Permiten:
 
 from datetime import datetime, timezone
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import List
 
 from app.database import get_db
-from app.models import Subtask, Ticket, TicketEvent, TicketEventType
+from app.models import Subtask, Ticket, TicketEventType
 from app.schemas import SubtaskResponse, SubtaskCreate, SubtaskUpdate
 from app.services.ticket_state_machine import ticket_state_machine
 from app.middleware.auth import get_current_user
@@ -244,7 +244,7 @@ async def delete_subtask(
         # Registrar evento en el ticket
         await ticket_state_machine.log_ticket_event(
             db, ticket_id, TicketEventType.SUBTASK_DELETED,
-            current_user.id, f"Subtarea eliminada"
+            current_user.id, "Subtarea eliminada"
         )
 
     except Exception as e:

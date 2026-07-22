@@ -46,5 +46,5 @@ class Notification(Base, BaseEntity):
         DateTime(timezone=True), nullable=True, default=None
     )
 
-    user: Mapped["User"] = relationship(back_populates="notifications")  # type: ignore[name-defined]
-    ticket: Mapped["Ticket | None"] = relationship()  # type: ignore[name-defined]
+    user: Mapped["User"] = relationship(back_populates="notifications")  # type: ignore[name-defined] # noqa: F821
+    ticket: Mapped["Ticket | None"] = relationship()  # type: ignore[name-defined] # noqa: F821
