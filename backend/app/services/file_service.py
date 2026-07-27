@@ -7,6 +7,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional
 from uuid import uuid4
+import re
 
 from fastapi import UploadFile
 
@@ -70,7 +71,7 @@ class FileService:
         file_ext = Path(file.filename).suffix
         unique_id = str(uuid4())
         original_name = Path(file.filename).stem
-        saved_filename = f"{unique_id}_{original_name}{file_ext}"
+        saved_filename = f"{unique_id}_{user_id}_{original_name}{file_ext}"
 
         file_path = UPLOAD_DIR / saved_filename
 
@@ -111,21 +112,29 @@ class FileService:
         }
 
     @staticmethod
-    def get_file_path(file_id: str) -> Optional[Path]:
-        """Obtener ruta del archivo si existe."""
+    def get_file_path(file_id: str, user_id: Optional[str] = None) -> Optional[Path]:
+        """Obtener ruta del archivo si existe y pertenece al usuario (opcional)."""
         FileService._ensure_upload_dir()
+
+        # Validar file_id para evitar Path Traversal
+        if not file_id or not re.match(r"^[0-9a-fA-F\-]+$", file_id):
+            return None
 
         # Buscar archivo que comienza con el ID
         for file in UPLOAD_DIR.glob(f"{file_id}_*"):
             if file.is_file():
+                parts = file.name.split("_")
+                owner_id = parts[1] if len(parts) >= 2 else None
+                if user_id and owner_id != user_id:
+                    continue
                 return file
 
         return None
 
     @staticmethod
-    def delete_file(file_id: str) -> bool:
+    def delete_file(file_id: str, user_id: Optional[str] = None) -> bool:
         """Eliminar archivo si existe."""
-        file_path = FileService.get_file_path(file_id)
+        file_path = FileService.get_file_path(file_id, user_id)
         if file_path:
             file_path.unlink()
             return True
@@ -139,8 +148,13 @@ class FileService:
         files_list = []
         for file in UPLOAD_DIR.glob("*_*"):
             if file.is_file():
-                # Extraer ID del nombre (formato: uuid_name)
-                file_id = file.name.split("_")[0]
+                parts = file.name.split("_", 2)
+                file_id = parts[0]
+                owner_id = parts[1] if len(parts) >= 2 else None
+                
+                if user_id and owner_id != user_id:
+                    continue
+                    
                 stat = file.stat()
 
                 files_list.append({
@@ -153,9 +167,9 @@ class FileService:
         return files_list
 
     @staticmethod
-    def get_file_info(file_id: str) -> Optional[dict]:
+    def get_file_info(file_id: str, user_id: Optional[str] = None) -> Optional[dict]:
         """Obtener información sobre un archivo."""
-        file_path = FileService.get_file_path(file_id)
+        file_path = FileService.get_file_path(file_id, user_id)
         if not file_path:
             return None
 

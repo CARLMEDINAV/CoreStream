@@ -313,6 +313,7 @@ import ConfettiAnimation from '@/components/shared/ConfettiAnimation.vue'
 import { useTicketTimer } from '@/composables/useTicketTimer'
 import { useTicketsStore } from '@/stores/tickets'
 import { useAuthStore } from '@/stores/auth'
+import { useDialogStore } from '@/stores/dialog'
 import { api } from '@/services/api'
 import { TicketStatus, TicketPriority, UserRole } from '@/types'
 import type { Ticket, Subtask, User } from '@/types'
@@ -332,6 +333,7 @@ const props = defineProps<Props>()
 // ESTADO LOCAL Y STORES
 // =====================================================================
 
+const dialogStore = useDialogStore()
 const currentStatus = ref(props.ticket.status)
 
 // Mantén sincronizado si el padre cambia (por si acaso)
@@ -469,7 +471,7 @@ const saveTicket = async () => {
     setTimeout(() => loadTicketEvents(), 200)
   } catch (error) {
     console.error("Error al actualizar ticket:", error)
-    alert("Hubo un error al guardar los cambios.")
+    dialogStore.alert("Hubo un error al guardar los cambios.")
   } finally {
     isSaving.value = false
   }
@@ -492,7 +494,7 @@ const validateAndSavePrLink = async () => {
 }
 
 const deleteTicket = async () => {
-  if (!confirm(`¿Estás seguro de que deseas eliminar el ticket "${props.ticket.title}"? Esta acción no se puede deshacer.`)) {
+  if (!(await dialogStore.confirm(`¿Estás seguro de que deseas eliminar el ticket "${props.ticket.title}"? Esta acción no se puede deshacer.`))) {
     return
   }
   try {
@@ -500,7 +502,7 @@ const deleteTicket = async () => {
     emit('close') // Cerramos el panel lateral porque el ticket ya no existe
   } catch (error) {
     console.error("Error al eliminar ticket:", error)
-    alert("Hubo un error al eliminar el ticket.")
+    dialogStore.alert("Hubo un error al eliminar el ticket.")
   }
 }
 
@@ -673,7 +675,7 @@ const handleStart = async () => {
 const handleComplete = async () => {
   // 1. Doble validación de seguridad en el Frontend
   if (!isPrLinkValid.value) {
-    alert('⚠️ Por favor ingresa un link de PR válido antes de completar el ticket.');
+    dialogStore.alert('⚠️ Por favor ingresa un link de PR válido antes de completar el ticket.');
     return;
   }
 
@@ -698,7 +700,7 @@ const handleComplete = async () => {
   } catch (error: any) {
     console.error("Error al completar el ticket:", error);
     const errorMsg = error.response?.data?.detail || error.message;
-    alert("Error al completar el ticket: " + errorMsg);
+    dialogStore.alert("Error al completar el ticket: " + errorMsg);
   }
 }
 
@@ -710,7 +712,7 @@ const handleQuestion = async (question: string) => {
     setTimeout(() => loadTicketEvents(), 200)
   } catch (error: any) {
     const msg = error.response?.data?.detail || error.message || 'Error al enviar la pregunta'
-    alert('Error: ' + msg)
+    dialogStore.alert('Error: ' + msg)
   }
 }
 
@@ -744,7 +746,7 @@ const handleResolve = async (resolution: string) => {
  */
 const resolveQuestion = async () => {
   if (!resolutionAnswer.value.trim()) {
-    alert('Por favor, escribe una respuesta antes de enviar.')
+    dialogStore.alert('Por favor, escribe una respuesta antes de enviar.')
     return
   }
 

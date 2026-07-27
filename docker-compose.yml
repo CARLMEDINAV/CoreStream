@@ -1,169 +1,79 @@
-# =====================================================================
-# DOCKER COMPOSE PARA CORESTREAM
-# =====================================================================
-# Orquestación de servicios para la plataforma de gestión de proyectos
-# Incluye: PostgreSQL, Redis, Backend (FastAPI) y Frontend (Vue.js)
-# =====================================================================
-
 services:
-  # ===================================================================
-  # SERVICIO: PostgreSQL 15
-  # ===================================================================
-  # Base de datos principal para almacenar:
-  # - Aplicaciones y épicas
-  # - Tickets y subtareas
-  # - Usuarios y asignaciones
-  # - Eventos de actividad
-  # ===================================================================
   postgres:
     image: postgres:15
     container_name: corestream-postgres
     environment:
-      # Nombre de la base de datos a crear
       POSTGRES_DB: corestream
-      # Usuario con permisos administrativos
       POSTGRES_USER: corestream
-      # Contraseña para el usuario
       POSTGRES_PASSWORD: corestream
-    # ports:
-      # Puerto expuesto para conexiones externas
-      # - "5432:5432"
     volumes:
-      # Persistencia de datos entre reinicios del contenedor
-      - postgres-data:/var/lib/postgresql/data
-    networks:
-      # Red interna de Docker Compose
-      - corestream-network
-    # Healthcheck para verificar disponibilidad del servicio
+    - postgres-data:/var/lib/postgresql/data
+    network_mode: host
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U corestream"]
+      test:
+      - CMD-SHELL
+      - pg_isready -U corestream
       interval: 10s
       timeout: 5s
       retries: 5
-
-  # ===================================================================
-  # SERVICIO: Redis 7 Alpine
-  # ===================================================================
-  # Cache en memoria para:
-  # - Sesiones de usuarios
-  # - Datos en caché (épicas, tickets, usuarios)
-  # - Cola de tareas asincrónicas
-  # - Limpieza automática de datos expirados
-  # ===================================================================
   redis:
     image: redis:7-alpine
     container_name: corestream-redis
-    # ports:
-      # Puerto para conexiones al cache
-      # - "6379:6379"
-      # - "6379:6379"
-    networks:
-      - corestream-network
-    # Comando para persistencia (AOF - Append Only File)
+    network_mode: host
     command: redis-server --appendonly yes
     volumes:
-      # Persistencia de datos de Redis
-      - redis-data:/data
+    - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test:
+      - CMD
+      - redis-cli
+      - ping
       interval: 10s
       timeout: 5s
       retries: 5
-
-  # ===================================================================
-  # SERVICIO: Backend (FastAPI con Uvicorn)
-  # ===================================================================
-  # API REST que gestiona:
-  # - Lógica de negocio de épicas y tickets
-  # - Autenticación y autorización
-  # - Integración con PostgreSQL y Redis
-  # - WebSockets para notificaciones en tiempo real
-  # ===================================================================
   backend:
     build:
-      # Ubicación del Dockerfile para construir la imagen
       context: ./backend
       dockerfile: Dockerfile
+      network: host
     container_name: corestream-backend
-    ports:
-      # Puerto de la API REST
-      - "8000:8000"
+    network_mode: host
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    # ===============================================================
-    # IMPORTANTE: Se eliminan DATABASE_URL y REDIS_URL de 'environment'
-    # para permitir que el backend lea las URLs asíncronas (+asyncpg)
-    # definidas en el archivo .env a través de 'env_file'.
-    # ===============================================================
     env_file:
-      - ./backend/.env
+    - ./backend/.env
     volumes:
-      # Montaje de código fuente para desarrollo con hot-reload
-      - ./backend:/app
-      # Volumen para almacenamiento persistente de documentos
-      - storage-documents:/app/storage/documents
-    networks:
-      - corestream-network
-    # Comando para iniciar el servidor con soporte para recargas
-    command: >
-      sh -c "alembic upgrade head && uvicorn app.main:app
-      --host 0.0.0.0
-      --port 8000
-      --reload
-      --reload-dir /app"
-    # Reintentos automáticos si la aplicación falla
-    restart: unless-stopped
+    - ./backend:/app
+    - storage-documents:/app/storage/documents
+    command: 'sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port
+      8000 --reload --reload-dir /app"
 
-  # ===================================================================
-  # SERVICIO: Frontend (Vue.js 3 + Vite)
-  # ===================================================================
-  # Aplicación web con:
-  # - Vista de Constructor (Admin) para gestionar épicas y tickets
-  # - Vista de Workbench (Desarrollador) para trabajar en tickets
-  # - Paneles deslizantes, modales y notificaciones
-  # - Conectividad con Backend via API REST
-  # ===================================================================
+      '
+    restart: unless-stopped
   frontend:
     build:
-      # Ubicación del Dockerfile para construir la imagen
       context: ./frontend
       dockerfile: Dockerfile
+      network: host
     container_name: corestream-frontend
-    ports:
-      # Puerto del servidor de desarrollo Vite
-      - "5173:5173"
     depends_on:
-      # El frontend depende del backend estar disponible
-      - backend
+    - backend
     volumes:
-      # Montaje de código fuente para desarrollo con hot-module-replacement
-      - ./frontend:/app
-      # Excluir node_modules del montaje para mejor performance
-      - /app/node_modules
-    networks:
-      - corestream-network
-    # Comando para iniciar servidor de desarrollo Vite
+    - ./frontend:/app
+    - /app/node_modules
+    network_mode: host
     command: npm run dev -- --host 0.0.0.0
-    # Reintentos automáticos si la aplicación falla
     restart: unless-stopped
     env_file:
-      - ./frontend/.env
-
-  # ===================================================================
-  # SERVICIO: ARQ Notification Worker
-  # ===================================================================
-  # Worker asíncrono que:
-  # - Consume la cola de notificaciones desde Redis
-  # - Persiste notificaciones en PostgreSQL
-  # - Publica eventos al canal Redis pub/sub correcto para WebSocket
-  # ===================================================================
+    - ./frontend/.env
   worker:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      network: host
     container_name: corestream-worker
     depends_on:
       postgres:
@@ -171,35 +81,16 @@ services:
       redis:
         condition: service_healthy
     env_file:
-      - ./backend/.env
+    - ./backend/.env
     volumes:
-      - ./backend:/app
-    networks:
-      - corestream-network
+    - ./backend:/app
+    network_mode: host
     command: python -m arq app.worker.settings.WorkerSettings
     restart: unless-stopped
-
-# ===================================================================
-# CONFIGURACIÓN DE REDES
-# ===================================================================
-networks:
-  # Red personalizada que permite comunicación entre contenedores
-  # Todos los servicios pueden referenciarse por su nombre de servicio
-  corestream-network:
-    driver: bridge
-
-# ===================================================================
-# CONFIGURACIÓN DE VOLÚMENES
-# ===================================================================
 volumes:
-  # Volumen para persistencia de datos de PostgreSQL
-  # Se mantiene entre reinicios de contenedores
   postgres-data:
     driver: local
-  # Volumen para persistencia de datos de Redis
   redis-data:
     driver: local
-  # Volumen para almacenamiento de documentos
-  # Archivos de código y documentación subidos por usuarios
   storage-documents:
     driver: local

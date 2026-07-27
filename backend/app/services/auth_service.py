@@ -202,7 +202,8 @@ class AuthService:
             
             getattr(user_data, 'specialty', 'Developer')
 
-            requested_role_name = (getattr(user_data, 'role', None) or 'DEVELOPER').upper()
+            # Prevenir Mass Assignment: Forzar siempre el rol a DEVELOPER en el registro público
+            requested_role_name = 'DEVELOPER'
             role_stmt = select(Role).where(Role.name == requested_role_name)
             role_result = await db.execute(role_stmt)
             developer_role = role_result.scalars().first()

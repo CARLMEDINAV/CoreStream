@@ -215,8 +215,10 @@
  */
 
 import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useAuthStore, useThemeStore } from '@/stores'
+import { useDialogStore } from '@/stores/dialog'
 
 // ============================================================================
 // INTERFACES Y TIPOS
@@ -390,6 +392,10 @@ const sortedApplications = computed(() => {
  */
 const { t } = useI18n()
 const router = useRouter()
+const route = useRoute()
+const authStore = useAuthStore()
+const themeStore = useThemeStore()
+const dialogStore = useDialogStore()
 const selectApplication = (appId: string) => {
   selectedAppId.value = appId
   // Navegamos a la misma ruta pero con el ID en el query param
@@ -445,7 +451,7 @@ const createApplication = async () => {
     console.log('Nueva aplicación creada exitosamente:', newApp)
   } catch (error) {
     console.error('Error al crear aplicación:', error)
-    alert('Error al crear aplicación. Por favor intenta nuevamente.')
+    dialogStore.alert('Error al crear aplicación. Por favor intenta nuevamente.')
   }
 }
 </script>

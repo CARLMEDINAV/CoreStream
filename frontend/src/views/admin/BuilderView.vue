@@ -634,6 +634,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { eventBus } from '@/utils/eventBus'
 import {
   Clock, AlertTriangle, Layers, CheckCircle, Plus, GripVertical,
   Folder, Database, Monitor, Link, Home, Shield, Globe, Code,
@@ -649,10 +650,10 @@ const iconComponents: Record<string, object> = {
 }
 import AppHeader from '@/components/layout/AppHeader.vue'
 import AppIcon from '@/components/shared/AppIcon.vue'
-import { useApplicationsStore, useEpicsStore } from '@/stores'
-import { useDragDropEpics } from '@/composables/useDragDropEpics'
-import { useTicketsStore } from '@/stores/tickets'
+import { useApplicationsStore, useEpicsStore, useTicketsStore, useAuthStore } from '@/stores'
+import { useDialogStore } from '@/stores/dialog'
 import { api } from '@/services/api'
+import { useDragDropEpics } from '@/composables/useDragDropEpics'
 import type { Application, Epic } from '@/types'
 import TicketSidePanel from '@/components/workbench/TicketSidePanel.vue'
 
@@ -662,6 +663,8 @@ const router = useRouter()
 const { t } = useI18n()
 
 const appsStore = useApplicationsStore()
+const authStore = useAuthStore()
+const dialogStore = useDialogStore()
 const epicsStore = useEpicsStore()
 const ticketsStore = useTicketsStore()
 // Controles para la creación inline de tickets
@@ -853,7 +856,7 @@ const saveApp = async () => {
 }
 
 const removeApp = async (app: Application) => {
-  const confirmed = window.confirm(`¿Eliminar la aplicación \"${app.name}\"? Esto borrará sus épicas y tickets.`)
+  const confirmed = await dialogStore.confirm(`¿Eliminar la aplicación "${app.name}"? Esto borrará sus épicas y tickets.`)
   if (!confirmed) return
 
   try {
@@ -918,7 +921,7 @@ const saveEpic = async () => {
 }
 
 const removeEpic = async (epic: Epic) => {
-  const confirmed = window.confirm(`¿Eliminar la épica \"${epic.title}\"?`)
+  const confirmed = await dialogStore.confirm(`¿Eliminar la épica "${epic.title}"?`)
   if (!confirmed) return
 
   try {
@@ -1149,7 +1152,7 @@ const guardarTicketInline = async (epicId: string) => {
     }
   } catch (error) {
     console.error('Error al crear ticket:', error)
-    alert('Hubo un error al crear el ticket: ' + (error instanceof Error ? error.message : String(error)))
+    dialogStore.alert('Hubo un error al crear el ticket: ' + (error instanceof Error ? error.message : String(error)))
   }
 }
 
@@ -1203,7 +1206,7 @@ const handleTicketAction = async (payload: any) => {
       const prUrl = data?.prUrl || (selectedTicket.value ? selectedTicket.value.prLink : '')
       const prUrlRegex = /^https?:\/\/(github\.com|gitlab\.com|bitbucket\.org)\//i
       if (!prUrl || !prUrlRegex.test(prUrl)) {
-        alert('El enlace de PR debe ser válido (GitHub, GitLab o Bitbucket) antes de completar el ticket.')
+        dialogStore.alert('El enlace de PR debe ser válido (GitHub, GitLab o Bitbucket) antes de completar el ticket.')
         return
       }
       await ticketsStore.completeTicket(ticketId, prUrl)
@@ -1252,8 +1255,7 @@ const handleTicketAction = async (payload: any) => {
   }
 }
 
-const handleWsTicketUpdate = (e: Event) => {
-  const detail = (e as CustomEvent).detail
+const handleWsTicketUpdate = (detail: any) => {
   const ticketId = detail?.ticket_id
   const newStatus = detail?.new_status
   if (!ticketId || !newStatus) return
@@ -1278,11 +1280,11 @@ const handleWsTicketUpdate = (e: Event) => {
 }
 
 onUnmounted(() => {
-  window.removeEventListener('ws-update', handleWsTicketUpdate)
+  eventBus.off('ws-update', handleWsTicketUpdate)
 })
 
 onMounted(async () => {
-  window.addEventListener('ws-update', handleWsTicketUpdate)
+  eventBus.on('ws-update', handleWsTicketUpdate)
   await loadApps()
   const notifTicketId = route.query.ticketId as string | undefined
   if (notifTicketId) {

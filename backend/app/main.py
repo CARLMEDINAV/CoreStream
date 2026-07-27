@@ -10,7 +10,6 @@ from fastapi.responses import JSONResponse
 # Mantenemos las importaciones individuales para asegurar que cada módulo cargue bien
 from app.routers import (
     auth,
-    auth_simple,
     users,
     applications,
     epics,
@@ -31,7 +30,8 @@ from arq import create_pool
 from arq.connections import RedisSettings
 
 from app.config import get_settings
-from app.database import engine, Base
+from app.database import engine
+from app.models.base import Base
 from app.redis_client import (
     init_redis,
     close_redis,
@@ -173,7 +173,6 @@ app.add_middleware(
 # Cada router maneja un dominio específico de la aplicación
 # Estos routers se crearían en carpeta app/routers/
 
-app.include_router(auth_simple.router, prefix="/api/auth")
 app.include_router(auth.router, prefix="/api/auth")
 app.include_router(users.router, prefix="/api/users")
 app.include_router(applications.router, prefix="/api/applications")
@@ -327,24 +326,15 @@ async def general_exception_handler(request, exc):
     Manejador global de excepciones para cualquier error no capturado.
     
     Registra la excepción y retorna una respuesta JSON con estado 500.
-    
-    Args:
-        request: Solicitud HTTP que causó el error
-        exc: Excepción no capturada
-        
-    Returns:
-        JSONResponse: Respuesta con detalles del error
     """
-    print(f"Error no manejado: {exc}")
-    import traceback
-    traceback.print_exc()
+    import logging
+    logging.error(f"Error no manejado en {request.url}: {exc}")
     
     return JSONResponse(
         status_code=500,
         content={
             "detail": "Error interno del servidor",
-            "error": str(exc) if settings.DEBUG else "Error interno",
-            "traceback": traceback.format_exc() if settings.DEBUG else None
+            "error": "Se ha producido un error inesperado."
         }
     )
 

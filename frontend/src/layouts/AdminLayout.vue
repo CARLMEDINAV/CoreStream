@@ -25,6 +25,7 @@
         <router-link
           to="/admin/builder"
           class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
+          active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm"
         >
           {{ t('nav.builder') }}
         </router-link>
@@ -32,6 +33,7 @@
         <router-link
           to="/admin/analytics"
           class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
+          active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm"
         >
           {{ t('nav.analytics') }}
         </router-link>
@@ -39,13 +41,15 @@
         <router-link
           to="/admin/code-docs"
           class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
+          active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm"
         >
           {{ t('nav.documentation') }}
         </router-link>
 
         <router-link
           to="/admin/incidents"
-          class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)] text-red-600 dark:text-red-400 font-medium"
+          class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
+          active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm"
         >
           Incidentes
         </router-link>
@@ -53,6 +57,7 @@
         <router-link
           to="/admin/meetings"
           class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
+          active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm"
         >
           Reuniones
         </router-link>
@@ -60,6 +65,7 @@
         <router-link
           to="/admin/team"
           class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
+          active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm"
         >
           {{ t('nav.team') }}
         </router-link>
@@ -67,6 +73,7 @@
         <router-link
           to="/admin/support"
           class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
+          active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm"
         >
           {{ t('nav.support') }}
         </router-link>

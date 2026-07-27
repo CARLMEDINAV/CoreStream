@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.middleware.auth import get_current_user, require_role
 from app.models.incident import Incident
-from app.models.role import Role
+from app.models.role import UserRole
 from app.models.user import User
 from app.schemas.incident import IncidentCreate, IncidentResponse, IncidentStatusUpdate, IncidentUpdate
 
@@ -30,8 +30,6 @@ async def create_incident(
     db.add(incident)
     await db.commit()
     await db.refresh(incident)
-    
-    # TODO: Disparar notificación si es P1 vía pubsub Redis.
     
     return incident
 
@@ -71,7 +69,7 @@ async def get_incident(
 async def update_incident(
     incident_id: UUID,
     incident_in: IncidentUpdate,
-    current_user: User = Depends(require_role([Role.ADMIN, Role.TEAM_LEADER])),
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.TEAM_LEADER])),
     db: AsyncSession = Depends(get_db),
 ):
     """

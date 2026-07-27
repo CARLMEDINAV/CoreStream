@@ -191,6 +191,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useApplicationsStore } from '@/stores'
+import { useDialogStore } from '@/stores/dialog'
 
 // Interfaces
 interface Application {
@@ -209,6 +210,7 @@ interface SortOption {
 
 const { t } = useI18n()
 const appsStore = useApplicationsStore()
+const dialogStore = useDialogStore()
 
 // Estado reactivo
 const selectedAppId = ref<string | null>(null)
@@ -315,7 +317,7 @@ const createApplication = async () => {
     selectApplication(created.id)
   } catch (err) {
     console.error('Error creating application:', err)
-    alert('Error al crear aplicación. Por favor intenta nuevamente.')
+    dialogStore.alert('Error al crear aplicación. Por favor intenta nuevamente.')
   } finally {
     isCreating.value = false
   }

@@ -21,6 +21,7 @@ import { ref, onUnmounted } from 'vue'
 import type { Ref } from 'vue'
 import { useNotificationsStore } from '@/stores/notifications'
 import { NotificationType } from '@/types'
+import { eventBus } from '@/utils/eventBus'
 
 /**
  * Interfaz para mensajes recibidos por WebSocket
@@ -198,7 +199,7 @@ export function useWebSocket() {
               // Legacy WebSocket event (workbench real-time update, timer sync, etc.)
               const eventType = message.data.eventType || message.data.type
               if (eventType === 'TIMER_SYNC') {
-                window.dispatchEvent(new CustomEvent('timer-sync', { detail: message.data }))
+                eventBus.emit('timer-sync', message.data)
               } else {
                 notificationStore.addNotification({
                   id: message.data.id || generateId(),
@@ -219,7 +220,7 @@ export function useWebSocket() {
           // Procesar actualización de datos en tiempo real
           // // console.log('Actualización en tiempo real recibida:', message.data)
           // Disparar evento personalizado para que los componentes reaccionen
-          window.dispatchEvent(new CustomEvent('ws-update', { detail: message.data }))
+          eventBus.emit('ws-update', message.data)
           break
 
         case 'ping':

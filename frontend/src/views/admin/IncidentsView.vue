@@ -14,12 +14,21 @@ import { api } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import type { Incident } from '@/types'
 import { TicketStatus } from '@/types'
+import CreateIncidentModal from '@/components/dev/CreateIncidentModal.vue'
+import ManageIncidentModal from '@/components/dev/ManageIncidentModal.vue'
 
 const authStore = useAuthStore()
 
 const incidents = ref<Incident[]>([])
 const isLoading = ref(true)
 const showCreateModal = ref(false)
+const showManageModal = ref(false)
+const selectedIncident = ref<Incident | null>(null)
+
+const openManageModal = (incident: Incident) => {
+  selectedIncident.value = incident
+  showManageModal.value = true
+}
 
 const loadIncidents = async () => {
   isLoading.value = true
@@ -72,17 +81,17 @@ onMounted(() => {
 
       <div class="flex items-center gap-3">
         <button
+          @click="showCreateModal = true"
+          class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2 shadow-sm"
+        >
+          <Plus :size="18" /> Reportar Incidente
+        </button>
+        <button
           @click="loadIncidents"
           :disabled="isLoading"
           class="px-4 py-2 bg-slate-100 dark:bg-[var(--bg-card)] text-slate-700 dark:text-[var(--text-secondary)] font-medium rounded-lg hover:bg-slate-200 dark:hover:bg-[var(--border-subtle)] transition-colors disabled:opacity-50"
         >
           🔄 Actualizar
-        </button>
-        <button
-          @click="showCreateModal = true"
-          class="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
-        >
-          <Plus :size="18" /> Reportar Incidente
         </button>
       </div>
     </header>
@@ -140,7 +149,7 @@ onMounted(() => {
                 <div class="text-xs text-slate-500 dark:text-[var(--text-muted)] flex items-center gap-1">
                   <UserIcon :size="14" /> {{ incident.assignedToId ? 'Asignado' : 'Sin asignar' }}
                 </div>
-                <button class="text-sm text-red-600 dark:text-red-400 font-medium hover:underline">Gestionar</button>
+                <button @click="openManageModal(incident)" class="text-sm text-red-600 dark:text-red-400 font-medium hover:underline">Gestionar</button>
               </div>
             </div>
           </div>
@@ -177,7 +186,7 @@ onMounted(() => {
                   <td class="px-6 py-4 text-slate-600 dark:text-[var(--text-secondary)]">{{ incident.affectedEnvironment }}</td>
                   <td class="px-6 py-4 text-slate-600 dark:text-[var(--text-secondary)]">{{ incident.mitigatedAt ? formatDate(incident.mitigatedAt) : 'N/A' }}</td>
                   <td class="px-6 py-4 text-right">
-                    <button class="text-teal-600 dark:text-teal-400 hover:underline">Post-mortem</button>
+                    <button @click="openManageModal(incident)" class="text-teal-600 dark:text-teal-400 hover:underline">Post-mortem</button>
                   </td>
                 </tr>
               </tbody>
@@ -187,5 +196,18 @@ onMounted(() => {
 
       </div>
     </div>
+    
+    <CreateIncidentModal 
+      :show="showCreateModal" 
+      @close="showCreateModal = false" 
+      @created="loadIncidents" 
+    />
+    
+    <ManageIncidentModal 
+      :show="showManageModal" 
+      :incident="selectedIncident" 
+      @close="showManageModal = false" 
+      @updated="loadIncidents" 
+    />
   </div>
 </template>

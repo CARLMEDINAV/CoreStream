@@ -66,7 +66,10 @@ async def upload_file(
 
 
 @router.get("/download/{file_id}")
-async def download_file(file_id: str) -> FileResponse:
+async def download_file(
+    file_id: str,
+    current_user = Depends(get_current_user),
+) -> FileResponse:
     """
     Descargar un archivo cargado.
 
@@ -76,7 +79,7 @@ async def download_file(file_id: str) -> FileResponse:
     **Respuesta:**
     - Archivo en stream
     """
-    file_path = FileService.get_file_path(file_id)
+    file_path = FileService.get_file_path(file_id, str(current_user.id))
 
     if not file_path:
         raise HTTPException(
@@ -92,7 +95,10 @@ async def download_file(file_id: str) -> FileResponse:
 
 
 @router.get("/info/{file_id}")
-async def get_file_info(file_id: str) -> dict:
+async def get_file_info(
+    file_id: str,
+    current_user = Depends(get_current_user),
+) -> dict:
     """
     Obtener información sobre un archivo.
 
@@ -102,7 +108,7 @@ async def get_file_info(file_id: str) -> dict:
     **Respuesta:**
     - id, filename, size, extension, created_at
     """
-    file_info = FileService.get_file_info(file_id)
+    file_info = FileService.get_file_info(file_id, str(current_user.id))
 
     if not file_info:
         raise HTTPException(
@@ -126,7 +132,7 @@ async def list_files(
     **Respuesta:**
     - Lista de archivos con metadatos
     """
-    files = FileService.list_files()
+    files = FileService.list_files(str(current_user.id))
 
     return {
         "status": "success",
@@ -149,7 +155,7 @@ async def delete_file(
     **Respuesta:**
     - Confirmación de eliminación
     """
-    if FileService.delete_file(file_id):
+    if FileService.delete_file(file_id, str(current_user.id)):
         return {
             "status": "success",
             "message": f"Archivo {file_id} eliminado exitosamente",

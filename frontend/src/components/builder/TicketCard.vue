@@ -110,7 +110,7 @@
 // =====================================================================
 
 import { computed } from 'vue'
-// import { Icon } from '@iconify/vue' // @TODO: install @iconify/vue when needed
+import { Icon } from '@iconify/vue'
 
 // =====================================================================
 // DEFINICIÓN DE TIPOS

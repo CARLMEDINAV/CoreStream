@@ -11,10 +11,32 @@ import {
 import { api } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import type { Meeting } from '@/types'
+import CreateMeetingModal from '@/components/dev/CreateMeetingModal.vue'
+import MeetingAttendanceModal from '@/components/dev/MeetingAttendanceModal.vue'
+import MeetingSummaryModal from '@/components/dev/MeetingSummaryModal.vue'
 
 const authStore = useAuthStore()
 const meetings = ref<Meeting[]>([])
 const isLoading = ref(true)
+
+const showCreateModal = ref(false)
+const showAttendanceModal = ref(false)
+const showSummaryModal = ref(false)
+const selectedMeeting = ref<Meeting | null>(null)
+
+const openAttendance = (meeting: Meeting) => {
+  selectedMeeting.value = meeting
+  showAttendanceModal.value = true
+}
+
+const openSummary = (meeting: Meeting) => {
+  selectedMeeting.value = meeting
+  showSummaryModal.value = true
+}
+
+const canCreate = computed(() => {
+  return authStore.user?.role === 'ADMIN' || authStore.user?.role === 'TEAM_LEADER'
+})
 
 const loadMeetings = async () => {
   isLoading.value = true
@@ -96,16 +118,18 @@ onMounted(() => {
 
       <div class="flex items-center gap-3">
         <button
+          v-if="canCreate"
+          @click="showCreateModal = true"
+          class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2 shadow-sm"
+        >
+          <Plus :size="18" /> Agendar Ceremonia
+        </button>
+        <button
           @click="loadMeetings"
           :disabled="isLoading"
           class="px-4 py-2 bg-slate-100 dark:bg-[var(--bg-card)] text-slate-700 dark:text-[var(--text-secondary)] font-medium rounded-lg hover:bg-slate-200 dark:hover:bg-[var(--border-subtle)] transition-colors disabled:opacity-50"
         >
           🔄 Actualizar
-        </button>
-        <button
-          class="px-4 py-2 bg-teal-600 text-white font-semibold rounded-lg hover:bg-teal-700 transition-colors flex items-center gap-2"
-        >
-          <Plus :size="18" /> Agendar Ceremonia
         </button>
       </div>
     </header>
@@ -145,10 +169,10 @@ onMounted(() => {
               <p class="text-teal-600 dark:text-teal-400 font-medium mb-4">{{ formatDateTime(meeting.scheduledAt) }}</p>
               
               <div class="mt-auto pt-4 border-t border-slate-100 dark:border-[var(--border-subtle)] flex gap-2">
-                <button class="flex-1 bg-slate-100 dark:bg-[var(--bg-card)] hover:bg-slate-200 dark:hover:bg-slate-700/50 text-slate-700 dark:text-slate-300 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5">
+                <button @click="openAttendance(meeting)" class="flex-1 bg-slate-100 dark:bg-[var(--bg-card)] hover:bg-slate-200 dark:hover:bg-slate-700/50 text-slate-700 dark:text-slate-300 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5">
                   <CheckSquare :size="16" /> Asistencia
                 </button>
-                <button class="flex-1 bg-teal-50 dark:bg-teal-900/10 hover:bg-teal-100 dark:hover:bg-teal-900/30 text-teal-700 dark:text-teal-400 border border-teal-200 dark:border-teal-800/50 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5">
+                <button @click="openSummary(meeting)" class="flex-1 bg-teal-50 dark:bg-teal-900/10 hover:bg-teal-100 dark:hover:bg-teal-900/30 text-teal-700 dark:text-teal-400 border border-teal-200 dark:border-teal-800/50 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5">
                   <FileText :size="16" /> Ver Acta
                 </button>
               </div>
@@ -186,7 +210,10 @@ onMounted(() => {
                   <div class="text-sm text-slate-500 dark:text-[var(--text-muted)] hidden md:flex items-center gap-1 mr-4">
                     <Users :size="16" /> {{ meeting.attendances?.length || 0 }} asistencias
                   </div>
-                  <button class="px-3 py-1.5 text-sm font-medium text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/10 rounded-md hover:bg-teal-100 dark:hover:bg-teal-900/30 transition-colors">
+                  <button @click="openAttendance(meeting)" class="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-[var(--bg-card)] rounded-md hover:bg-slate-200 dark:hover:bg-slate-700/50 transition-colors">
+                    Asistencia
+                  </button>
+                  <button @click="openSummary(meeting)" class="px-3 py-1.5 text-sm font-medium text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/10 rounded-md hover:bg-teal-100 dark:hover:bg-teal-900/30 transition-colors">
                     Acta
                   </button>
                 </div>
@@ -197,5 +224,25 @@ onMounted(() => {
 
       </div>
     </div>
+
+    <CreateMeetingModal 
+      :show="showCreateModal" 
+      @close="showCreateModal = false" 
+      @created="loadMeetings" 
+    />
+
+    <MeetingAttendanceModal 
+      :show="showAttendanceModal" 
+      :meeting="selectedMeeting" 
+      @close="showAttendanceModal = false" 
+      @updated="loadMeetings" 
+    />
+
+    <MeetingSummaryModal 
+      :show="showSummaryModal" 
+      :meeting="selectedMeeting" 
+      @close="showSummaryModal = false" 
+      @updated="loadMeetings" 
+    />
   </div>
 </template>

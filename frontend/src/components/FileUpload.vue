@@ -168,6 +168,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { api } from '@/services/api'
+import { useDialogStore } from '@/stores/dialog'
 
 interface ApiDocument {
   id: string
@@ -191,6 +192,7 @@ const emit = defineEmits<{
   deleted: [docId: string]
 }>()
 
+const dialogStore = useDialogStore()
 const isDragging = ref(false)
 const fileInput = ref<HTMLInputElement>()
 const uploadingFiles = ref<{ id: string; name: string; size: number; progress: number }[]>([])
@@ -286,7 +288,7 @@ const downloadFile = async (doc: ApiDocument) => {
 }
 
 const deleteFile = async (docId: string) => {
-  if (!confirm('¿Eliminar este archivo permanentemente?')) return
+  if (!(await dialogStore.confirm('¿Eliminar este archivo permanentemente?'))) return
   try {
     await api.documents.delete(docId)
     uploadedFiles.value = uploadedFiles.value.filter((f) => f.id !== docId)

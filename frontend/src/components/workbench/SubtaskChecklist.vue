@@ -151,6 +151,9 @@
 import { ref, computed } from 'vue'
 import { Icon } from '@iconify/vue'
 import type { Subtask } from '@/types'
+import { useDialogStore } from '@/stores/dialog'
+
+const dialogStore = useDialogStore()
 
 // =====================================================================
 // PROPS
@@ -233,9 +236,9 @@ const toggleSubtask = (subtask: any) => {
  * Elimina una subtarea
  * Muestra un diálogo de confirmación y emite evento de eliminación
  */
-const deleteSubtask = (subtaskId: string) => {
+const deleteSubtask = async (subtaskId: string) => {
   // Confirmar antes de eliminar
-  if (confirm('¿Estás seguro de que quieres eliminar esta subtarea?')) {
+  if (await dialogStore.confirm('¿Estás seguro de que quieres eliminar esta subtarea?')) {
     emit('delete', subtaskId)
   }
 }

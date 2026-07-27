@@ -245,6 +245,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { eventBus } from '@/utils/eventBus'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import type { Ticket } from '@/types'
 import { TicketStatus } from '@/types'
@@ -408,11 +409,11 @@ onMounted(async () => {
     console.error('Error cargando miembros del equipo:', e)
   }
   await refreshData()
-  window.addEventListener('ws-update', handleWsUpdate)
+  eventBus.on('ws-update', handleWsUpdate)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('ws-update', handleWsUpdate)
+  eventBus.off('ws-update', handleWsUpdate)
 })
 </script>
 

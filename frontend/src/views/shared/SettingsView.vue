@@ -227,11 +227,13 @@ import { useI18n } from 'vue-i18n'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
+import { useDialogStore } from '@/stores/dialog'
 import { api } from '@/services/api'
 
 const { locale } = useI18n()
 const authStore = useAuthStore()
 const themeStore = useThemeStore()
+const dialogStore = useDialogStore()
 
 // Profile
 const profile = reactive({
@@ -289,7 +291,7 @@ async function saveProfile() {
     } as any)
     await authStore.fetchMe()
   } catch (e: any) {
-    alert('Error al guardar: ' + (e.response?.data?.detail || e.message))
+    dialogStore.alert('Error al guardar: ' + (e.response?.data?.detail || e.message))
   } finally {
     isSavingProfile.value = false
   }

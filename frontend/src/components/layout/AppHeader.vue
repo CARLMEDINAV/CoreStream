@@ -139,28 +139,7 @@
           </div>
         </section>
 
-        <hr class="border-[var(--border-subtle)]" />
 
-        <!-- SECCIÓN 3: NOTIFICACIONES -->
-        <section>
-          <h3 class="text-sm font-bold uppercase tracking-wider text-[var(--text-muted)] mb-4">{{ t('settings.notifSectionTitle') }}</h3>
-          <div class="space-y-3">
-            <div v-for="(notif, key) in notifications" :key="key" class="flex items-center justify-between p-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)]">
-              <div class="flex items-center gap-3">
-                <span class="text-2xl">{{ notif.icon }}</span>
-                <div>
-                  <p class="text-sm font-semibold text-[var(--text-primary)]">{{ notif.title }}</p>
-                  <p class="text-xs text-[var(--text-secondary)]">{{ notif.desc }}</p>
-                </div>
-              </div>
-              <button @click="toggleNotif(key)" :class="[notif.enabled ? 'bg-[var(--teal)]' : 'bg-gray-400 dark:bg-gray-600', 'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none']">
-                <span :class="[notif.enabled ? 'translate-x-6' : 'translate-x-1', 'inline-block h-4 w-4 transform rounded-full bg-white transition-transform']" />
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <hr class="border-[var(--border-subtle)]" />
 
         <!-- SECCIÓN 4: CUENTA -->
         <section>
@@ -171,20 +150,11 @@
               <p class="text-sm font-medium text-[var(--text-primary)]">Cambiar Contraseña</p>
               <p class="text-xs text-[var(--text-secondary)]">Actualiza tus credenciales</p>
             </button>
-            <button @click="showComingSoon('apps')" type="button" class="group p-4 rounded-xl text-left border border-purple-500/20 bg-purple-500/10 hover:bg-purple-500/20 transition-all flex flex-col">
-              <span class="text-3xl mb-2 block group-hover:scale-110 transition-transform origin-left">🔗</span>
-              <p class="text-sm font-medium text-[var(--text-primary)]">Apps Conectadas</p>
-              <p class="text-xs text-[var(--text-secondary)]">Gestiona integraciones</p>
-            </button>
+
             <button @click="exportUserData" type="button" class="group p-4 rounded-xl text-left border border-blue-500/20 bg-blue-500/10 hover:bg-blue-500/20 transition-all flex flex-col">
               <span class="text-3xl mb-2 block group-hover:scale-110 transition-transform origin-left">📊</span>
               <p class="text-sm font-medium text-[var(--text-primary)]">Exportar Datos</p>
               <p class="text-xs text-[var(--text-secondary)]">Descarga tus datos</p>
-            </button>
-            <button @click="showComingSoon('help')" type="button" class="group p-4 rounded-xl text-left border border-pink-500/20 bg-pink-500/10 hover:bg-pink-500/20 transition-all flex flex-col">
-              <span class="text-3xl mb-2 block group-hover:scale-110 transition-transform origin-left">❓</span>
-              <p class="text-sm font-medium text-[var(--text-primary)]">Ayuda y Soporte</p>
-              <p class="text-xs text-[var(--text-secondary)]">Obtén asistencia</p>
             </button>
           </div>
         </section>
@@ -253,6 +223,7 @@ import { ref, computed, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useAuthStore, useThemeStore } from '@/stores'
+import { useDialogStore } from '@/stores/dialog'
 import type { Theme } from '@/stores/theme'
 import { api } from '@/services/api'
 import NotificationBell from '@/components/shared/NotificationBell.vue'
@@ -269,6 +240,7 @@ const showLanguageMenu = ref(false)
 
 const authStore = useAuthStore()
 const themeStore = useThemeStore()
+const dialogStore = useDialogStore()
 const i18n = useI18n()
 const { t } = i18n
 const router = useRouter()
@@ -500,10 +472,10 @@ const saveSettings = async () => {
     });
 
     showSettingsModal.value = false;
-    alert('¡Preferencias guardadas exitosamente!');
+    dialogStore.alert('¡Preferencias guardadas exitosamente!');
   } catch (error) {
     console.error('Error al guardar:', error);
-    alert('Hubo un error al guardar las preferencias.');
+    dialogStore.alert('Hubo un error al guardar las preferencias.');
   } finally {
     isSaving.value = false
   }
@@ -518,12 +490,12 @@ const openPasswordModal = () => {
 const submitPasswordChange = async () => {
   // Validación de coincidencia
   if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-    alert('Las nuevas contraseñas no coinciden. Por favor, verifica.')
+    dialogStore.alert('Las nuevas contraseñas no coinciden. Por favor, verifica.')
     return
   }
 
   if (passwordForm.newPassword.length < 8) {
-    alert('Por seguridad, la nueva contraseña debe tener al menos 8 caracteres.')
+    dialogStore.alert('Por seguridad, la nueva contraseña debe tener al menos 8 caracteres.')
     return
   }
 
@@ -534,14 +506,14 @@ const submitPasswordChange = async () => {
       newPassword: passwordForm.newPassword 
     })
     
-    alert('¡Contraseña actualizada con éxito! 🔐')
+    dialogStore.alert('¡Contraseña actualizada con éxito! 🔐')
 
     resetPasswordForm()
     showPasswordModal.value = false
   } catch (error: any) {
     console.error(error)
     const mensajeReal = error.response?.data?.detail || error.message || 'Verifica tu contraseña actual.'
-    alert(`Error al cambiar la contraseña: ${mensajeReal}`)
+    dialogStore.alert(`Error al cambiar la contraseña: ${mensajeReal}`)
   } finally {
     isChangingPassword.value = false
   }
@@ -553,13 +525,7 @@ const resetPasswordForm = () => {
   passwordForm.confirmPassword = ''
 }
 
-const showComingSoon = (type: 'apps' | 'help') => {
-  if (type === 'apps') {
-    alert('🚀 Próximamente: Integración con GitHub, Slack y Jira.')
-  } else {
-    alert('🛠️ Estamos construyendo el Centro de Ayuda. ¡Pronto estará disponible!')
-  }
-}
+
 
 const exportUserData = () => {
   // Extraemos las preferencias del usuario global

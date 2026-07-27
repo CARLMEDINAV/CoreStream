@@ -355,9 +355,11 @@ import { useAuthStore } from '@/stores/auth'
 import { UserRole } from '@/types'
 import type { User } from '@/types'
 import api from '@/services/api'
+import { useDialogStore } from '@/stores/dialog'
 
 const teamStore = useTeamStore()
 const authStore = useAuthStore()
+const dialogStore = useDialogStore()
 
 // ========== STATE ==========
 const isLoading = ref(false)
@@ -436,7 +438,7 @@ const refreshTeam = async () => {
     await loadRealStats()
   } catch (error) {
     console.error('Error al actualizar equipo:', error)
-    alert('Error al actualizar el equipo')
+    dialogStore.alert('Error al actualizar el equipo')
   } finally {
     isLoading.value = false
   }
@@ -455,7 +457,7 @@ const editMember = (member: User) => {
 
 const saveMember = async () => {
   if (!formData.value.fullName || !formData.value.email) {
-    alert('Por favor completa todos los campos requeridos')
+    dialogStore.alert('Por favor completa todos los campos requeridos')
     return
   }
 
@@ -484,14 +486,14 @@ const saveMember = async () => {
     editingMemberId.value = null
   } catch (error) {
     console.error('Error al guardar miembro:', error)
-    alert('Error al guardar los cambios')
+    dialogStore.alert('Error al guardar los cambios')
   } finally {
     isLoading.value = false
   }
 }
 
 const promoteToLeader = async (userId: string) => {
-  if (!confirm('¿Estás seguro de que deseas promover este miembro a líder?')) {
+  if (!(await dialogStore.confirm('¿Estás seguro de que deseas promover este miembro a líder?'))) {
     return
   }
 
@@ -500,14 +502,14 @@ const promoteToLeader = async (userId: string) => {
     await teamStore.promoteToLeader(userId)
   } catch (error) {
     console.error('Error al promover:', error)
-    alert('Error al promover el miembro')
+    dialogStore.alert('Error al promover el miembro')
   } finally {
     isLoading.value = false
   }
 }
 
 const demoteLeader = async (userId: string) => {
-  if (!confirm('¿Estás seguro de que deseas degradar este líder a desarrollador?')) {
+  if (!(await dialogStore.confirm('¿Estás seguro de que deseas degradar este líder a desarrollador?'))) {
     return
   }
 
@@ -516,7 +518,7 @@ const demoteLeader = async (userId: string) => {
     await teamStore.demoteLeader(userId)
   } catch (error) {
     console.error('Error al degradar:', error)
-    alert('Error al degradar el líder')
+    dialogStore.alert('Error al degradar el líder')
   } finally {
     isLoading.value = false
   }
@@ -541,7 +543,7 @@ const executeDelete = async (hardDelete: boolean) => {
     memberToDelete.value = null
   } catch (error) {
     console.error('Error al eliminar:', error)
-    alert('Error al eliminar el miembro: ' + (error as Error).message)
+    dialogStore.alert('Error al eliminar el miembro: ' + (error as Error).message)
   } finally {
     isLoading.value = false
   }

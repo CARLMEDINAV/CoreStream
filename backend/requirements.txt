@@ -10,7 +10,8 @@ email-validator>=2.0,<3.0
 # Base de datos
 sqlalchemy
 asyncpg
-alembic
+alembic==1.13.1
+psycopg2-binary==2.9.9
 
 # Redis + async task queue
 redis
@@ -22,8 +23,6 @@ python-jose[cryptography]
 python-multipart
 passlib==1.7.4
 bcrypt==4.0.1
-
-psycopg2-binary==2.9.9
 
 # Cliente HTTP async (usado por translation_service para llamar a Azure Translator)
 httpx

@@ -60,9 +60,11 @@ export default defineConfig({
     },
 
     // Proxy de API hacia el backend
+    // NOTA: Con network_mode: host, el backend corre en localhost del host,
+    // no en el hostname 'backend' (que solo funciona con redes bridge de Docker)
     proxy: {
       '/api': {
-        target: 'http://backend:8000',
+        target: process.env.VITE_API_TARGET ?? 'http://localhost:8000',
         changeOrigin: false,
         ws: true,
         rewrite: (path) => path

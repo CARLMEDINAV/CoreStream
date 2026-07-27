@@ -239,7 +239,7 @@
 // =====================================================================
 
 import { ref, computed } from 'vue'
-// import { Icon } from '@iconify/vue' // @TODO: install @iconify/vue
+import { Icon } from '@iconify/vue'
 import { useTicketsStore } from '@/stores/tickets'
 import { useDragDrop } from '@/composables/useDragDrop'
 import type { Ticket } from '@/types'

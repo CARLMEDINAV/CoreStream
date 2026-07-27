@@ -1046,6 +1046,7 @@ export interface Incident {
   createdById: string
   assignedToId?: string
   mitigationTimeSeconds?: number
+  mitigationState?: string
   isMitigated: boolean
   mitigatedAt?: string
   rootCauseAnalysis?: string

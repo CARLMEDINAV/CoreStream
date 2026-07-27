@@ -1,7 +1,6 @@
 # Archivo de configuración centralizado para la aplicación FastAPI
 # Utiliza pydantic-settings para cargar variables desde .env y valores por defecto
 
-import secrets
 from functools import lru_cache
 from typing import Union
 
@@ -55,8 +54,8 @@ class Settings(BaseSettings):
     
     # Configuración de Autenticación y Seguridad
     # Clave secreta para firmar y verificar tokens JWT
-    # Se genera aleatoriamente si no se proporciona en .env para mayor seguridad
-    SECRET_KEY: str = secrets.token_urlsafe(32)
+    # En producción debe ser sobreescrita desde el archivo .env
+    SECRET_KEY: str = "insecure-default-key-change-in-prod"
     
     # Algoritmo criptográfico utilizado para firmar tokens JWT
     # HS256 (HMAC SHA-256) es el estándar recomendado
@@ -107,7 +106,7 @@ class Settings(BaseSettings):
 
     # Directorio para almacenar documentos subidos por los usuarios
     # En producción/Docker debe apuntar a un volumen persistente (ej. /app/storage/uploads)
-    UPLOAD_DIR: str = "/tmp/corestream_documents"
+    UPLOAD_DIR: str = "./storage/uploads"
     
     # Configuración de Pydantic Settings
     class Config:

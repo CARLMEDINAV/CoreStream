@@ -342,6 +342,7 @@ async def test_transicion_investigating_a_resolved(
     result = await TicketStateMachine.transition_to_resolved(
         ticket=support_ticket,
         current_user=developer,
+        pr_link="https://github.com/org/repo/pull/123",
         db=db_session,
     )
     assert result["status"] == "success"
@@ -383,6 +384,7 @@ async def test_workflow_completo_soporte(
     await TicketStateMachine.transition_to_resolved(
         ticket=support_ticket,
         current_user=developer,
+        pr_link="https://github.com/org/repo/pull/123",
         db=db_session,
     )
     assert support_ticket.status == TicketStatus.RESOLVED

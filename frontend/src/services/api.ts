@@ -16,7 +16,6 @@
  */
 
 import axios, { AxiosInstance, AxiosError, AxiosResponse } from 'axios'
-import { mockApi } from './mockApi'
 import type {
   User,
   UserRole,
@@ -149,6 +148,7 @@ const toIncident = (raw: any): Incident => ({
   createdById: raw.createdById ?? raw.created_by_id,
   assignedToId: raw.assignedToId ?? raw.assigned_to_id ?? undefined,
   mitigationTimeSeconds: raw.mitigationTimeSeconds ?? raw.mitigation_time_seconds ?? undefined,
+  mitigationState: raw.mitigationState ?? raw.mitigation_state ?? undefined,
   isMitigated: raw.isMitigated ?? raw.is_mitigated ?? false,
   mitigatedAt: raw.mitigatedAt ?? raw.mitigated_at ?? undefined,
   rootCauseAnalysis: raw.rootCauseAnalysis ?? raw.root_cause_analysis ?? undefined,
@@ -1812,11 +1812,21 @@ const realApi = {
    */
   incidents: {
     list: async (filters?: { page?: number, limit?: number, application_id?: string, status?: string }): Promise<PaginatedResponse<Incident>> => {
-      const response = await apiClient.get<PaginatedResponse<Incident>>('/incidents/', { params: filters })
-      const data = response.data as any
+      const response = await apiClient.get<any>('/incidents/', { params: filters })
+      const data = response.data
+      
+      if (Array.isArray(data)) {
+        return {
+          items: data.map(toIncident),
+          total: data.length,
+          page: 1,
+          pages: 1
+        }
+      }
+      
       return {
         ...data,
-        items: Array.isArray(data.items) ? data.items.map(toIncident) : []
+        items: Array.isArray(data?.items) ? data.items.map(toIncident) : []
       }
     },
     
@@ -1835,8 +1845,8 @@ const realApi = {
       return toIncident(response.data)
     },
     
-    mitigate: async (incidentId: string, data: any): Promise<Incident> => {
-      const response = await apiClient.post<any>(`/incidents/${incidentId}/mitigate`, data)
+    updateStatus: async (incidentId: string, status: string): Promise<Incident> => {
+      const response = await apiClient.patch<any>(`/incidents/${incidentId}/status`, { status })
       return toIncident(response.data)
     }
   },
@@ -1873,7 +1883,7 @@ const realApi = {
     },
     
     updateSummary: async (meetingId: string, summary: string): Promise<Meeting> => {
-      const response = await apiClient.patch<any>(`/meetings/${meetingId}/summary`, { summary_markdown: summary })
+      const response = await apiClient.patch<any>(`/meetings/${meetingId}`, { summary_markdown: summary })
       return toMeeting(response.data)
     }
   },
@@ -1900,22 +1910,10 @@ export const clearAuthTokens = (): void => {
 }
 
 /**
- * MODO PROTOTIPO
- * Si VITE_MODO_PROTOTIPO=true, exporta mockApi en lugar de api real
- * Esto permite desarrollar sin backend usando localStorage
- */
-const isProtoMode = import.meta.env.VITE_MODO_PROTOTIPO === 'true'
-
-if (isProtoMode) {
-  console.warn('⚠️  MODO PROTOTIPO ACTIVADO - No se está usando backend real, todos los datos están en localStorage')
-}
-
-/**
  * API Object exportado:
- * - Si MODO_PROTOTIPO=true: usa mockApi (localStorage)
- * - Si MODO_PROTOTIPO=false: usa realApi (Axios + backend)
+ * Usa realApi (Axios + backend)
  */
-export const api = isProtoMode ? mockApi : realApi
+export const api = realApi
 
 /**
  * Export default: el objeto api para que pueda importarse como default

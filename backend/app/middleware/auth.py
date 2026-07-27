@@ -346,11 +346,7 @@ def require_role(required_roles: list[str] | str):
         else:
             user_role = str(role_obj)
 
-        # Asegurar que required_roles sea una colección para evitar el TypeError
-        # y problemas de coincidencia parcial si se pasa un string por error
-        roles_to_check = [required_roles] if isinstance(required_roles, str) else required_roles
-
-        if user_role not in roles_to_check:
+        if user_role not in normalized_required_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(

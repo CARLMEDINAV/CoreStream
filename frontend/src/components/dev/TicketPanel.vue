@@ -130,7 +130,7 @@
             :disabled="!prLinkValid || isCompleting"
             class="w-full flex items-center justify-center gap-2 font-bold py-3 rounded-xl transition-all duration-200 mb-3"
             :class="prLinkValid
-              ? 'bg-[var(--lime)] text-[var(--dark-gray)] hover:bg-[#B5EC5D] cursor-pointer'
+              ? 'bg-[var(--lime)] text-[var(--dark-gray)] hover:brightness-95 cursor-pointer'
               : 'bg-[var(--bg-panel)] text-[var(--text-muted)] cursor-not-allowed opacity-60'"
           >
             <span>✓</span>
@@ -146,7 +146,7 @@
               @click="showQuestionForm = !showQuestionForm"
               :disabled="ticket?.status !== 'IN_PROGRESS' && ticket?.status !== 'TODO'"
               :class="ticket?.status === 'IN_PROGRESS' || ticket?.status === 'TODO'
-                ? 'bg-[#D07AB8] text-white hover:bg-[#C1108B] cursor-pointer'
+                ? 'bg-purple-500 text-white hover:bg-purple-600 cursor-pointer'
                 : 'bg-[var(--bg-panel)] text-[var(--text-muted)] border border-[var(--border-subtle)] cursor-not-allowed opacity-60'"
               class="w-full flex items-center justify-center gap-2 font-semibold py-2.5 rounded-xl transition-colors"
             >
@@ -159,7 +159,7 @@
               @click="showRedirectModal = true"
               :disabled="ticket?.status !== 'TODO' && ticket?.status !== 'IN_PROGRESS'"
               :class="ticket?.status === 'TODO' || ticket?.status === 'IN_PROGRESS'
-                ? 'bg-[#2058D8] text-white hover:bg-[#1106C6] cursor-pointer'
+                ? 'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer'
                 : 'bg-[var(--bg-panel)] text-[var(--text-muted)] border border-[var(--border-subtle)] cursor-not-allowed opacity-60'"
               class="w-full flex items-center justify-center gap-2 font-semibold py-2.5 rounded-xl transition-colors"
             >
@@ -192,7 +192,7 @@
                   :disabled="questionText.length < 10 || isQuestioning"
                   class="text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors"
                   :class="questionText.length >= 10
-                    ? 'bg-[#D07AB8] text-white hover:bg-[#C1108B] cursor-pointer'
+                    ? 'bg-purple-500 text-white hover:bg-purple-600 cursor-pointer'
                     : 'bg-[var(--bg-tag)] text-[var(--text-muted)] cursor-not-allowed'"
                 >
                   {{ isQuestioning ? 'Enviando...' : 'Enviar' }}
@@ -273,7 +273,7 @@
             :disabled="!selectedRedirectDev || redirectContext.length < 10 || isRedirecting"
             class="flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors"
             :class="selectedRedirectDev && redirectContext.length >= 10
-              ? 'bg-[#2058D8] text-white hover:bg-[#1106C6] cursor-pointer'
+              ? 'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer'
               : 'bg-[var(--bg-panel)] text-[var(--text-muted)] cursor-not-allowed'"
           >
             {{ isRedirecting ? 'Redireccionando...' : 'Confirmar' }}
@@ -299,6 +299,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { api } from '@/services/api'
 import { useTicketsStore } from '@/stores/tickets'
 import { useAuthStore } from '@/stores/auth'
+import { useDialogStore } from '@/stores/dialog'
 import SubtaskChecklist from '@/components/workbench/SubtaskChecklist.vue'
 import type { Ticket } from '@/types'
 
@@ -315,6 +316,7 @@ const emit = defineEmits<{
 
 const ticketsStore = useTicketsStore()
 const authStore = useAuthStore()
+const dialogStore = useDialogStore()
 
 // Estado local
 const prLink = ref('')
@@ -415,7 +417,7 @@ const statusBadgeClass = computed(() => {
     IN_PROGRESS: 'px-2 py-0.5 rounded-full text-xs font-medium bg-[var(--teal)] text-white',
     BLOCKED: 'px-2 py-0.5 rounded-full text-xs font-medium bg-[var(--priority-urg-bg)] text-white animate-pulse',
     BLOCKED_QUESTION: 'px-2 py-0.5 rounded-full text-xs font-medium bg-[var(--priority-urg-bg)] text-white animate-pulse',
-    REDIRECTED: 'px-2 py-0.5 rounded-full text-xs font-medium bg-[#82A6F7] text-white',
+    REDIRECTED: 'px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-500 text-white',
     DONE: 'px-2 py-0.5 rounded-full text-xs font-medium bg-[var(--lime)] text-[var(--dark-gray)]',
   }
   return map[props.ticket?.status || ''] || ''
@@ -445,7 +447,7 @@ async function handleSubtaskCreate(title: string) {
     localSubtasks.value.push(newSubtask)
   } catch (error) {
     console.error('Error creating subtask:', error)
-    alert('No se pudo crear la subtarea. Intenta de nuevo.')
+    dialogStore.alert('No se pudo crear la subtarea. Intenta de nuevo.')
   }
 }
 

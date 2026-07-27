@@ -202,10 +202,12 @@ import { ref, computed } from 'vue'
 import { useApplicationsStore } from '@/stores'
 import { useAuthStore } from '@/stores'
 import type { Application } from '@/types'
+import { useDialogStore } from '@/stores/dialog'
 
 // Store
 const appsStore = useApplicationsStore()
 const authStore = useAuthStore()
+const dialogStore = useDialogStore()
 
 // Computed
 const applications = computed(() => appsStore.sortedByName)
@@ -261,7 +263,7 @@ const handleCreateApp = async () => {
 }
 
 const handleDeleteApp = async (appId: string) => {
-  if (confirm('¿Estás seguro de que quieres eliminar esta aplicación? Esto eliminará todos sus épicos y tareas.')) {
+  if (await dialogStore.confirm('¿Estás seguro de que quieres eliminar esta aplicación? Esto eliminará todos sus épicos y tareas.')) {
     try {
       await appsStore.remove(appId)
     } catch (error) {

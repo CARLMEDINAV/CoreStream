@@ -439,34 +439,12 @@ router.beforeEach(
     next: NavigationGuardNext
   ): Promise<void> => {
     /**
-     * Valida que un token sea un JWT real
-     */
-    const isValidJWT = (token: string | null) => {
-      if (!token) return false
-      const parts = token.split('.')
-      return parts.length === 3 && parts.every(part => part.length > 0)
-    }
-
-    /**
      * Obtiene el token de autenticación almacenado
      * Normalmente se guardaría en el store de Pinia
      * Aquí se simplifca extrayéndolo del localStorage
      */
     let token = localStorage.getItem('accessToken')
     let userRole = localStorage.getItem('userRole') as UserRole | null
-
-    /**
-     * Si hay un token pero NO es un JWT válido, lo limpia
-     */
-    if (token && !isValidJWT(token)) {
-      console.warn('Invalid token detected in guard, clearing')
-      localStorage.removeItem('accessToken')
-      localStorage.removeItem('refreshToken')
-      localStorage.removeItem('userRole')
-      localStorage.removeItem('userId')
-      token = null
-      userRole = null
-    }
 
     /**
      * Meta información de la ruta

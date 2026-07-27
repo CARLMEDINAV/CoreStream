@@ -31,6 +31,7 @@
     <NotificationContainer 
       v-if="showNotifications && router.currentRoute.value.name !== 'Login'" 
     />
+    <GlobalDialog />
   </div>
 </template>
 
@@ -42,6 +43,7 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import NotificationContainer from '@/components/NotificationContainer.vue'
+import GlobalDialog from '@/components/common/GlobalDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 

@@ -257,16 +257,7 @@ async def get_current_user_profile(
     return await _to_user_response(db, current_user)
 
 
-@router.post(
-    "/logout",
-    status_code=status.HTTP_200_OK,
-    summary="Cerrar sesión",
-    description="Invalida la sesión del usuario (stateless — el cliente debe eliminar sus tokens)"
-)
-async def logout(
-    current_user: User = Depends(get_current_user)
-) -> dict:
-    return {"message": "Sesión cerrada exitosamente"}
+
 
 
 @router.put(

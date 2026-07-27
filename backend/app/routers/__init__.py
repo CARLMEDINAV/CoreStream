@@ -6,7 +6,6 @@ Este paquete contiene todos los routers para los endpoints REST de CoreStream.
 
 from . import (
     auth,
-    auth_simple,
     users,
     applications,
     epics,
@@ -18,11 +17,13 @@ from . import (
     websocket,
     ticket_redirection,
     uploads,
+    support_tickets,
+    incidents,
+    meetings,
 )
 
 __all__ = [
     "auth",
-    "auth_simple",
     "users",
     "applications",
     "epics",
@@ -34,4 +35,7 @@ __all__ = [
     "websocket",
     "ticket_redirection",
     "uploads",
+    "support_tickets",
+    "incidents",
+    "meetings",
 ]
