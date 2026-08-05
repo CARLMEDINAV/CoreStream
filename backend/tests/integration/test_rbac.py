@@ -73,6 +73,22 @@ async def test_dev_no_crea_aplicaciones(client, dev_headers):
     assert res.status_code == 403
 
 
+async def test_team_leader_crea_aplicaciones(client, leader_headers):
+    """
+    ADMIN ya no es el único que puede crear aplicaciones: obligaba al admin a
+    crear cada proyecto nuevo en persona, sin poder delegarlo en quien lleva
+    el día a día del equipo. Invitar usuarios, cambiar roles y resetear
+    contraseñas siguen siendo solo de ADMIN — esto solo afecta aplicaciones,
+    igual que epics.py ya permitía para épicas/tickets.
+    """
+    res = await client.post(
+        "/api/applications/",
+        json={"name": "App de Team Leader", "description": "x"},
+        headers=leader_headers,
+    )
+    assert res.status_code == 201, res.text[:200]
+
+
 # ---------------------------------------------------------------------------
 # Épicas
 # ---------------------------------------------------------------------------

@@ -112,11 +112,17 @@ const routes: RouteRecordRaw[] = [
      */
     component: () => import('@/layouts/AdminLayout.vue'),
     /**
-     * Guards de navegación específicos para rutas admin
+     * Guards de navegación específicos para rutas admin.
+     * ADMIN entra a todo este layout; TEAM_LEADER solo entra porque
+     * necesita llegar a /admin/builder (crear/gestionar aplicaciones) — esa
+     * ruta hija tiene su propio requiredRoles más permisivo (ver abajo) que
+     * pisa a este durante el matching. El resto de las rutas hijas se
+     * quedan con su propio ['ADMIN'] explícito, así que siguen bloqueadas
+     * para TEAM_LEADER aunque este nivel ya no lo esté.
      */
     meta: {
       requiresAuth: true,
-      requiredRoles: ['ADMIN'],
+      requiredRoles: ['ADMIN', 'TEAM_LEADER'],
       title: 'Administración - CoreStream'
     },
     /**
@@ -143,7 +149,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/BuilderView.vue'),
         meta: {
           requiresAuth: true,
-          requiredRoles: ['ADMIN'],
+          requiredRoles: ['ADMIN', 'TEAM_LEADER'],
           title: 'Constructor - CoreStream Admin'
         }
       },

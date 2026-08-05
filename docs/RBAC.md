@@ -9,14 +9,17 @@ reflejarse aquí en el mismo commit.
 Definidos en `app/models/role.py` (`UserRole`) y reflejados en la tabla
 `roles` (seedeada por la migración `a2b3c4d5e6f7_seed_base_roles`):
 
-- **ADMIN** — administra la estructura del sistema (aplicaciones, épicas,
-  tickets, usuarios, invitaciones). No ejecuta trabajo operativo sobre
-  tickets (no puede iniciar/completar/preguntar) — ver nota sobre
-  `require_non_admin` más abajo.
+- **ADMIN** — el único que administra usuarios (invitar, cambiar roles,
+  resetear contraseñas) y la estructura completa del sistema (aplicaciones,
+  épicas, tickets). No ejecuta trabajo operativo sobre tickets (no puede
+  iniciar/completar/preguntar) — ver nota sobre `require_non_admin` más
+  abajo.
 - **TEAM_LEADER** — gestiona el trabajo de su equipo: puede hacer todo lo que
   hace un DEVELOPER sobre tickets propios, más las acciones de gestión
-  (crear/editar/borrar/reasignar tickets y épicas, resolver preguntas
-  bloqueantes ajenas, redirigir tickets, gestionar reuniones e incidentes).
+  (crear/editar/borrar/reasignar tickets y épicas, crear/editar/borrar
+  aplicaciones, resolver preguntas bloqueantes ajenas, redirigir tickets,
+  gestionar reuniones e incidentes). No puede invitar usuarios, cambiar
+  roles ni resetear contraseñas — eso queda exclusivo de ADMIN.
 - **DEVELOPER** — ejecuta el trabajo: solo puede actuar sobre tickets/
   subtareas/documentos que le pertenecen (asignado o autor de la carga).
 
@@ -50,7 +53,13 @@ sobre tickets, usadas por `routers/tickets.py`, `routers/subtasks.py` y
 | Acción | ADMIN | TEAM_LEADER | DEVELOPER |
 |---|---|---|---|
 | Listar / ver | ✅ | ✅ | ✅ |
-| Crear / editar / borrar | ✅ | ❌ | ❌ |
+| Crear / editar / borrar | ✅ | ✅ | ❌ |
+
+Antes era ADMIN-only: obligaba al admin a crear cada proyecto nuevo en
+persona, sin poder delegarlo en quien lleva el día a día del equipo. Se
+extendió a TEAM_LEADER siguiendo el mismo criterio que ya aplicaba a
+épicas/tickets — invitar usuarios, cambiar roles y resetear contraseñas
+siguen siendo exclusivos de ADMIN (ver más abajo).
 
 ### Épicas (`/api/applications/{app_id}/epics`)
 

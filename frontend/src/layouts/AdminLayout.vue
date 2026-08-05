@@ -30,53 +30,60 @@
           {{ t('nav.builder') }}
         </router-link>
 
-        <router-link
-          to="/admin/analytics"
-          class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
-          active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm"
-        >
-          {{ t('nav.analytics') }}
-        </router-link>
+        <!-- Constructor: el único punto de este layout que TEAM_LEADER
+             también puede usar (crear/editar aplicaciones). El resto sigue
+             siendo exclusivo de ADMIN — mostrarlo igual sería un enlace que
+             redirige solo al hacer click, la clase de "botón muerto" que ya
+             se evitó en el resto de la app. -->
+        <template v-if="isAdmin">
+          <router-link
+            to="/admin/analytics"
+            class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
+            active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm"
+          >
+            {{ t('nav.analytics') }}
+          </router-link>
 
-        <router-link
-          to="/admin/code-docs"
-          class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
-          active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm"
-        >
-          {{ t('nav.documentation') }}
-        </router-link>
+          <router-link
+            to="/admin/code-docs"
+            class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
+            active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm"
+          >
+            {{ t('nav.documentation') }}
+          </router-link>
 
-        <router-link
-          to="/admin/incidents"
-          class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
-          active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm"
-        >
-          Incidentes
-        </router-link>
+          <router-link
+            to="/admin/incidents"
+            class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
+            active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm"
+          >
+            Incidentes
+          </router-link>
 
-        <router-link
-          to="/admin/meetings"
-          class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
-          active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm"
-        >
-          Reuniones
-        </router-link>
+          <router-link
+            to="/admin/meetings"
+            class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
+            active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm"
+          >
+            Reuniones
+          </router-link>
 
-        <router-link
-          to="/admin/team"
-          class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
-          active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm"
-        >
-          {{ t('nav.team') }}
-        </router-link>
+          <router-link
+            to="/admin/team"
+            class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
+            active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm"
+          >
+            {{ t('nav.team') }}
+          </router-link>
 
-        <router-link
-          to="/admin/support"
-          class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
-          active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm"
-        >
-          {{ t('nav.support') }}
-        </router-link>
+          <router-link
+            to="/admin/support"
+            class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
+            active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm"
+          >
+            {{ t('nav.support') }}
+          </router-link>
+        </template>
 
       </nav>
     </aside>
@@ -116,7 +123,7 @@
 /**
  * AdminLayout - Componente de estructura para vistas de administración
  */
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores'
@@ -124,6 +131,8 @@ import { useAuthStore } from '@/stores'
 const router = useRouter()
 const authStore = useAuthStore()
 const { t } = useI18n()
+
+const isAdmin = computed(() => authStore.userRole === 'ADMIN')
 
 const isSidebarOpen = ref(false)
 const toggleSidebar = () => {

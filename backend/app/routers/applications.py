@@ -4,7 +4,7 @@ Router de Gestión de Aplicaciones.
 Maneja operaciones CRUD para aplicaciones del sistema:
 - Crear, listar, obtener, actualizar y eliminar aplicaciones
 - Cada aplicación contiene épicas que contienen tickets
-- Requiere permisos de ADMIN para crear, actualizar y eliminar
+- Requiere permisos de ADMIN o TEAM_LEADER para crear, actualizar y eliminar
 """
 
 from datetime import datetime, timezone
@@ -23,6 +23,14 @@ from app.schemas import ApplicationCreate, ApplicationResponse, ApplicationUpdat
 
 # Router para endpoints de aplicaciones
 router = APIRouter(tags=["Aplicaciones"])
+
+# ADMIN y TEAM_LEADER gestionan aplicaciones — igual que ya hace epics.py con
+# épicas/tickets (_MANAGERS ahí). Antes esto era ADMIN-only: en la práctica
+# obligaba al admin a crear cada aplicación nueva en persona, sin poder
+# delegarlo en quien lleve el día a día del equipo. Invitar usuarios,
+# cambiar roles y resetear contraseñas siguen siendo solo de ADMIN (ver
+# users.py e invitations.py) — esto solo afecta a las aplicaciones.
+_MANAGERS = [UserRole.ADMIN, UserRole.TEAM_LEADER]
 
 
 @router.get(
@@ -103,11 +111,11 @@ async def list_applications(
     response_model=ApplicationResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Crear nueva aplicación",
-    description="Crea una nueva aplicación en el sistema (requiere permisos ADMIN)"
+    description="Crea una nueva aplicación en el sistema (requiere ADMIN o TEAM_LEADER)"
 )
 async def create_application(
     app_data: ApplicationCreate,
-    current_user: User = Depends(require_role(UserRole.ADMIN)),
+    current_user: User = Depends(require_role(_MANAGERS)),
     db: AsyncSession = Depends(get_db)
 ) -> ApplicationResponse:
     """
@@ -115,7 +123,7 @@ async def create_application(
 
     Args:
         app_data (ApplicationCreate): Datos de la nueva aplicación
-        current_user (User): Usuario autenticado con rol ADMIN
+        current_user (User): Usuario autenticado con rol ADMIN o TEAM_LEADER
         db (AsyncSession): Sesión asíncrona de base de datos
 
     Returns:
@@ -239,12 +247,12 @@ async def get_application(
     "/{app_id}",
     response_model=ApplicationResponse,
     summary="Actualizar aplicación",
-    description="Modifica los datos de una aplicación existente (requiere permisos ADMIN)"
+    description="Modifica los datos de una aplicación existente (requiere ADMIN o TEAM_LEADER)"
 )
 async def update_application(
     app_id: UUID,
     app_update: ApplicationUpdate,
-    current_user: User = Depends(require_role(UserRole.ADMIN)),
+    current_user: User = Depends(require_role(_MANAGERS)),
     db: AsyncSession = Depends(get_db)
 ) -> ApplicationResponse:
     """
@@ -253,7 +261,7 @@ async def update_application(
     Args:
         app_id (UUID): ID de la aplicación a actualizar
         app_update (ApplicationUpdate): Nuevos datos de la aplicación
-        current_user (User): Usuario autenticado con rol ADMIN
+        current_user (User): Usuario autenticado con rol ADMIN o TEAM_LEADER
         db (AsyncSession): Sesión asíncrona de base de datos
 
     Returns:
@@ -311,7 +319,7 @@ async def update_application(
 )
 async def delete_application(
     app_id: UUID,
-    current_user: User = Depends(require_role(UserRole.ADMIN)),
+    current_user: User = Depends(require_role(_MANAGERS)),
     db: AsyncSession = Depends(get_db)
 ) -> None:
     """
@@ -319,7 +327,7 @@ async def delete_application(
 
     Args:
         app_id (UUID): ID de la aplicación a eliminar
-        current_user (User): Usuario autenticado con rol ADMIN
+        current_user (User): Usuario autenticado con rol ADMIN o TEAM_LEADER
         db (AsyncSession): Sesión asíncrona de base de datos
 
     Raises:
