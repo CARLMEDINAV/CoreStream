@@ -41,7 +41,7 @@
         @click="showAddMemberModal = true"
         class="px-4 py-2 bg-lime text-dark-gray font-semibold rounded-lg hover:bg-lime-90 transition-colors flex items-center gap-2"
       >
-        ➕ Agregar Miembro
+        ➕ Invitar Miembro
       </button>
       <button
         @click="refreshTeam"
@@ -206,12 +206,42 @@
           <div class="bg-white dark:bg-[var(--bg-card)] rounded-xl shadow-xl w-full max-w-md mx-4">
             <div class="p-6 border-b border-slate-200 dark:border-[var(--border-subtle)]">
               <h2 class="text-xl font-bold text-slate-900 dark:text-white">
-                {{ showEditModal ? 'Editar Miembro' : 'Agregar Nuevo Miembro' }}
+                {{ showEditModal ? 'Editar Miembro' : 'Invitar Nuevo Miembro' }}
               </h2>
             </div>
 
-            <form @submit.prevent="saveMember" class="p-6 space-y-4">
-              <div>
+            <!-- Enlace de invitación ya generado: se muestra en vez del formulario -->
+            <div v-if="inviteLink" class="p-6 space-y-4">
+              <p class="text-sm text-slate-600 dark:text-slate-300">
+                Copia este enlace y entrégaselo a la persona invitada (por Slack, correo, etc.).
+                Solo se muestra una vez.
+              </p>
+              <div class="flex gap-2">
+                <input
+                  :value="inviteLink"
+                  readonly
+                  class="flex-1 px-3 py-2 border border-slate-300 dark:border-[var(--border-subtle)] rounded-lg bg-slate-50 dark:bg-[var(--bg-panel)] text-slate-900 dark:text-white text-sm"
+                  @click="($event.target as HTMLInputElement).select()"
+                />
+                <button
+                  type="button"
+                  @click="copyInviteLink"
+                  class="px-4 py-2 bg-lime text-dark-gray font-semibold rounded-lg hover:bg-lime-90 transition-colors"
+                >
+                  Copiar
+                </button>
+              </div>
+              <button
+                type="button"
+                @click="closeMemberModal"
+                class="w-full px-4 py-2 border border-slate-300 dark:border-[var(--border-subtle)] text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-[var(--bg-panel)] transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <form v-else @submit.prevent="saveMember" class="p-6 space-y-4">
+              <div v-if="showEditModal">
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                   Nombre Completo
                 </label>
@@ -236,7 +266,7 @@
                 />
               </div>
 
-              <div>
+              <div v-if="showEditModal">
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                   Especialidad
                 </label>
@@ -273,7 +303,7 @@
               <div class="flex gap-3 mt-6">
                 <button
                   type="button"
-                  @click="showAddMemberModal = false; showEditModal = false"
+                  @click="closeMemberModal"
                   class="flex-1 px-4 py-2 border border-slate-300 dark:border-[var(--border-subtle)] text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-[var(--bg-panel)] transition-colors"
                 >
                   Cancelar
@@ -283,7 +313,7 @@
                   :disabled="isLoading"
                   class="flex-1 px-4 py-2 bg-lime text-dark-gray font-semibold rounded-lg hover:bg-lime-90 transition-colors disabled:opacity-50"
                 >
-                  {{ showEditModal ? 'Guardar Cambios' : 'Agregar Miembro' }}
+                  {{ showEditModal ? 'Guardar Cambios' : 'Generar Invitación' }}
                 </button>
               </div>
             </form>
@@ -365,6 +395,7 @@ const dialogStore = useDialogStore()
 const isLoading = ref(false)
 const showAddMemberModal = ref(false)
 const showEditModal = ref(false)
+const inviteLink = ref<string | null>(null)
 
 const formData = ref({
   fullName: '',
@@ -456,8 +487,13 @@ const editMember = (member: User) => {
 }
 
 const saveMember = async () => {
-  if (!formData.value.fullName || !formData.value.email) {
-    dialogStore.alert('Por favor completa todos los campos requeridos')
+  if (showEditModal.value) {
+    if (!formData.value.fullName) {
+      dialogStore.alert('Por favor completa todos los campos requeridos')
+      return
+    }
+  } else if (!formData.value.email) {
+    dialogStore.alert('Por favor ingresa un correo')
     return
   }
 
@@ -470,25 +506,39 @@ const saveMember = async () => {
         specialty: formData.value.specialty || undefined,
       })
       showEditModal.value = false
+      formData.value = { fullName: '', email: '', specialty: '', role: UserRole.DEVELOPER }
+      editingMemberId.value = null
     } else {
-      // Add new member
-      await teamStore.addMember({
-        fullName: formData.value.fullName,
+      // Invita al nuevo miembro: no crea la cuenta todavía, solo genera el
+      // enlace. Se muestra en el propio modal en vez de cerrarlo.
+      inviteLink.value = await teamStore.inviteMember({
         email: formData.value.email,
-        specialty: formData.value.specialty || undefined,
         role: formData.value.role as UserRole,
       })
-      showAddMemberModal.value = false
     }
-
-    // Reset form
-    formData.value = { fullName: '', email: '', specialty: '', role: UserRole.DEVELOPER }
-    editingMemberId.value = null
   } catch (error) {
     console.error('Error al guardar miembro:', error)
     dialogStore.alert('Error al guardar los cambios')
   } finally {
     isLoading.value = false
+  }
+}
+
+const closeMemberModal = () => {
+  showAddMemberModal.value = false
+  showEditModal.value = false
+  inviteLink.value = null
+  formData.value = { fullName: '', email: '', specialty: '', role: UserRole.DEVELOPER }
+  editingMemberId.value = null
+}
+
+const copyInviteLink = async () => {
+  if (!inviteLink.value) return
+  try {
+    await navigator.clipboard.writeText(inviteLink.value)
+    dialogStore.alert('Enlace copiado al portapapeles')
+  } catch {
+    // Sin permiso de clipboard: el input de todas formas es seleccionable a mano
   }
 }
 

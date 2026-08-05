@@ -250,7 +250,6 @@ import { Icon } from '@iconify/vue'
 import { useAuthStore } from '@/stores/auth'
 import { api } from '@/services/api'
 import { useNotificationsStore } from '@/stores/notifications'
-import { useWebSocket } from '@/composables/useWebSocket'
 
 // =====================================================================
 // DEFINICIÓN DE TIPOS

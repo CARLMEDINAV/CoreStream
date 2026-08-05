@@ -7,7 +7,6 @@
  * - Recopilar datos de rendimiento de usuarios
  * - Generar mapas de calor de actividad
  * - Calcular datos de burndown para épicos
- * - Exportar reportes en CSV
  * - Ordenar y filtrar datos analíticos
  */
  
@@ -425,83 +424,6 @@ export const useAnalyticsStore = defineStore('analytics', () => {
   }
 
   /**
-   * Exporta un reporte en formato CSV
-   * Se descarga automáticamente en el navegador del usuario
-   * 
-   * CONTENIDO DEL CSV:
-   * - Resumen de aplicación
-   * - Datos de rendimiento por usuario
-   * - Métricas generales
-   * 
-   * @param appId - ID de la aplicación
-   * @returns Promise<void>
-   */
-  const exportCsv = async (appId: string): Promise<void> => {
-    isLoading.value = true
-    error.value = null
-
-    try {
-      // La API retorna un blob con el contenido CSV
-      const csvContent = await api.analytics.exportCsv({applicationId: appId})
-      
-      // Crear blob y descargar
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-      const link = document.createElement('a')
-      const url = URL.createObjectURL(blob)
-      
-      link.setAttribute('href', url)
-      link.setAttribute('download', `analytics-${appId}-${Date.now()}.csv`)
-      link.style.visibility = 'hidden'
-      
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Error al exportar CSV'
-      error.value = message
-      console.error('Error en exportCsv:', err)
-      throw err
-    } finally {
-      isLoading.value = false
-    }
-  }
-
-  /**
-   * Exporta un reporte en formato PDF
-   * Se descarga automáticamente en el navegador del usuario
-   * 
-   * @param appId - ID de la aplicación
-   * @returns Promise<void>
-   */
-  const exportPdf = async (appId: string): Promise<void> => {
-    isLoading.value = true
-    error.value = null
-
-    try {
-      const pdfContent = await api.analytics.exportPdf({applicationId: appId})
-      
-      const blob = new Blob([pdfContent], { type: 'application/pdf' })
-      const link = document.createElement('a')
-      const url = URL.createObjectURL(blob)
-      
-      link.setAttribute('href', url)
-      link.setAttribute('download', `analytics-${appId}-${Date.now()}.pdf`)
-      link.style.visibility = 'hidden'
-      
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Error al exportar PDF'
-      error.value = message
-      console.error('Error en exportPdf:', err)
-      throw err
-    } finally {
-      isLoading.value = false
-    }
-  }
-
-  /**
    * Limpia el estado del store (para cuando se cambia de aplicación)
    */
   const clear = (): void => {
@@ -541,8 +463,6 @@ export const useAnalyticsStore = defineStore('analytics', () => {
     setDateRangeLastDays,
     setSortColumn,
     setSortDirection,
-    exportCsv,
-    exportPdf,
     clear,
   }
 })

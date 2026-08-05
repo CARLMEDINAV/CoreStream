@@ -10,25 +10,27 @@ Permisos:
 - Cambiar estado (investigate/resolve): cualquier usuario autenticado
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from uuid import UUID
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from app.database import get_db
-from app.models import (
-    Ticket, User, TicketStatus, TicketType, TicketEvent, TicketEventType
-)
+from app.middleware.auth import get_current_user, require_role
+from app.models import Ticket, TicketEvent, TicketEventType, TicketStatus, TicketType, User
 from app.models.role import UserRole
 from app.schemas.ticket import (
-    TicketResponse, TicketEventResponse, TicketComplete,
-    SupportTicketCreate, SupportTicketUpdate, SupportTicketAssign,
+    SupportTicketAssign,
+    SupportTicketCreate,
+    SupportTicketUpdate,
+    TicketComplete,
+    TicketEventResponse,
+    TicketResponse,
 )
 from app.services.ticket_state_machine import TicketStateMachine
-from app.middleware.auth import get_current_user, require_role
-
 
 router = APIRouter(tags=["Support Tickets"])
 
@@ -274,9 +276,13 @@ async def get_support_ticket_events(
     """Devuelve el historial de eventos de un ticket de soporte."""
     await _get_support_ticket_or_404(ticket_id, db)
 
+    # TicketEventResponse (app.schemas.ticket) serializa user como UserResponse,
+    # cuyo campo `role` es un str derivado de user.role.name — sin cargar
+    # también esa relación, el lazy-load fuera de contexto async revienta con
+    # 500 (MissingGreenlet) en cuanto el ticket tiene algún evento con usuario.
     result = await db.execute(
         select(TicketEvent)
-        .options(selectinload(TicketEvent.user))
+        .options(selectinload(TicketEvent.user).selectinload(User.role))
         .where(TicketEvent.ticket_id == ticket_id)
         .order_by(TicketEvent.created_at.desc())
         .offset(skip)

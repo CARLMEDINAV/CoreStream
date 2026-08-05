@@ -14,6 +14,7 @@
  
 import { createRouter, createWebHashHistory, RouteRecordRaw, NavigationGuardNext, RouteLocationNormalized } from 'vue-router'
 import type { UserRole } from '@/types'
+import { useAuthStore } from '@/stores/auth'
 
 /**
  * ========================================
@@ -29,29 +30,20 @@ import type { UserRole } from '@/types'
 const routes: RouteRecordRaw[] = [
   {
     /**
-     * Ruta raíz
-     * Redirige a login si no está autenticado, o al dashboard si lo está
+     * Ruta raíz. Antes resolvía el destino con un `redirect(to)` síncrono
+     * que leía accessToken de localStorage — funcionaba porque el token
+     * estaba disponible de inmediato al cargar la página.
+     *
+     * Ya no: el access token vive solo en memoria y se restaura de forma
+     * asíncrona (authStore.ensureInitialized(), que espera a /auth/refresh).
+     * Un `redirect` de ruta debe resolver de forma síncrona, así que no
+     * puede esperar nada — por eso esta ruta ya no decide el destino por sí
+     * misma: se queda "en blanco" y el guard beforeEach (que sí es async)
+     * es quien decide a dónde ir una vez conoce el estado real de sesión.
      */
     path: '/',
-    redirect: (to) => {
-      /**
-       * Si hay token, redirige al dashboard apropiado
-       * Si no hay token, redirige a login
-       */
-      const token = localStorage.getItem('accessToken')
-      const userRole = localStorage.getItem('userRole')
-      
-      // // console.log('ROOT REDIRECT:', { token, userRole })
-      
-      if (!token) {
-        // // console.log('NO TOKEN - Redirecting to /login')
-        return { path: '/login' }
-      }
-      
-      const target = userRole === 'ADMIN' ? '/admin' : '/dev'
-      // // console.log('HAS TOKEN - Redirecting to', target)
-      return { path: target }
-    }
+    name: 'Root',
+    component: { render: () => null },
   },
 
   /**
@@ -84,6 +76,20 @@ const routes: RouteRecordRaw[] = [
        * Título de la página
        */
       title: 'Iniciar Sesión - CoreStream'
+    }
+  },
+
+  {
+    /**
+     * Aceptación de invitación (plan 3.7). Pública: el invitado todavía no
+     * tiene cuenta, no puede haber autenticación que exigirle.
+     */
+    path: '/invite/:token',
+    name: 'InvitationAccept',
+    component: () => import('@/views/InvitationAcceptView.vue'),
+    meta: {
+      requiresAuth: false,
+      title: 'Aceptar invitación - CoreStream'
     }
   },
 
@@ -439,32 +445,39 @@ router.beforeEach(
     next: NavigationGuardNext
   ): Promise<void> => {
     /**
-     * Obtiene el token de autenticación almacenado
-     * Normalmente se guardaría en el store de Pinia
-     * Aquí se simplifca extrayéndolo del localStorage
+     * El access token ya no vive en localStorage (plan 3.2): vive en memoria
+     * en el store de Pinia, y se restaura de forma asíncrona en la primera
+     * carga de página vía /auth/refresh (cookie httpOnly). ensureInitialized()
+     * dispara esa restauración una sola vez y la memoiza — si App.vue ya la
+     * inició, esto solo espera la misma promesa; si esta es la primera
+     * navegación tras recargar la página, la dispara aquí.
      */
-    let token = localStorage.getItem('accessToken')
-    let userRole = localStorage.getItem('userRole') as UserRole | null
+    const authStore = useAuthStore()
+    await authStore.ensureInitialized()
+
+    const isAuthenticated = authStore.isAuthenticated
+    const userRole = authStore.userRole as UserRole | undefined
+    const dashboardPath = userRole === 'ADMIN' ? '/admin' : '/dev'
 
     /**
-     * Meta información de la ruta
+     * CASO 0: Ruta raíz — antes tenía su propio redirect() síncrono leyendo
+     * localStorage; ahora que el estado de sesión se conoce de forma async,
+     * la decisión se toma aquí, después de esperar ensureInitialized().
      */
+    if (to.path === '/') {
+      next({ path: isAuthenticated ? dashboardPath : '/login' })
+      return
+    }
+
     const requiresAuth = to.meta.requiresAuth as boolean | undefined
     const requiredRoles = to.meta.requiredRoles as string[] | undefined
 
     /**
-     * CASO 1: Ruta requiere autenticación pero usuario no tiene token
-     * Excepto para la ruta raíz que tiene su propio redirect()
+     * CASO 1: Ruta requiere autenticación pero el usuario no tiene sesión
      */
-    if (requiresAuth && !token && to.path !== '/') {
-      /**
-       * Redirige a login y guarda la ruta destino para volver después
-       */
+    if (requiresAuth && !isAuthenticated) {
       next({
         name: 'Login',
-        /**
-         * Parámetro query: ruta a la que ir después de autenticarse
-         */
         query: { redirect: to.path }
       })
       return
@@ -477,12 +490,25 @@ router.beforeEach(
      * CASO 3: Ruta requiere un rol específico y usuario no lo tiene
      */
     if (requiredRoles && userRole && !requiredRoles.includes(userRole)) {
-      /**
-       * Redirige a la página de acceso denegado o al dashboard principal
-       */
       next({
-        path: userRole === 'ADMIN' ? '/admin/builder' : '/dev/workbench'
+        path: dashboardPath === '/admin' ? '/admin/builder' : '/dev/workbench'
       })
+      return
+    }
+
+    /**
+     * CASO 3.5: la contraseña actual la fijó un admin al resetearla
+     * (plan 3.8) — se fuerza el cambio antes de dejar navegar a cualquier
+     * otro sitio que no sea la propia pantalla de ajustes o el login.
+     */
+    if (
+      isAuthenticated &&
+      authStore.mustChangePassword &&
+      to.name !== 'AdminSettings' &&
+      to.name !== 'DevSettings' &&
+      to.name !== 'Login'
+    ) {
+      next({ path: `${dashboardPath}/settings`, query: { forcePasswordChange: '1' } })
       return
     }
 

@@ -34,4 +34,4 @@ class Subtask(Base, BaseEntity):
         index=True,
     )
 
-    ticket: Mapped["Ticket"] = relationship(back_populates="subtasks")
+    ticket: Mapped["Ticket"] = relationship(lazy="raise_on_sql", back_populates="subtasks")

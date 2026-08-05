@@ -62,7 +62,7 @@ export { useThemeStore } from './theme'
  * useAnalyticsStore
  *   - Estado: summary, performance, heatmapData, burndownData, dateRange
  *   - Acciones: fetchSummary, fetchPerformance, fetchHeatmap, fetchBurndown
- *              exportCsv, exportPdf, setDateRange, setSortColumn
+ *              setDateRange, setSortColumn
  *   - Getters: sortedPerformance, topPerformer, teamAverageVelocity, teamBlockedRate
  * 
  * useNotificationsStore

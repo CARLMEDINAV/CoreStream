@@ -14,13 +14,13 @@ Métricas principales:
 
 from datetime import datetime, timedelta
 from typing import List, Optional
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from fastapi import HTTPException, status
 from uuid import UUID
 
-from app.models import TicketEvent, Ticket, User, Epic, TicketStatus, Role
+from fastapi import HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 
+from app.models import Epic, Role, Ticket, TicketEvent, TicketStatus, User
 
 # Tipos de evento que NO representan trabajo real sobre un ticket, sino acciones de
 # gestión o autoría (crearlo, asignarlo, editar sus campos, moverlo entre épicas).

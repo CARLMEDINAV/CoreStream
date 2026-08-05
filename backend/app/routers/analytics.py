@@ -9,22 +9,31 @@ Proporciona endpoints para análisis y visualización de datos:
 - Exportación de datos en CSV
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from fastapi.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-from typing import Optional
-from datetime import datetime, timedelta, timezone, date
-from uuid import UUID
 import csv
 import io
+from datetime import date, datetime, timedelta, timezone
+from typing import Optional
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Application, Ticket, User, Epic, TicketStatus, TicketType, SupportSeverity
+from app.middleware.auth import get_current_user, require_role
+from app.models import (
+    Application,
+    Epic,
+    SupportSeverity,
+    Ticket,
+    TicketStatus,
+    TicketType,
+    User,
+    UserRole,
+)
 from app.schemas.analytics import SupportSummarySchema
 from app.services.analytics_service import analytics_service
-from app.middleware.auth import get_current_user, require_role
-from app.models import UserRole
 
 # Router para analíticas
 router = APIRouter(tags=["Analíticas"])

@@ -1,149 +1,128 @@
 /**
  * Store de Autenticación - CoreStream
- * Gestiona la sesión JWT, usuario actual y permisos RBAC
- * 
+ * Gestiona la sesión, usuario actual y permisos RBAC
+ *
  * Responsabilidades:
- * - Autenticación (login, logout, registro)
- * - Gestión de tokens (almacenamiento, refresco)
+ * - Autenticación (login, logout)
+ * - Gestión del access token (en memoria, nunca en localStorage)
  * - Control de acceso basado en roles
- * - Persistencia de sesión en localStorage
+ * - Conexión/desconexión del WebSocket de notificaciones en tiempo real
+ *
+ * El registro público se eliminó (plan 3.7): las cuentas se crean por
+ * invitación, ver stores/team.ts (inviteMember) y views/InvitationAcceptView.vue.
  */
- 
+
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { UserRole, type User, type AuthTokens } from '@/types'
 import { api, setAuthTokens, clearAuthTokens } from '@/services/api'
 import { useThemeStore } from '@/stores/theme'
+import { useWebSocket } from '@/composables/useWebSocket'
 
 export const useAuthStore = defineStore('auth', () => {
   // ========== ESTADO REACTIVO ==========
-  
-  /**
-   * Usuario actualmente autenticado
-   * null si no hay sesión activa
-   */
+
   const user = ref<User | null>(null)
 
   /**
-   * Tokens de autenticación (access y refresh)
-   * Se persiste en localStorage para mantener sesión
+   * Access token JWT. Vive solo en memoria — nunca en localStorage — para
+   * que un XSS no pueda robar una sesión completa (antes tanto access como
+   * refresh token estaban en localStorage; el refresh de 7 días era el
+   * premio gordo). El refresh token ya no es visible aquí en absoluto: vive
+   * en una cookie HttpOnly que solo el navegador puede adjuntar.
    */
-  const tokens = ref<AuthTokens | null>(null)
+  const accessToken = ref<string | null>(null)
 
-  /**
-   * Indica si el usuario está autenticado
-   * Derivado del estado de tokens y usuario
-   */
   const isAuthenticated = ref(false)
-
-  /**
-   * Flag de carga durante operaciones async
-   * Previene múltiples llamadas simultáneas
-   */
   const isLoading = ref(false)
-
-  /**
-   * Mensaje de error de la última operación fallida
-   */
   const error = ref<string | null>(null)
 
   // ========== GETTERS COMPUTADOS ==========
 
-  /**
-   * Comprueba si el usuario tiene rol de administrador
-   */
   const isAdmin = computed(() => user.value?.role === 'ADMIN')
-
-  /**
-   * Comprueba si el usuario tiene rol de desarrollador
-   */
   const isDeveloper = computed(() => user.value?.role === 'DEVELOPER')
-
-  /**
-   * Comprueba si el usuario tiene rol de líder de equipo
-   */
   const isTeamLeader = computed(() => user.value?.role === 'TEAM_LEADER')
-
-  /**
-   * Retorna el rol actual del usuario
-   */
   const userRole = computed((): UserRole | undefined => user.value?.role)
-
-  /**
-   * Retorna el nombre completo del usuario autenticado
-   */
   const fullName = computed(() => user.value?.fullName ?? '')
-
-  /**
-   * Retorna el email del usuario autenticado
-   */
   const userEmail = computed(() => user.value?.email ?? '')
+  const mustChangePassword = computed(() => user.value?.mustChangePassword ?? false)
+
+  // ========== WEBSOCKET DE NOTIFICACIONES ==========
 
   /**
-   * Comprueba si el access token está próximo a expirar (menos de 5 minutos)
+   * Conecta el WebSocket para el usuario actual. Requiere haber llamado
+   * primero a fetchMe() (necesita user.value.id).
+   *
+   * No es crítico: si falla (p. ej. el backend no puede emitir un ticket),
+   * solo se pierden las notificaciones en tiempo real, no la sesión.
    */
-  const isTokenExpiringSoon = computed(() => {
-    // expiresIn is a duration in seconds, not a timestamp — we don't have issuedAt
-    // so we can't compute absolute expiry here. The Axios 401 interceptor handles
-    // reactive refresh; this proactive check is left as a safe no-op.
-    return false
-  })
+  const connectRealtime = (): void => {
+    if (!user.value) return
+    try {
+      useWebSocket().connect(user.value.id)
+    } catch (err) {
+      console.error('No se pudo conectar el WebSocket de notificaciones:', err)
+    }
+  }
+
+  const disconnectRealtime = (): void => {
+    try {
+      useWebSocket().disconnect()
+    } catch {
+      /* no-op */
+    }
+  }
 
   // ========== ACCIONES ==========
 
   /**
-   * Inicializa el store desde localStorage.
-   * Restaura tokens, configura el cliente HTTP y carga el perfil del usuario.
-   * Lanza error si la sesión no puede restaurarse (el caller debe redirigir a login).
+   * Restaura la sesión al cargar la aplicación.
+   *
+   * Como el access token vive solo en memoria, se pierde en cada recarga de
+   * página. Para restaurarlo sin pedir credenciales de nuevo, se llama a
+   * /auth/refresh sin argumentos: el navegador adjunta la cookie httpOnly
+   * del refresh token solo. Si no hay cookie válida (primera visita, o
+   * sesión expirada), esto falla con 401 y el caller (App.vue) redirige a
+   * login — es el comportamiento esperado, no un error real.
    */
   const initialize = async (): Promise<void> => {
     try {
-      // Intentar authTokens (objeto JSON guardado en login)
-      let parsed: AuthTokens | null = null
-      const storedAuthTokens = localStorage.getItem('authTokens')
-      if (storedAuthTokens) {
-        try { parsed = JSON.parse(storedAuthTokens) } catch { /* ignorar JSON inválido */ }
-      }
-      // Fallback: claves individuales (compatibilidad hacia atrás)
-      if (!parsed?.accessToken) {
-        const accessToken = localStorage.getItem('accessToken')
-        const refreshToken = localStorage.getItem('refreshToken')
-        if (accessToken && refreshToken) {
-          parsed = { accessToken, refreshToken, tokenType: 'Bearer' }
-        }
-      }
-
-      if (!parsed?.accessToken) return  // Sin tokens almacenados, nada que restaurar
-
-      // Validar formato JWT básico (3 segmentos separados por punto)
-      if (parsed.accessToken.split('.').length !== 3) {
-        clearSession()
-        return
-      }
-
-      tokens.value = parsed
-      setAuthTokens(parsed)       // Configura headers en el cliente HTTP
+      const tokens = await api.auth.refresh()
+      applyTokens(tokens)
       isAuthenticated.value = true
-      await fetchMe()             // Carga user.value desde el backend
+      await fetchMe()
+      connectRealtime()
     } catch (err) {
-      console.error('Error al inicializar autenticación desde localStorage:', err)
       clearSession()
-      throw err  // El caller (App.vue) redirige a login
+      throw err
     }
   }
 
   /**
-   * Autentica al usuario con email y contraseña
-   * 
-   * @param email - Email del usuario
-   * @param password - Contraseña en texto plano
-   * @returns Promise<User> - Datos del usuario autenticado
-   * 
-   * Flujo:
-   * 1. Llama a api.auth.login(email, password)
-   * 2. Almacena tokens en localStorage
-   * 3. Marca isAuthenticated = true
-   * 4. Obtiene datos completos del usuario con fetchMe()
+   * Memoiza el intento de inicialización para que tanto App.vue (al montar)
+   * como el guard del router (en la primera navegación) puedan esperarlo
+   * sin disparar dos /auth/refresh en paralelo.
+   *
+   * Por qué hace falta esto: antes el guard leía accessToken de localStorage
+   * — disponible de forma sincrónica en cuanto carga la página. Ahora el
+   * access token vive solo en memoria y se restaura de forma asíncrona
+   * (initialize(), arriba). En la primera navegación tras una recarga de
+   * página, el guard puede ejecutarse ANTES de que App.vue monte y llame a
+   * initialize() — por eso el propio guard debe poder dispararlo, no solo
+   * esperarlo.
+   */
+  let initPromise: Promise<void> | null = null
+  const ensureInitialized = (): Promise<void> => {
+    if (!initPromise) {
+      initPromise = initialize().catch(() => {
+        /* sin sesión previa: estado normal, no un error a propagar aquí */
+      })
+    }
+    return initPromise
+  }
+
+  /**
+   * Autentica al usuario con email y contraseña.
    */
   const login = async (email: string, password: string): Promise<User> => {
     isLoading.value = true
@@ -151,29 +130,17 @@ export const useAuthStore = defineStore('auth', () => {
 
     try {
       const response = await api.auth.login({ email, password })
-
-      tokens.value = response.tokens
-      setAuthTokens(response.tokens)
-      localStorage.setItem('authTokens', JSON.stringify(response.tokens))
-      localStorage.setItem('accessToken', response.tokens.accessToken)
-      localStorage.setItem('refreshToken', response.tokens.refreshToken)
-
+      applyTokens(response.tokens)
       isAuthenticated.value = true
-      console.log('Auth.login: isAuthenticated set to true')
 
       await fetchMe()
-      if (user.value) {
-        localStorage.setItem('userRole', user.value.role)
-        localStorage.setItem('userId', user.value.id)
-        localStorage.setItem('userName', user.value.fullName)
-      }
+      connectRealtime()
 
       return user.value!
     } catch (err) {
       const message = (err as any)?.response?.data?.detail
         || (err as any)?.response?.data?.message
         || (err instanceof Error ? err.message : 'Error al iniciar sesión')
-      console.error('Auth.login: Error en login:', err)
       clearSession()
       error.value = message
       throw err
@@ -183,58 +150,22 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * Registra un nuevo usuario en el sistema
-   * 
-   * @param data - Datos de registro {email, password, fullName, departament?}
-   * @returns Promise<User> - Usuario creado
-   * 
-   * Nota: Generalmente no autentica automáticamente, requiere login posterior
+   * Aplica un AuthTokens recién recibido: guarda el access token en memoria
+   * y lo registra en el cliente HTTP para que vaya como Bearer.
    */
-  const register = async (data: {
-    email: string
-    password: string
-    fullName: string
-    department?: string
-  }): Promise<User> => {
-    isLoading.value = true
-    error.value = null
-
-    try {
-      const created = await api.auth.register({
-        email: data.email,
-        password: data.password,
-        fullName: data.fullName,
-        role: UserRole.DEVELOPER,
-      })
-      return created
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Error al registrarse'
-      error.value = message
-      console.error('Error en register:', err)
-      throw err
-    } finally {
-      isLoading.value = false
-    }
+  const applyTokens = (tokens: AuthTokens): void => {
+    accessToken.value = tokens.accessToken
+    setAuthTokens(tokens)
   }
 
   /**
-   * Obtiene los datos actuales del usuario autenticado
-   * Se ejecuta después del login para obtener información completa
-   * 
-   * @returns Promise<User>
+   * Obtiene los datos del usuario autenticado.
    */
   const fetchMe = async (): Promise<User> => {
     try {
-      console.log('fetchMe: Calling api.auth.getMe()...')
       const userData = await api.auth.getMe()
-      console.log('fetchMe: User data received:', userData)
-
       user.value = userData
-      localStorage.setItem('userRole', userData.role)
-      localStorage.setItem('userId', userData.id)
-      localStorage.setItem('userName', userData.fullName)
 
-      // Restaurar tema guardado en el servidor
       const savedTheme = userData.preferences?.theme
       if (savedTheme === 'light' || savedTheme === 'dark') {
         useThemeStore().applyTheme(savedTheme)
@@ -242,44 +173,28 @@ export const useAuthStore = defineStore('auth', () => {
 
       return userData
     } catch (err) {
-      console.error('fetchMe: Error al obtener datos del usuario:', err)
       clearSession()
       throw err
     }
   }
 
   /**
-   * Refresca el access token usando el refresh token
-   * Se debe ejecutar automáticamente cuando el token está próximo a expirar
-   * 
-   * @returns Promise<AuthTokens> - Nuevos tokens
+   * Refresca el access token. El refresh token va por cookie httpOnly, no
+   * hace falta pasarlo — a diferencia de antes, donde vivía en el store.
    */
   const refreshToken = async (): Promise<AuthTokens> => {
-    if (!tokens.value?.refreshToken) {
-      throw new Error('No hay refresh token disponible')
-    }
-
     try {
-      const response = await api.auth.refresh(tokens.value.refreshToken)
-      const newTokens = ((response as any).data || response) as AuthTokens
-      tokens.value = newTokens
-      setAuthTokens(newTokens)
-      localStorage.setItem('authTokens', JSON.stringify(newTokens))
-      localStorage.setItem('accessToken', newTokens.accessToken)
-      localStorage.setItem('refreshToken', newTokens.refreshToken)
+      const newTokens = await api.auth.refresh()
+      applyTokens(newTokens)
       return newTokens
     } catch (err) {
-      console.error('Error al refrescar token:', err)
       clearSession()
       throw err
     }
   }
 
   /**
-   * Actualiza el perfil del usuario autenticado
-   * 
-   * @param data - Datos a actualizar {fullName?, email?, phone?, avatar?}
-   * @returns Promise<User> - Usuario actualizado
+   * Actualiza el perfil del usuario autenticado.
    */
   const updateProfile = async (data: Partial<User>): Promise<User> => {
     isLoading.value = true
@@ -292,7 +207,6 @@ export const useAuthStore = defineStore('auth', () => {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error al actualizar perfil'
       error.value = message
-      console.error('Error en updateProfile:', err)
       throw err
     } finally {
       isLoading.value = false
@@ -300,11 +214,9 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * Cambia la contraseña del usuario autenticado
-   * 
-   * @param oldPassword - Contraseña actual
-   * @param newPassword - Nueva contraseña
-   * @returns Promise<void>
+   * Cambia la contraseña del usuario autenticado. Al completarse, el
+   * backend limpia must_change_password — se refleja pidiendo el perfil
+   * de nuevo para que la UI deje de exigir el cambio forzado.
    */
   const changePassword = async (oldPassword: string, newPassword: string): Promise<void> => {
     isLoading.value = true
@@ -312,10 +224,10 @@ export const useAuthStore = defineStore('auth', () => {
 
     try {
       await api.auth.changePassword({ oldPassword, newPassword })
+      await fetchMe()
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error al cambiar contraseña'
       error.value = message
-      console.error('Error en changePassword:', err)
       throw err
     } finally {
       isLoading.value = false
@@ -323,83 +235,56 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * Cierra la sesión del usuario
-   * 
-   * Flujo:
-   * 1. Llama a api.auth.logout para invalidar sesión en servidor
-   * 2. Limpia todos los datos locales
-   * 3. Elimina tokens de localStorage
-   * 4. Redirige a página de login (manejado por router)
+   * Cierra la sesión del usuario.
+   *
+   * Antes /auth/logout no existía (404) y esto solo borraba localStorage;
+   * el access token seguía siendo válido hasta expirar por su cuenta. Ahora
+   * el backend revoca de verdad access y refresh token (plan 3.3).
    */
   const logout = async (): Promise<void> => {
     try {
-      // Intentar notificar al servidor
       await api.auth.logout()
     } catch (err) {
       console.error('Error al notificar logout al servidor:', err)
-      // Continuar con limpieza local incluso si falla
     } finally {
       clearSession()
     }
   }
 
   /**
-   * Limpia toda la información de sesión
-   * Función auxiliar llamada por logout e initialize en caso de error
+   * Limpia toda la información de sesión en memoria.
    */
   const clearSession = (): void => {
+    disconnectRealtime()
     user.value = null
-    tokens.value = null
+    accessToken.value = null
     isAuthenticated.value = false
     error.value = null
     clearAuthTokens()
-    localStorage.removeItem('authTokens')
-    localStorage.removeItem('accessToken')
-    localStorage.removeItem('refreshToken')
-    localStorage.removeItem('userRole')
-    localStorage.removeItem('userId')
-    localStorage.removeItem('userName')
   }
 
-  /**
-   * Solicita reset de contraseña por email
-   * 
-   * @param email - Email del usuario
-   * @returns Promise<void>
-   */
   const requestPasswordReset = async (email: string): Promise<void> => {
     isLoading.value = true
     error.value = null
-
     try {
       await api.auth.requestPasswordReset({ email })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error al solicitar reset de contraseña'
       error.value = message
-      console.error('Error en requestPasswordReset:', err)
       throw err
     } finally {
       isLoading.value = false
     }
   }
 
-  /**
-   * Confirma el reset de contraseña con token
-   * 
-   * @param token - Token recibido en email
-   * @param newPassword - Nueva contraseña
-   * @returns Promise<void>
-   */
   const confirmPasswordReset = async (token: string, newPassword: string): Promise<void> => {
     isLoading.value = true
     error.value = null
-
     try {
       await api.auth.confirmPasswordReset({ token, newPassword })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error al confirmar reset de contraseña'
       error.value = message
-      console.error('Error en confirmPasswordReset:', err)
       throw err
     } finally {
       isLoading.value = false
@@ -409,7 +294,7 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     // Estado
     user,
-    tokens,
+    accessToken,
     isAuthenticated,
     isLoading,
     error,
@@ -420,11 +305,11 @@ export const useAuthStore = defineStore('auth', () => {
     userRole,
     fullName,
     userEmail,
-    isTokenExpiringSoon,
+    mustChangePassword,
     // Acciones
     initialize,
+    ensureInitialized,
     login,
-    register,
     fetchMe,
     refreshToken,
     updateProfile,

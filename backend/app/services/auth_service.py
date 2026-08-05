@@ -7,33 +7,33 @@ Utiliza SQLAlchemy AsyncSession para operaciones asincrónicas de base de datos 
 proporciona manejo robusto de errores y validaciones.
 """
 
-from typing import Optional
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from fastapi import HTTPException, status
-from passlib.context import CryptContext
-import re
-from uuid import UUID
+import base64
 
 # Pre-hash con SHA-256
 import hashlib
-import base64
+import logging
+import re
+from typing import Optional
+from uuid import UUID
 
-# Importar modelos desde el paquete de modelos
-from app.models import User, UserRole, Role
+from fastapi import HTTPException, status
+from passlib.context import CryptContext
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 
 # Importar utilidades de tokens del middleware
-from app.middleware.auth import (
-    create_access_token as mw_create_access_token, 
-    create_refresh_token as mw_create_refresh_token,
-    verify_token
-)
+from app.middleware.auth import create_access_token as mw_create_access_token
+from app.middleware.auth import create_refresh_token as mw_create_refresh_token
+from app.middleware.auth import verify_token
 
-
+# Importar modelos desde el paquete de modelos
+from app.models import Role, User, UserRole
+from app.schemas import TokenPayload
 
 # Configuración del contexto de encriptación de contraseñas
 # Se utiliza bcrypt como algoritmo de hashing para máxima seguridad
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+logger = logging.getLogger("corestream.auth")
 
 
 class AuthService:
@@ -87,7 +87,6 @@ class AuthService:
             - El hash es determinístico pero cada ejecución produce salt diferente
         """
         prepared = AuthService._prepare_password(password)
-        print(f"DEBUG - password len: {len(password)}, prepared len: {len(prepared)}")
         return pwd_context.hash(prepared)
     
     @staticmethod
@@ -237,9 +236,9 @@ class AuthService:
             
         except HTTPException:
             raise
-        except Exception as e:
+        except Exception:
             await db.rollback()
-            print(f"ERROR REAL: {type(e).__name__}: {e}")
+            logger.exception("Error al registrar nuevo usuario")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Error al registrar nuevo usuario"
@@ -398,6 +397,9 @@ class AuthService:
             
         # 3. Hashear y guardar
         user.hashed_password = AuthService.hash_password(new_password)
+        # Un cambio de contraseña exitoso cierra el ciclo abierto por un
+        # reseteo de admin (plan 3.8): ya no hace falta forzar el cambio.
+        user.must_change_password = False
         await db.commit()
         return True
 
@@ -421,20 +423,31 @@ class AuthService:
         )
 
     @staticmethod
-    def create_refresh_token(user: User) -> str:
-        """Crea un token de refresco JWT para renovar sesiones."""
-        role_str = user.role.name if user.role else "DEVELOPER"
+    def create_refresh_token(user: User, role_name: str | None = None) -> str:
+        """
+        Crea un token de refresco JWT para renovar sesiones.
+
+        role_name opcional, igual que create_access_token: si el caller ya
+        conoce el rol (p. ej. porque su query no cargó la relación
+        User.role con selectinload), evita un lazy-load que con
+        lazy="raise_on_sql" revienta con InvalidRequestError en vez de
+        acceder a la relación en silencio.
+        """
+        role_str = role_name or (user.role.name if user.role else "DEVELOPER")
 
         return mw_create_refresh_token(
             data={"sub": str(user.id), "role": role_str}
         )
 
     @staticmethod
-    async def verify_refresh_token(token: str) -> Optional[str]:
-        """Verifica la validez de un token de refresco."""
+    async def verify_refresh_token(token: str) -> Optional[TokenPayload]:
+        """
+        Verifica la validez de un token de refresco y devuelve su payload
+        completo (no solo el sub): el router necesita el jti para revocar el
+        token consumido al rotarlo, y is_jti_revoked ya lo comprueba aquí.
+        """
         try:
-            token_data = verify_token(token)
-            return token_data.sub
+            return await verify_token(token, expected_type="refresh")
         except Exception:
             return None
 

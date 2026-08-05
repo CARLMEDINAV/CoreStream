@@ -3,14 +3,13 @@
 
 import re
 from datetime import datetime
-from typing import Optional
+from typing import Any, List, Optional
 from uuid import UUID
-from typing import List, Any
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
-from app.schemas.user import UserResponse
 from app.schemas.subtask import SubtaskResponse
+from app.schemas.user import UserResponse
 
 _PLACEHOLDER_PR = re.compile(
     r'github\.com/owner/repo/|gitlab\.com/owner/repo/|bitbucket\.org/owner/repo/',
@@ -30,8 +29,8 @@ class TicketCreate(BaseModel):
         priority: Nivel de prioridad del ticket (default: MEDIUM) - URGENT, HIGH, MEDIUM, LOW
         due_date: Fecha límite para completar el ticket (opcional)
     """
-    title: str
-    description: Optional[str] = None
+    title: str = Field(..., max_length=255)
+    description: Optional[str] = Field(None, max_length=10_000)
     epic_id: UUID
     assignee_id: Optional[UUID] = None
     priority: str = "MEDIUM"
@@ -91,8 +90,8 @@ class TicketUpdate(BaseModel):
         order_index: Índice para ordenar tickets dentro de la épica (opcional)
         assignee_id: UUID del usuario asignado (opcional)
     """
-    title: Optional[str] = None
-    description: Optional[str] = None
+    title: Optional[str] = Field(None, max_length=255)
+    description: Optional[str] = Field(None, max_length=10_000)
     priority: Optional[str] = None
     due_date: Optional[datetime] = None
     order_index: Optional[int] = None
@@ -155,7 +154,7 @@ class TicketComplete(BaseModel):
     Atributos:
         pr_link: URL válida a la solicitud de cambio en GitHub, GitLab o Bitbucket
     """
-    pr_link: str
+    pr_link: str = Field(..., max_length=500)
 
     @field_validator("pr_link")
     @classmethod
@@ -195,7 +194,7 @@ class TicketQuestion(BaseModel):
     Atributos:
         question_text: Texto de la pregunta (mínimo 10 caracteres)
     """
-    question_text: str
+    question_text: str = Field(..., max_length=2_000)
 
     @field_validator("question_text")
     @classmethod
@@ -227,7 +226,7 @@ class TicketRedirect(BaseModel):
         reason: Motivo de la redirección (mínimo 10 caracteres)
     """
     to_user_id: UUID
-    reason: str
+    reason: str = Field(..., max_length=2_000)
 
     @field_validator("reason")
     @classmethod
@@ -345,7 +344,7 @@ class TicketResponse(BaseModel):
 
 class TicketResolveQuestion(BaseModel):
     """Esquema para resolver una pregunta de un ticket"""
-    resolution: str
+    resolution: str = Field(..., max_length=2_000)
 
     @field_validator("resolution")
     @classmethod
@@ -356,13 +355,13 @@ class TicketResolveQuestion(BaseModel):
     
 class SupportTicketCreate(BaseModel):
     """Esquema para crear un ticket de soporte (bug de producción)."""
-    title: str
-    description: Optional[str] = None
+    title: str = Field(..., max_length=255)
+    description: Optional[str] = Field(None, max_length=10_000)
     severity: str = "MEDIUM"
-    stack_trace: Optional[str] = None
-    reproduction_steps: Optional[str] = None
-    browser: Optional[str] = None
-    operating_system: Optional[str] = None
+    stack_trace: Optional[str] = Field(None, max_length=20_000)
+    reproduction_steps: Optional[str] = Field(None, max_length=5_000)
+    browser: Optional[str] = Field(None, max_length=255)
+    operating_system: Optional[str] = Field(None, max_length=255)
     linked_ticket_id: Optional[UUID] = None
 
     @field_validator("title")
@@ -383,13 +382,13 @@ class SupportTicketCreate(BaseModel):
 
 class SupportTicketUpdate(BaseModel):
     """Esquema para actualizar campos de un ticket de soporte."""
-    title: Optional[str] = None
-    description: Optional[str] = None
+    title: Optional[str] = Field(None, max_length=255)
+    description: Optional[str] = Field(None, max_length=10_000)
     severity: Optional[str] = None
-    stack_trace: Optional[str] = None
-    reproduction_steps: Optional[str] = None
-    browser: Optional[str] = None
-    operating_system: Optional[str] = None
+    stack_trace: Optional[str] = Field(None, max_length=20_000)
+    reproduction_steps: Optional[str] = Field(None, max_length=5_000)
+    browser: Optional[str] = Field(None, max_length=255)
+    operating_system: Optional[str] = Field(None, max_length=255)
     linked_ticket_id: Optional[UUID] = None
 
     @field_validator("title")

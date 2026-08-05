@@ -6,17 +6,16 @@ Sección B: métodos de transición async con TimerService y TransitionAuditServ
 Sección C: log_ticket_event con DB SQLite real (usa fixture sample_ticket).
 """
 
-import pytest
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
+import pytest
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models import TicketEventType, TicketStatus
 from app.services.ticket_state_machine import TicketStateMachine
-from app.models import TicketStatus, TicketEventType
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Sección A — can_transition (síncrono, sin dependencias externas)

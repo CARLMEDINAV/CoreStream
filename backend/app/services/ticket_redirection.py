@@ -5,18 +5,21 @@ Maneja el traspaso de responsabilidad de tickets entre usuarios,
 incluyendo la máquina de estados, gestión de tiempo y trazabilidad.
 """
 
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import Ticket, TicketEvent, TicketEventType, TicketStatus, User, Application
+from app.models import Application, Ticket, TicketEvent, TicketEventType, TicketStatus, User
 from app.routers.websocket import manager
+from app.services.notification_service import flush_pending_notifications, notify_ticket_redirected
 from app.services.timer_service import timer_service
-from app.services.notification_service import notify_ticket_redirected, flush_pending_notifications
+
+logger = logging.getLogger("corestream.ticket_redirection")
 
 
 class TicketRedirectionService:
@@ -293,6 +296,6 @@ class TicketRedirectionService:
                     target_user_id=str(to_user_id)
                 )
                 
-        except Exception as e:
+        except Exception:
             # Log error pero no fallar la redirección
-            print(f"Error enviando notificación de redirección: {e}")
+            logger.exception("Error enviando notificación de redirección")

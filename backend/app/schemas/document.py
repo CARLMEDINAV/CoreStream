@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
-from pydantic import BaseModel
+
+from pydantic import BaseModel, Field
 
 
 class UploaderResponse(BaseModel):
@@ -28,7 +29,7 @@ class DocumentResponse(BaseModel):
 
 
 class TranslateRequest(BaseModel):
-    target_language: str  # código ISO 639-1: "en", "es", "fr", "de", "pt", "it", "zh", "ar"
+    target_language: str = Field(..., max_length=10)  # código ISO 639-1: "en", "es", "fr", "de", "pt", "it", "zh", "ar"
 
 
 class TranslateResponse(BaseModel):

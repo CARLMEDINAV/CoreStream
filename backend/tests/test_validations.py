@@ -7,18 +7,17 @@ PROTOCOLO DE VALIDACIÓN (Definition of Done):
 3. Verificación de Performance: Uso de índices
 """
 
-import pytest
-import asyncio
-from uuid import uuid4
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
+
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.models import Epic, Ticket, Application, TicketStatus, Base
-from app.schemas import EpicResponse, TicketResponse
+from app.models import Application, Base, Epic, Ticket, TicketStatus
+from app.routers.applications import list_applications
 from app.routers.epics import reorder_epic
 from app.routers.tickets import move_ticket_to_epic
-from app.routers.applications import list_applications
 
 # ═════════════════════════════════════════════════════════════════════
 # CONFIGURACIÓN DE BASE DE DATOS TEMPORAL PARA TESTS
@@ -126,7 +125,7 @@ async def test_concurrent_reorder_no_duplicates(test_db: AsyncSession):
     # Obtener índices
     indices = sorted([epic1.order_index, epic2.order_index, epic3.order_index])
     
-    print(f"\n📊 RESULTADO DEL TEST DE CONCURRENCIA:")
+    print("\n📊 RESULTADO DEL TEST DE CONCURRENCIA:")
     print(f"   Epic 1: order_index = {epic1.order_index}")
     print(f"   Epic 2: order_index = {epic2.order_index}")
     print(f"   Epic 3: order_index = {epic3.order_index}")
@@ -210,29 +209,35 @@ async def test_move_ticket_prevents_cross_app_movement(test_db: AsyncSession):
     await test_db.commit()
     
     # ACT: Intentar mover ticket a épica de otra app
-    print(f"\n🔒 TEST DE SEGURIDAD - VALIDACIÓN CROSS-APP:")
+    print("\n🔒 TEST DE SEGURIDAD - VALIDACIÓN CROSS-APP:")
     print(f"   Ticket: {ticket.id} (en App A, Epic {epic_a.id})")
     print(f"   Intento: Mover a Epic {epic_b.id} (en App B)")
-    print(f"   Resultado esperado: ❌ ERROR 400")
+    print("   Resultado esperado: ❌ ERROR 400")
     
     # Debe lanzar excepción HTTP 400
     from fastapi import HTTPException
     
     try:
+        # current_user necesita un role ADMIN/TEAM_LEADER (plan fase 4:
+        # move_ticket_to_epic ahora exige assert_can_manage_ticket antes de
+        # llegar a la validación cross-app que este test quiere ejercitar;
+        # sin rol, un usuario sin ticket asignado recibe 403 antes de tiempo).
+        fake_role = type('Role', (object,), {'name': 'ADMIN'})()
+        fake_user = type('User', (object,), {'id': uuid4(), 'role': fake_role})()
         await move_ticket_to_epic(
             ticket_id=ticket.id,
             move_data=type('obj', (object,), {'new_epic_id': epic_b.id})(),
-            current_user=type('obj', (object,), {'id': uuid4()})(),
+            current_user=fake_user,
             db=test_db
         )
         # Si llegamos aquí, el test FALLÓ
-        assert False, "❌ FALLO: Movimiento cross-app fue permitido (sin validación)"
+        raise AssertionError("❌ FALLO: Movimiento cross-app fue permitido (sin validación)")
     
     except HTTPException as e:
         # Esperamos error 400
         assert e.status_code == 400, f"Status incorrecto: {e.status_code}"
         assert "Apps diferentes" in e.detail, f"Mensaje incorrecto: {e.detail}"
-        print(f"   ✅ PASS: Rechazado correctamente con 400")
+        print("   ✅ PASS: Rechazado correctamente con 400")
         print(f"   ✅ Mensaje: {e.detail}\n")
 
 
@@ -340,9 +345,9 @@ async def test_application_list_has_real_counts(test_db: AsyncSession):
     await test_db.commit()
     
     # ACT: Consultar aplicaciones
-    print(f"\n📈 TEST DE CONTEOS REALES - FIX-003:")
-    print(f"   Setup: 3 épicas, 5+2+3+1 = 11 tickets")
-    print(f"   Esperado: epic_count=3, pending_count=8, overdue_count=1")
+    print("\n📈 TEST DE CONTEOS REALES - FIX-003:")
+    print("   Setup: 3 épicas, 5+2+3+1 = 11 tickets")
+    print("   Esperado: epic_count=3, pending_count=8, overdue_count=1")
     
     # Usar la función del router (sin HTTP)
     result = await list_applications(
@@ -356,7 +361,7 @@ async def test_application_list_has_real_counts(test_db: AsyncSession):
     assert len(result) > 0, "No se retornaron aplicaciones"
     app_response = result[0]
     
-    print(f"   Resultado:")
+    print("   Resultado:")
     print(f"   - epic_count = {app_response.epic_count} (esperado: 3)")
     print(f"   - pending_count = {app_response.pending_count} (esperado: 8)")
     print(f"   - delayed_count = {app_response.delayed_count} (esperado: 1)")
@@ -368,7 +373,7 @@ async def test_application_list_has_real_counts(test_db: AsyncSession):
     assert app_response.delayed_count == 1, \
         f"❌ delayed_count incorrecto: {app_response.delayed_count} != 1"
     
-    print(f"   ✅ PASS: Todos los conteos coinciden\n")
+    print("   ✅ PASS: Todos los conteos coinciden\n")
 
 
 # ═════════════════════════════════════════════════════════════════════
@@ -376,7 +381,6 @@ async def test_application_list_has_real_counts(test_db: AsyncSession):
 # ═════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    import sys
     
     print("""
 ╔════════════════════════════════════════════════════════════════╗

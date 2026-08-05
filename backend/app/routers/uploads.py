@@ -4,12 +4,11 @@ Endpoints para upload, download, listado y eliminación de archivos.
 """
 
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 
 from app.middleware import get_current_user
 from app.services.file_service import FileService
-
 
 router = APIRouter(
     prefix="/api/uploads",

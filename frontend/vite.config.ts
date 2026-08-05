@@ -59,12 +59,14 @@ export default defineConfig({
       protocol: 'ws'
     },
 
-    // Proxy de API hacia el backend
-    // NOTA: Con network_mode: host, el backend corre en localhost del host,
-    // no en el hostname 'backend' (que solo funciona con redes bridge de Docker)
+    // Proxy de API hacia el backend. Ambos contenedores viven en la misma
+    // red bridge de Docker (docker-compose.dev.yml, sin network_mode: host
+    // desde la fase 6), así que el backend se alcanza por su nombre de
+    // servicio ("backend"), no por localhost — dentro de este contenedor,
+    // localhost es el propio frontend.
     proxy: {
       '/api': {
-        target: process.env.VITE_API_TARGET ?? 'http://localhost:8000',
+        target: process.env.VITE_API_TARGET ?? 'http://backend:8000',
         changeOrigin: false,
         ws: true,
         rewrite: (path) => path

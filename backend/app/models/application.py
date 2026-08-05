@@ -1,12 +1,11 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from uuid import UUID as PyUUID
 
 from sqlalchemy import Boolean, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.models.epic import Epic
@@ -31,8 +30,9 @@ class Application(Base, BaseEntity):
         index=True,
     )
 
-    owner: Mapped["User | None"] = relationship(back_populates="owned_applications")
+    owner: Mapped["User | None"] = relationship(lazy="raise_on_sql", back_populates="owned_applications")
     epics: Mapped[list["Epic"]] = relationship(
+        lazy="raise_on_sql",
         back_populates="application",
         cascade="all, delete-orphan",
     )

@@ -4,7 +4,7 @@
 from functools import lru_cache
 from typing import Union
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -47,7 +47,22 @@ class Settings(BaseSettings):
         if isinstance(v, str) and v.startswith("postgresql://"):
             return v.replace("postgresql://", "postgresql+asyncpg://", 1)
         return v
-    
+
+    # Opciones del pool de conexiones (solo aplican a PostgreSQL)
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 10
+
+    # Recicla conexiones más viejas que este umbral (segundos). Evita que un
+    # proxy o el propio PostgreSQL cierre por su cuenta una conexión que el
+    # pool sigue considerando válida.
+    DB_POOL_RECYCLE: int = 1800
+
+    # Volcado de cada sentencia SQL al log.
+    # Deliberadamente independiente de DEBUG: antes era echo=DEBUG, y eso hacía
+    # que cualquier entorno con DEBUG=True escribiera todas las consultas al
+    # log por duplicado, llenando el disco y filtrando datos de negocio.
+    SQL_ECHO: bool = False
+
     # Configuración de Redis
     # URL para conectarse al servidor Redis para caché y sistema de notificaciones
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -104,9 +119,11 @@ class Settings(BaseSettings):
     AZURE_TRANSLATOR_REGION: str = "eastus"
     AZURE_TRANSLATOR_ENDPOINT: str = "https://api.cognitive.microsofttranslator.com"
 
-    # Directorio para almacenar documentos subidos por los usuarios
-    # En producción/Docker debe apuntar a un volumen persistente (ej. /app/storage/uploads)
-    UPLOAD_DIR: str = "./storage/uploads"
+    # Raíz de almacenamiento de archivos subidos por los usuarios. Tanto
+    # routers/documents.py (subcarpeta "documents") como
+    # services/file_service.py (subcarpeta "uploads") cuelgan de esta misma
+    # raíz (plan fase 7.2) — en Docker debe ser un volumen persistente.
+    UPLOAD_DIR: str = "/app/storage"
     
     # Configuración de Pydantic Settings
     class Config:
@@ -120,6 +137,57 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = True
+
+    @model_validator(mode="after")
+    def validate_production_settings(self) -> "Settings":
+        """
+        Aborta el arranque si ENVIRONMENT=production trae configuración
+        insegura (plan 3.4). Deliberadamente un model_validator(mode="after"),
+        no field_validators individuales: con field_validator, el orden de
+        declaración de los campos en la clase determina qué hay disponible en
+        info.data, y ENVIRONMENT está declarado DESPUÉS de SECRET_KEY — un
+        field_validator sobre SECRET_KEY nunca vería el ENVIRONMENT real. Aquí,
+        al validar después de poblar todo el modelo, ese problema no existe.
+
+        Antes, backend/.env traía literalmente
+        SECRET_KEY=tu-clave-secreta-muy-segura-cambiar-en-produccion y nada
+        impedía arrancar así contra el dominio público: con una clave
+        conocida, cualquiera puede forjar un JWT con rol ADMIN.
+        """
+        if self.ENVIRONMENT != "production":
+            return self
+
+        placeholders = {
+            "tu-clave-secreta-muy-segura-cambiar-en-produccion",
+            "insecure-default-key-change-in-prod",
+            "cambiar-esta-clave-por-una-generada",
+            "",
+        }
+        # `openssl rand -hex 32` (lo que .env.example pide) produce 64
+        # caracteres. El umbral queda bien por debajo de eso a propósito
+        # (para no rechazar otros generadores válidos de menos entropía),
+        # pero por encima de cualquier placeholder legible tecleado a mano
+        # — la lista explícita de arriba ya cubre los conocidos, esto es
+        # la red de seguridad para el próximo placeholder que alguien añada
+        # y se olvide de registrar aquí.
+        if self.SECRET_KEY in placeholders or len(self.SECRET_KEY) < 40:
+            raise ValueError(
+                "SECRET_KEY inválida para producción: falta, es un placeholder, o "
+                "es demasiado corta. Generar una con: openssl rand -hex 32"
+            )
+
+        if self.DEBUG:
+            raise ValueError("DEBUG no puede ser True con ENVIRONMENT=production")
+
+        if "*" in self.ALLOWED_ORIGINS:
+            raise ValueError(
+                "ALLOWED_ORIGINS no puede ser '*' en producción — combinado con "
+                "allow_credentials=True (cookies) es una combinación que los "
+                "navegadores rechazan de todas formas, y expone la API a "
+                "cualquier origen si algún día se relaja allow_credentials."
+            )
+
+        return self
 
 
 @lru_cache()

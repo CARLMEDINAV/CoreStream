@@ -8,8 +8,7 @@ describe('Completar ticket con PR link', () => {
   })
 
   beforeEach(() => {
-    cy.loginAsDeveloper()
-    cy.visit('/#/dev/workbench')
+    cy.loginAsDeveloper('/dev/workbench')
   })
 
   it('Botón Completar deshabilitado sin PR link válido', () => {
@@ -18,14 +17,17 @@ describe('Completar ticket con PR link', () => {
   })
 
   it('PR link válido de GitHub habilita el botón Completar', () => {
+    // "owner/repo" es justo el placeholder que el propio input sugiere — la
+    // app lo rechaza a propósito (mismo criterio que el SECRET_KEY: no
+    // aceptar el ejemplo literal sin personalizar). Un repo real sí vale.
     cy.get('[data-cy="ticket-card"][data-status="IN_PROGRESS"]').first().click()
-    cy.get('[data-cy="pr-link-input"]').clear().type('https://github.com/owner/repo/pull/1')
+    cy.get('[data-cy="pr-link-input"]').clear().type('https://github.com/corestream/backend/pull/42')
     cy.get('[data-cy="btn-completar"]').should('not.be.disabled')
   })
 
   it('PR link de GitLab es aceptado', () => {
     cy.get('[data-cy="ticket-card"][data-status="IN_PROGRESS"]').first().click()
-    cy.get('[data-cy="pr-link-input"]').clear().type('https://gitlab.com/owner/repo/merge_requests/42')
+    cy.get('[data-cy="pr-link-input"]').clear().type('https://gitlab.com/corestream/backend/merge_requests/42')
     cy.get('[data-cy="btn-completar"]').should('not.be.disabled')
   })
 

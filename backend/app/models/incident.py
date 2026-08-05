@@ -1,18 +1,20 @@
 from __future__ import annotations
 
 from enum import Enum
+from typing import TYPE_CHECKING
 from uuid import UUID as PyUUID
 
-from sqlalchemy import Enum as SQLEnum, ForeignKey, Integer, String, Text
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.models.application import Application
     from app.models.user import User
 
 from .base import Base, BaseEntity
+
 
 class IncidentSeverity(str, Enum):
     P1 = "P1"
@@ -76,6 +78,6 @@ class Incident(Base, BaseEntity):
         index=True,
     )
 
-    application: Mapped["Application | None"] = relationship(foreign_keys=[application_id])
-    created_by: Mapped["User | None"] = relationship(foreign_keys=[created_by_id])
-    assigned_to: Mapped["User | None"] = relationship(foreign_keys=[assigned_to_id])
+    application: Mapped["Application | None"] = relationship(lazy="raise_on_sql", foreign_keys=[application_id])
+    created_by: Mapped["User | None"] = relationship(lazy="raise_on_sql", foreign_keys=[created_by_id])
+    assigned_to: Mapped["User | None"] = relationship(lazy="raise_on_sql", foreign_keys=[assigned_to_id])

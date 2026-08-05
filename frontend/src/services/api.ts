@@ -9,10 +9,6 @@
  * - Manejo de errores consistente
  *
  * Todas las llamadas al API deben ir a través de este servicio.
- *
- * MODO PROTOTIPO:
- * Si VITE_MODO_PROTOTIPO=true, el frontend NO hace queries al backend
- * Todos los datos se guardan en localStorage y se devuelven valores mockeados
  */
 
 import axios, { AxiosInstance, AxiosError, AxiosResponse } from 'axios'
@@ -45,22 +41,23 @@ import type {
 } from '@/types'
 
 /**
- * Interfaz para estado de autenticación
- * Se utiliza en el store de Pinia para mantener tokens
+ * Interfaz para estado de autenticación.
+ *
+ * Ya no incluye refreshToken: el backend lo entrega como cookie HttpOnly
+ * (Set-Cookie en /auth/login y /auth/refresh), invisible para JavaScript.
+ * axios lo envía solo mandando withCredentials: true — no hay nada que
+ * guardar ni leer aquí para eso.
  */
 interface AuthState {
   accessToken: string | null
-  refreshToken: string | null
 }
 
 /**
- * Variable global para almacenar tokens
- * En una aplicación real, esto vendría del store de Pinia
- * Aquí se mantiene por simplicidad
+ * Variable global para el access token en memoria.
+ * Vive solo mientras dura la pestaña: nunca se persiste a localStorage.
  */
 let authState: AuthState = {
-  accessToken: null,
-  refreshToken: null
+  accessToken: null
 }
 
 /**
@@ -159,7 +156,7 @@ const toMeetingAttendance = (raw: any): MeetingAttendance => ({
   id: raw.id,
   meetingId: raw.meetingId ?? raw.meeting_id,
   userId: raw.userId ?? raw.user_id,
-  isPresent: raw.isPresent ?? raw.is_present ?? false,
+  status: raw.status ?? 'ABSENT',
   notes: raw.notes ?? undefined,
   createdAt: raw.createdAt ?? raw.created_at,
   updatedAt: raw.updatedAt ?? raw.updated_at,
@@ -190,6 +187,64 @@ const toMeeting = (raw: any): Meeting => ({
  * 
  * @returns Instancia de Axios configurada
  */
+/**
+ * Lee una cookie por nombre. Se usa solo para csrf_token, la única cookie
+ * que el backend deja legible por JS (a propósito: el patrón de doble envío
+ * exige que el frontend pueda leerla para devolverla como cabecera).
+ */
+/**
+ * Refresco en curso compartido entre peticiones concurrentes.
+ *
+ * /auth/refresh ROTA refresh_token y csrf_token en cada llamada (plan 3.3).
+ * Si dos peticiones reciben 401 casi a la vez (p. ej. una vista que dispara
+ * varias llamadas en paralelo al montar), sin esto cada una dispararía su
+ * propio /auth/refresh: la primera rota la cookie, y la segunda —que ya
+ * había leído el csrf_token viejo— llega después con un valor que el
+ * backend ya no reconoce (403), tirando la sesión aunque el refresh token
+ * seguía siendo válido. Compartir la misma promesa asegura una sola
+ * llamada real de red por cada expiración del access token.
+ */
+let refreshInFlight: Promise<Record<string, unknown>> | null = null
+
+/**
+ * Único punto de entrada real a POST /auth/refresh — tanto el interceptor
+ * de 401 como ensureInitialized() (vía api.auth.refresh) pasan por aquí, no
+ * cada uno con su propia llamada. Antes cada uno tenía su propio guard, y
+ * si el arranque de página disparaba ambos casi a la vez (el primero por
+ * ensureInitialized, el segundo porque algún componente montó y pidió datos
+ * antes de que hubiera access_token en memoria, recibiendo 401), la
+ * primera petición rotaba refresh_token/csrf_token y la segunda —que ya
+ * había leído el csrf_token viejo— llegaba con un valor que el backend ya
+ * no reconocía (403), tirando la sesión con el refresh token todavía
+ * válido. Un único guard compartido colapsa ambos caminos en una sola
+ * petición real.
+ */
+const performRefresh = (): Promise<Record<string, unknown>> => {
+  if (!refreshInFlight) {
+    const csrfToken = getCookie('csrf_token')
+    refreshInFlight = axios
+      .post<Record<string, unknown>>(
+        '/api/auth/refresh',
+        {},
+        {
+          withCredentials: true,
+          headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
+        }
+      )
+      .then((response) => response.data ?? {})
+      .finally(() => {
+        refreshInFlight = null
+      })
+  }
+  return refreshInFlight
+}
+
+const getCookie = (name: string): string | null => {
+  if (typeof document === 'undefined') return null
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`))
+  return match ? decodeURIComponent(match[1]) : null
+}
+
 const createApiClient = (): AxiosInstance => {
   const instance = axios.create({
     /**
@@ -205,44 +260,30 @@ const createApiClient = (): AxiosInstance => {
     timeout: 30000,
 
     /**
+     * Envía la cookie del refresh_token (HttpOnly) en /auth/refresh y
+     * /auth/logout. En el resto de rutas el backend la ignora, pero
+     * necesitamos esto activado igual porque axios decide por instancia,
+     * no por request.
+     */
+    withCredentials: true,
+
+    /**
      * Headers por defecto para todas las solicitudes
      */
     headers: {
-      /**
-       * Content-Type: especifica que estamos enviando JSON
-       */
       'Content-Type': 'application/json'
     }
   })
 
   /**
    * INTERCEPTOR DE REQUEST
-   * 
-   * Se ejecuta antes de que se envíe cada solicitud.
-   * Aquí agregamos el token JWT en el header Authorization si existe.
+   *
+   * Agrega el access token (en memoria, nunca en localStorage) como Bearer.
    */
   instance.interceptors.request.use(
     (config) => {
-      /**
-       * Si existe un token de acceso, lo agregamos al header Authorization
-       * Formato: Bearer <token>
-       * Primero intenta authState, luego localStorage como fallback
-       */
-      let token = authState.accessToken
-      
-      // Si no hay token en authState, intenta localStorage
-      if (!token) {
-        try {
-          const storedToken = localStorage.getItem('accessToken')
-          if (storedToken) {
-            token = storedToken
-            authState.accessToken = storedToken
-          }
-        } catch (e) {
-          // localStorage no disponible en algunos contextos
-        }
-      }
-      
+      const token = authState.accessToken
+
       if (token) {
         const headers = config.headers as any
 
@@ -258,112 +299,48 @@ const createApiClient = (): AxiosInstance => {
 
       return config
     },
-
-    /**
-     * En caso de error en la preparación de la solicitud
-     */
-    (error) => {
-      return Promise.reject(error)
-    }
+    (error) => Promise.reject(error)
   )
 
   /**
    * INTERCEPTOR DE RESPONSE
-   * 
-   * Se ejecuta cuando se recibe una respuesta.
-   * Maneja:
-   * - Errores 401 (Unauthorized): intenta renovar el token
-   * - Otros errores: propaga el error
+   *
+   * Ante un 401, intenta renovar el access_token llamando a /auth/refresh.
+   * ANTES: leía el refresh_token de authState/localStorage y lo mandaba en
+   * el cuerpo. AHORA: el refresh_token vive en una cookie HttpOnly que el
+   * navegador adjunta solo — por eso withCredentials arriba — y el backend
+   * exige además la cabecera X-CSRF-Token (patrón de doble envío) para
+   * aceptar esa cookie; se lee del cookie csrf_token, que sí es legible.
    */
   instance.interceptors.response.use(
-    /**
-     * Respuesta exitosa: retorna tal cual
-     */
     (response) => response,
 
-    /**
-     * Respuesta con error
-     * Principalmente maneja tokens expirados
-     */
     async (error: AxiosError) => {
-      /**
-       * Obtiene la solicitud original que falló
-       * Se puede usar para reintentar
-       */
       const originalRequest = error.config as any
 
-      /**
-       * Si el error es 401 (Unauthorized) y no hemos intentado renovar ya
-       * (para evitar loops infinitos)
-       */
       if (error.response?.status === 401 && !originalRequest._retry) {
-        /**
-         * Marca que ya hemos intentado renovar este request
-         */
         originalRequest._retry = true
 
-        /**
-         * Intenta renovar el token usando el refresh token
-         */
-        const storedRefresh = authState.refreshToken ?? (typeof localStorage !== 'undefined' ? localStorage.getItem('refreshToken') : null)
-        if (storedRefresh) {
-          authState.refreshToken = storedRefresh
-          try {
-            /**
-             * Solicitud especial para renovar el token
-             * Usa directamente axios (no la instancia con interceptores)
-             * para evitar recursión infinita
-             */
-            const response = await axios.post<Record<string, unknown>>(
-              '/api/auth/refresh',
-              { refresh_token: authState.refreshToken }
-            )
+        try {
+          const d = await performRefresh()
 
-            const d = response.data
-            if (d && typeof d === 'object' && 'access_token' in d) {
-              const mapped = mapTokenResponse(d as Record<string, unknown>)
-              authState.accessToken = mapped.accessToken
-              authState.refreshToken = mapped.refreshToken
+          if (d && typeof d === 'object' && 'access_token' in d) {
+            const mapped = mapTokenResponse(d as Record<string, unknown>)
+            authState.accessToken = mapped.accessToken
 
-              if (typeof localStorage !== 'undefined') {
-                localStorage.setItem('accessToken', mapped.accessToken)
-                localStorage.setItem('refreshToken', mapped.refreshToken)
-              }
-
-              /**
-               * Actualiza el header Authorization del request original
-               */
-              originalRequest.headers.Authorization = `Bearer ${authState.accessToken}`
-
-              /**
-               * Reintenta el request original con el nuevo token
-               */
-              return instance(originalRequest)
-            }
-          } catch (refreshError) {
-            /**
-             * Si la renovación falla (refresh token expirado),
-             * limpia los tokens y rechaza la promesa
-             * El usuario será redirigido a login
-             */
-            authState.accessToken = null
-            authState.refreshToken = null
-
-            return Promise.reject(refreshError)
+            originalRequest.headers.Authorization = `Bearer ${authState.accessToken}`
+            return instance(originalRequest)
           }
-        } else {
+        } catch (refreshError) {
           /**
-           * No hay refresh token disponible
-           * Limpia tokens y rechaza
+           * La cookie de refresh no existe o expiró: no hay sesión que
+           * renovar. El usuario deberá volver a iniciar sesión.
            */
           authState.accessToken = null
-          authState.refreshToken = null
+          return Promise.reject(refreshError)
         }
       }
 
-      /**
-       * Propaga el error para que sea manejado por quien llamó
-       */
       return Promise.reject(error)
     }
   )
@@ -418,7 +395,8 @@ function mapUserFromApi(raw: Record<string, unknown>): User {
     avatarUrl: (raw.avatar_url as string) || (raw.avatarUrl as string) || undefined,
     isActive: Boolean(raw.is_active ?? true),
     createdAt: raw.created_at ? String(raw.created_at) : undefined,
-    preferences: raw.preferences || {}
+    preferences: raw.preferences || {},
+    mustChangePassword: Boolean(raw.must_change_password ?? false)
   } as User
 }
 
@@ -435,9 +413,9 @@ function mapUserUpdateToApi(data: Partial<User>): Record<string, unknown> {
 function mapTokenResponse(d: Record<string, unknown>): AuthTokens {
   return {
     accessToken: String(d.access_token ?? ''),
-    refreshToken: String(d.refresh_token ?? ''),
     tokenType: String(d.token_type ?? 'bearer'),
     expiresIn: typeof d.expires_in === 'number' ? d.expires_in : undefined,
+    mustChangePassword: Boolean(d.must_change_password ?? false),
   }
 }
 
@@ -449,9 +427,6 @@ function mapTokenResponse(d: Record<string, unknown>): AuthTokens {
  * para mantener orden y facilitar el mantenimiento.
  *
  * Todos los métodos retornan Promesas tipadas con tipos de TypeScript.
- *
- * NOTA: Si VITE_MODO_PROTOTIPO=true, este objeto será reemplazado por mockApi
- * al final de este archivo para usar localStorage en lugar del backend real.
  */
 // Mapea la respuesta snake_case del backend al tipo UserPerformance camelCase del frontend.
 function toUserPerformance(raw: any): UserPerformance {
@@ -503,7 +478,8 @@ const realApi = {
      * // Guarda tokens en el store y redirige al dashboard
      */
     /**
-     * Login: FastAPI devuelve TokenResponse (access_token, refresh_token, ...).
+     * Login: FastAPI devuelve TokenResponse (solo access_token — el
+     * refresh_token llega como cookie HttpOnly en Set-Cookie, no aquí).
      */
     login: async (credentials: LoginRequest): Promise<{ tokens: AuthTokens }> => {
       const response = await apiClient.post<Record<string, unknown>>(
@@ -514,26 +490,27 @@ const realApi = {
     },
 
     /**
-     * Registro: el backend devuelve UserResponse (sin tokens).
+     * El registro público se eliminó (plan 3.7): las cuentas se crean por
+     * invitación. Ver api.invitations.
      */
-    register: async (data: RegisterRequest): Promise<User> => {
-      const response = await apiClient.post<Record<string, unknown>>('/auth/register', {
-        email: data.email,
-        password: data.password,
-        full_name: data.fullName,
-      })
-      return mapUserFromApi((response.data ?? {}) as Record<string, unknown>)
+
+    /**
+     * Refresh: el refresh_token viaja en la cookie HttpOnly, el navegador la
+     * adjunta solo (withCredentials en el cliente). Se manda además el
+     * X-CSRF-Token que el backend exige para aceptar esa cookie.
+     */
+    refresh: async (): Promise<AuthTokens> => {
+      const d = await performRefresh()
+      return mapTokenResponse(d)
     },
 
     /**
-     * Refresh: cuerpo { refresh_token } según el backend.
+     * Cambia el access token actual por un ticket de un solo uso (15s) para
+     * abrir el WebSocket sin exponer el JWT en el query string (plan 3.2).
      */
-    refresh: async (refreshToken: string): Promise<AuthTokens> => {
-      const response = await apiClient.post<Record<string, unknown>>(
-        '/auth/refresh',
-        { refresh_token: refreshToken }
-      )
-      return mapTokenResponse((response.data ?? {}) as Record<string, unknown>)
+    getWsTicket: async (): Promise<string> => {
+      const response = await apiClient.post<{ ticket: string }>('/auth/ws-ticket')
+      return response.data.ticket
     },
 
     getMe: async (): Promise<User> => {
@@ -562,9 +539,13 @@ const realApi = {
 
     logout: async (): Promise<void> => {
       try {
+        // Antes /auth/logout no existía (404): esto se tragaba el error y
+        // solo se limpiaba localStorage. Ahora revoca de verdad access y
+        // refresh token en el servidor (plan 3.3); igualmente toleramos el
+        // fallo para no bloquear la limpieza local si la red falla.
         await apiClient.post('/auth/logout')
       } catch {
-        /* ignorar 404/401 al cerrar */
+        /* continuar con la limpieza local aunque el servidor no responda */
       }
     },
 
@@ -587,12 +568,6 @@ const realApi = {
       })
     },
 
-    deleteAccount: async (): Promise<void> => {
-      // Endpoint típico para eliminar la propia cuenta
-      await apiClient.delete('/auth/me')
-      clearAuthTokens()
-    },
-
     requestPasswordReset: async (_payload: { email: string }): Promise<void> => {
       throw new Error('Recuperación de contraseña no implementada')
     },
@@ -603,6 +578,62 @@ const realApi = {
     }): Promise<void> => {
       throw new Error('Recuperación de contraseña no implementada')
     }
+  },
+
+  /**
+   * ========================================
+   * MÓDULO DE INVITACIONES
+   * ========================================
+   *
+   * Sustituye al registro público (plan 3.7): un ADMIN invita por correo,
+   * el invitado acepta con su propio enlace y elige su contraseña.
+   */
+  invitations: {
+    create: async (data: { email: string; role: string }): Promise<{
+      id: string
+      email: string
+      role: string
+      token: string
+      expiresAt: string
+    }> => {
+      const response = await apiClient.post<Record<string, unknown>>('/invitations/', {
+        email: data.email,
+        role: data.role,
+      })
+      const d = response.data
+      return {
+        id: String(d.id ?? ''),
+        email: String(d.email ?? ''),
+        role: String(d.role ?? ''),
+        token: String(d.token ?? ''),
+        expiresAt: String(d.expires_at ?? ''),
+      }
+    },
+
+    getInfo: async (token: string): Promise<{
+      email: string
+      role: string
+      expiresAt: string
+      isExpired: boolean
+      isUsed: boolean
+    }> => {
+      const response = await apiClient.get<Record<string, unknown>>(`/invitations/${token}`)
+      const d = response.data
+      return {
+        email: String(d.email ?? ''),
+        role: String(d.role ?? ''),
+        expiresAt: String(d.expires_at ?? ''),
+        isExpired: Boolean(d.is_expired),
+        isUsed: Boolean(d.is_used),
+      }
+    },
+
+    accept: async (token: string, data: { fullName: string; password: string }): Promise<void> => {
+      await apiClient.post(`/invitations/${token}/accept`, {
+        full_name: data.fullName,
+        password: data.password,
+      })
+    },
   },
 
   /**
@@ -686,6 +717,17 @@ const realApi = {
         { role: newRole }
       )
       return response.data
+    },
+
+    /**
+     * Resetea la contraseña de otro usuario (solo ADMIN, plan 3.8).
+     * La contraseña temporal se devuelve una única vez en esta respuesta.
+     */
+    resetPassword: async (userId: string): Promise<{ temporaryPassword: string }> => {
+      const response = await apiClient.post<{ temporary_password: string }>(
+        `/users/${userId}/reset-password`
+      )
+      return { temporaryPassword: response.data.temporary_password }
     },
 
     /**
@@ -883,19 +925,24 @@ const realApi = {
     },
 
     /**
-     * Carga un documento asociado a una épica
-     * 
-     * @param appId - ID de la aplicación
+     * Carga un documento asociado a una épica.
+     *
+     * No existe una ruta /applications/{a}/epics/{e}/documents en el backend
+     * (plan fase 5): se usa el endpoint real /documents/, el mismo que usa
+     * api.documents.upload.
+     *
      * @param epicId - ID de la épica
      * @param file - Archivo a cargar
      * @returns Documento creado
      */
-    uploadDoc: async (appId: string, epicId: string, file: File): Promise<Document> => {
+    uploadDoc: async (epicId: string, file: File): Promise<Document> => {
       const formData = new FormData()
       formData.append('file', file)
+      formData.append('epicId', epicId)
+      formData.append('docType', 'DOCUMENTATION')
 
       const response = await apiClient.post<ApiResponse<Document>>(
-        `/applications/${appId}/epics/${epicId}/documents`,
+        '/documents/',
         formData,
         {
           headers: {
@@ -1004,7 +1051,7 @@ const realApi = {
      * @returns Ticket actualizado
      */
     move: async (ticketId: string, newEpicId: string, _newOrderIndex?: number): Promise<ApiResponse<Ticket>> => {
-      const response = await apiClient.post<ApiResponse<Ticket>>(
+      const response = await apiClient.patch<ApiResponse<Ticket>>(
         `/tickets/${ticketId}/move`,
         { new_epic_id: newEpicId }
       )
@@ -1071,21 +1118,6 @@ const realApi = {
     },
 
     /**
-     * Obtiene el workbench del usuario actual
-     * Lista todas sus tareas activas y pendientes
-     * 
-     * @returns Array de tickets asignados al usuario actual
-     */
-    getMyWorkbench: async (): Promise<ApiResponse<Ticket[]>> => {
-      const response = await apiClient.get<ApiResponse<Ticket[]>>(
-        '/tickets/workbench'
-      )
-      return response.data
-    }
-
-    ,
-
-    /**
      * Alias compatible con el store existente para listar tickets por épica.
      */
     listByEpic: async (epicId: string, filters?: {
@@ -1115,7 +1147,7 @@ const realApi = {
      * Alias compatible para mover ticket a otra épica.
      */
     moveToEpic: async (data: { ticketId: string; newEpicId: string }): Promise<Ticket> => {
-      const response = await apiClient.post<any>(
+      const response = await apiClient.patch<any>(
         `/tickets/${data.ticketId}/move`,
         { new_epic_id: data.newEpicId }
       )
@@ -1315,21 +1347,21 @@ const realApi = {
     },
 
     /**
-     * Obtiene datos de rendimiento de usuarios
+     * Obtiene datos de rendimiento de usuarios de una aplicación.
+     * El backend solo expone /analytics/performance/{app_id} — no existe la
+     * ruta sin id (plan fase 5), así que aquí se exige.
      *
-     * @param filters - Filtros opcionales
+     * @param filters - applicationId es obligatorio; fechas opcionales
      * @returns Array de rendimiento por usuario
      */
-    getPerformance: async (filters?: {
-      applicationId?: string
+    getPerformance: async (filters: {
+      applicationId: string
       startDate?: string
       endDate?: string
     }): Promise<UserPerformance[]> => {
-      const appId = filters?.applicationId ?? ''
-      const url = appId ? `/analytics/performance/${appId}` : '/analytics/performance'
       const response = await apiClient.get<any>(
-        url,
-        { params: { start_date: filters?.startDate, end_date: filters?.endDate } }
+        `/analytics/performance/${filters.applicationId}`,
+        { params: { start_date: filters.startDate, end_date: filters.endDate } }
       )
       // El backend devuelve { application_id, period, user_performance: [...] }
       const raw = response.data
@@ -1357,19 +1389,22 @@ const realApi = {
     },
 
     /**
-     * Obtiene datos del gráfico de quemado (burndown)
-     * Muestra progreso de trabajo a lo largo del tiempo
-     * 
-     * @param applicationId - ID de la aplicación
+     * Obtiene datos del gráfico de quemado (burndown) de una épica.
+     * El backend calcula el burndown por épica, no por aplicación
+     * (plan fase 5: este método recibía un applicationId de nombre pero
+     * quien lo llama siempre pasó un epicId — coincidía en valor, no en
+     * nombre; se corrige aquí solo la firma para que quede claro).
+     *
+     * @param epicId - ID de la épica
      * @param filters - Filtros opcionales (rango de fechas)
      * @returns Datos de burndown
      */
-    getBurndown: async (applicationId: string, filters?: {
+    getBurndown: async (epicId: string, filters?: {
       startDate?: string
       endDate?: string
     }): Promise<ApiResponse<BurndownData>> => {
       const response = await apiClient.get<ApiResponse<BurndownData>>(
-        `/analytics/burndown/${applicationId}`,
+        `/analytics/burndown/${epicId}`,
         { params: filters }
       )
       return response.data
@@ -1384,41 +1419,15 @@ const realApi = {
     getSupportSummary: async (): Promise<SupportSummary> => {
       const response = await apiClient.get<SupportSummary>('/analytics/support-summary')
       return response.data
-    },
-    exportPdf: async (filters?: {
-      applicationId?: string
-      startDate?: string
-      endDate?: string
-    }): Promise<Blob> => {
-      const response = await apiClient.get<Blob>(
-        '/analytics/export/pdf',
-        {
-          params: filters,
-          responseType: 'blob'
-        }
-      )
-      return response.data
-    },
-    /**
-     * Exporta datos de analítica a CSV
-     * 
-     * @param filters - Filtros para qué datos exportar
-     * @returns Blob con contenido CSV
-     */
-    exportCsv: async (filters?: {
-      applicationId?: string
-      startDate?: string
-      endDate?: string
-    }): Promise<Blob> => {
-      const response = await apiClient.get<Blob>(
-        '/analytics/export/csv',
-        {
-          params: filters,
-          responseType: 'blob'
-        }
-      )
-      return response.data
     }
+
+    /**
+     * exportPdf/exportCsv se eliminaron (plan fase 5): llamaban a rutas del
+     * backend que no existen (o no coinciden en forma), y ningún componente
+     * los invocaba — la exportación real de reportes ya está resuelta
+     * enteramente en el cliente por ExportButton.vue + services/exportService.ts
+     * (jsPDF para el PDF, Blob nativo para el CSV), sin pasar por el backend.
+     */
   },
 
   /**
@@ -1659,17 +1668,6 @@ const realApi = {
       return items.map((u: any) => mapUserFromApi(u as Record<string, unknown>))
     },
 
-    addMember: async (data: { email: string; fullName: string; role: UserRole; specialty?: string; appId?: string | null }): Promise<User> => {
-      const response = await apiClient.post<Record<string, unknown>>('/auth/register', {
-        email: data.email,
-        full_name: data.fullName,
-        password: 'TemporaryPassword123!',
-        role: data.role,
-        specialty: data.specialty
-      })
-      return mapUserFromApi(response.data)
-    },
-
     updateMember: async (id: string, data: Partial<User>): Promise<User> => {
       const response = await apiClient.put<Record<string, unknown>>(`/users/${id}`, mapUserUpdateToApi(data))
       return mapUserFromApi(response.data)
@@ -1820,7 +1818,8 @@ const realApi = {
           items: data.map(toIncident),
           total: data.length,
           page: 1,
-          pages: 1
+          limit: data.length,
+          totalPages: 1
         }
       }
       
@@ -1841,7 +1840,7 @@ const realApi = {
     },
     
     update: async (incidentId: string, data: any): Promise<Incident> => {
-      const response = await apiClient.put<any>(`/incidents/${incidentId}`, data)
+      const response = await apiClient.patch<any>(`/incidents/${incidentId}`, data)
       return toIncident(response.data)
     },
     
@@ -1873,13 +1872,22 @@ const realApi = {
     },
     
     update: async (meetingId: string, data: any): Promise<Meeting> => {
-      const response = await apiClient.put<any>(`/meetings/${meetingId}`, data)
+      const response = await apiClient.patch<any>(`/meetings/${meetingId}`, data)
       return toMeeting(response.data)
     },
     
-    setAttendance: async (meetingId: string, data: any[]): Promise<MeetingAttendance[]> => {
-      const response = await apiClient.post<any[]>(`/meetings/${meetingId}/attendance`, data)
-      return Array.isArray(response.data) ? response.data.map(toMeetingAttendance) : []
+    /**
+     * Registra la asistencia de UN usuario a la reunión.
+     * El backend (record_attendance) recibe un solo MeetingAttendanceCreate
+     * por llamada, no un array — para varios asistentes hay que llamar esto
+     * una vez por usuario (ver MeetingAttendanceModal.vue).
+     */
+    setAttendance: async (
+      meetingId: string,
+      data: { user_id: string; status: string; notes?: string }
+    ): Promise<MeetingAttendance> => {
+      const response = await apiClient.post<any>(`/meetings/${meetingId}/attendance`, data)
+      return toMeetingAttendance(response.data)
     },
     
     updateSummary: async (meetingId: string, summary: string): Promise<Meeting> => {
@@ -1897,7 +1905,6 @@ const realApi = {
  */
 export const setAuthTokens = (tokens: AuthTokens): void => {
   authState.accessToken = tokens.accessToken
-  authState.refreshToken = tokens.refreshToken
 }
 
 /**
@@ -1906,7 +1913,6 @@ export const setAuthTokens = (tokens: AuthTokens): void => {
  */
 export const clearAuthTokens = (): void => {
   authState.accessToken = null
-  authState.refreshToken = null
 }
 
 /**

@@ -37,6 +37,9 @@ dist/
 build/
 .vite/
 /coverage
+frontend/cypress/screenshots/
+frontend/cypress/videos/
+frontend/cypress/downloads/
 
 # Logs
 *.log

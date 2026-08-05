@@ -7,20 +7,23 @@ Proporciona endpoints para:
 - Obtener estadísticas y métricas de usuarios individuales
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-from sqlalchemy.orm import selectinload
-from typing import List
-from pydantic import BaseModel
-import traceback
 import logging
+import secrets
+import string
+import traceback
+from typing import List
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.models import User, UserRole, Ticket, TicketEvent, TicketStatus, Role
-from app.schemas import UserResponse, UserCreate, UserUpdate
-from app.middleware.auth import get_current_user, require_role, hash_password
-from app.middleware.auth import TokenPayload
+from app.middleware.auth import TokenPayload, get_current_user, require_role
+from app.models import Role, Ticket, TicketEvent, TicketStatus, User, UserRole
+from app.schemas import AdminPasswordResetResponse, UserCreate, UserResponse, UserUpdate
+from app.services.auth_service import AuthService
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +77,12 @@ async def create_user(
         email=user_data.email,
         full_name=user_data.full_name,
         specialty=user_data.specialty,
-        hashed_password=hash_password(user_data.password),
+        # AuthService.hash_password (no middleware.auth.hash_password): el
+        # login verifica con AuthService.verify_password, que aplica un
+        # pre-hash SHA-256 antes de bcrypt; el otro hash_password es bcrypt
+        # liso y un usuario creado así nunca podría iniciar sesión — bug
+        # preexistente en este endpoint, detectado al escribir create_admin.py.
+        hashed_password=AuthService.hash_password(user_data.password),
         role_id=dev_role.id,
     )
 
@@ -619,3 +627,63 @@ async def get_user_stats(
         "total_activity": activity_count,
         "join_date": user.created_at.isoformat() if user.created_at else None
     }
+
+
+def _generate_temporary_password(length: int = 16) -> str:
+    """
+    Genera una contraseña temporal aleatoria que cumple la política de
+    validación de AuthService._validate_password (mayúscula, minúscula,
+    dígito y símbolo).
+    """
+    alphabet = string.ascii_letters + string.digits
+    body = "".join(secrets.choice(alphabet) for _ in range(length - 4))
+    # Se garantizan las cuatro clases de carácter exigidas, en posiciones
+    # aleatorias, para no sesgar el prefijo de todas las contraseñas emitidas.
+    forced = [
+        secrets.choice(string.ascii_uppercase),
+        secrets.choice(string.ascii_lowercase),
+        secrets.choice(string.digits),
+        secrets.choice("!@#$%^&*()"),
+    ]
+    chars = list(body) + forced
+    secrets.SystemRandom().shuffle(chars)
+    return "".join(chars)
+
+
+@router.post(
+    "/{user_id}/reset-password",
+    response_model=AdminPasswordResetResponse,
+    summary="Resetear la contraseña de un usuario",
+    description=(
+        "Genera una contraseña temporal aleatoria para el usuario indicado y "
+        "marca must_change_password. Solo ADMIN. La contraseña se devuelve "
+        "una única vez en esta respuesta."
+    ),
+)
+async def reset_user_password(
+    user_id: str,
+    current_user: User = Depends(require_role([UserRole.ADMIN])),
+    db: AsyncSession = Depends(get_db),
+) -> AdminPasswordResetResponse:
+    """
+    Antes no existía ninguna forma de fijar o resetear la contraseña de un
+    usuario desde la aplicación (plan 3.8): team.addMember mandaba una
+    contraseña fija ('TemporaryPassword123!') para todo el mundo, y
+    requestPasswordReset lanzaba 'no implementada'. Quien olvidaba su clave
+    necesitaba que alguien entrara a Postgres a mano.
+    """
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Usuario con ID {user_id} no encontrado",
+        )
+
+    temporary_password = _generate_temporary_password()
+    user.hashed_password = AuthService.hash_password(temporary_password)
+    user.must_change_password = True
+    await db.commit()
+
+    return AdminPasswordResetResponse(user_id=user.id, temporary_password=temporary_password)

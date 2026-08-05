@@ -306,6 +306,12 @@ export interface User {
    * Timestamp de la última actualización
    */
   updatedAt?: string
+
+  /**
+   * True si un ADMIN reseteó la contraseña de este usuario (plan 3.8): el
+   * frontend debe forzar el cambio antes de dejarlo navegar.
+   */
+  mustChangePassword?: boolean
 }
 
 /**
@@ -1071,7 +1077,7 @@ export interface MeetingAttendance {
   id: string
   meetingId: string
   userId: string
-  isPresent: boolean
+  status: 'PRESENT' | 'ABSENT' | 'JUSTIFIED'
   notes?: string
   createdAt: string
   updatedAt: string
@@ -1101,23 +1107,20 @@ export interface Meeting {
  */
 
 /**
- * Tokens de autenticación utilizados para validar requests
- * El accessToken se envía en cada request autorizado
- * El refreshToken se utiliza para obtener un nuevo accessToken cuando expira
+ * Tokens de autenticación utilizados para validar requests.
+ *
+ * Ya NO incluye refreshToken (antes viajaba aquí y se guardaba en
+ * localStorage). El backend lo entrega como cookie HttpOnly, invisible para
+ * JavaScript — así un XSS no puede robar una sesión de 7 días, solo el
+ * accessToken de vida corta que ya está en memoria.
  */
 export interface AuthTokens {
   /**
-   * Token JWT utilizado para autenticar requests
-   * Se envía en el header Authorization: Bearer <accessToken>
-   * Tiene una vida útil corta (típicamente 15-30 minutos)
+   * Token JWT utilizado para autenticar requests.
+   * Se envía en el header Authorization: Bearer <accessToken>.
+   * Vive solo en memoria (el store de Pinia), nunca en localStorage.
    */
   accessToken: string
-
-  /**
-   * Token utilizado para obtener un nuevo accessToken
-   * Tiene una vida útil más larga (típicamente días o semanas)
-   */
-  refreshToken: string
 
   /**
    * Tipo de token (generalmente 'Bearer')
@@ -1128,6 +1131,12 @@ export interface AuthTokens {
    * Segundos hasta que el accessToken expira
    */
   expiresIn?: number
+
+  /**
+   * Si es true, el usuario debe cambiar su contraseña antes de continuar
+   * (la fijó un admin mediante un reseteo).
+   */
+  mustChangePassword?: boolean
 }
 
 /**

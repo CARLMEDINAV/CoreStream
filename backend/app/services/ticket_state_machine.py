@@ -18,8 +18,9 @@ Diagrama de transiciones de estado:
 from datetime import datetime, timezone
 from typing import Union
 from uuid import UUID
-from sqlalchemy.ext.asyncio import AsyncSession
+
 from fastapi import HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import TicketEvent, TicketStatus
 from app.models.ticket_event import TicketEventType

@@ -178,32 +178,28 @@ export const useTeamStore = defineStore('team', () => {
   }
 
   /**
-   * Añade un nuevo miembro al equipo
-   * 
-   * @param data - Datos del nuevo miembro {email, fullName, role, department?}
-   * @returns Promise<User>
+   * Invita a un nuevo miembro al equipo (plan 3.7).
+   *
+   * Ya no crea la cuenta directamente — antes lo hacía llamando a
+   * /auth/register con una contraseña fija ('TemporaryPassword123!') para
+   * todo el mundo, lo cual quedaba eliminado junto con el registro público.
+   * Ahora genera un enlace de invitación de un solo uso; el invitado elige
+   * su propia contraseña al aceptarlo. El miembro NO aparece en `members`
+   * hasta que acepta — no hay cuenta todavía.
+   *
+   * @returns el enlace completo para copiar y entregar al invitado
    */
-  const addMember = async (data: {
-    email: string
-    fullName: string
-    role: UserRole
-    specialty?: string
-  }): Promise<User> => {
+  const inviteMember = async (data: { email: string; role: UserRole }): Promise<string> => {
     isLoading.value = true
     error.value = null
 
     try {
-      const created = await api.team.addMember({
-        ...data,
-        appId: currentAppId.value,
-      })
-
-      members.value.push(created)
-      return created
+      const invitation = await api.invitations.create({ email: data.email, role: data.role })
+      return `${window.location.origin}/invite/${invitation.token}`
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Error al añadir miembro'
+      const message = err instanceof Error ? err.message : 'Error al invitar miembro'
       error.value = message
-      console.error('Error en addMember:', err)
+      console.error('Error en inviteMember:', err)
       throw err
     } finally {
       isLoading.value = false
@@ -492,7 +488,7 @@ export const useTeamStore = defineStore('team', () => {
     unassignedSortedByPriority,
     // Acciones
     fetchMembers,
-    addMember,
+    inviteMember,
     updateMember,
     deleteMember,
     promoteToLeader,

@@ -1,7 +1,6 @@
 describe('Analytics', () => {
   beforeEach(() => {
-    cy.loginAsAdmin()
-    cy.visit('/#/admin/analytics')
+    cy.loginAsAdmin('/admin/analytics')
   })
 
   it('Vista de Analytics carga con título correcto', () => {

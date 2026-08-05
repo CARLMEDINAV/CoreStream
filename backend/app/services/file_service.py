@@ -3,17 +3,22 @@ Servicio para gestionar carga de archivos de código y documentación.
 Maneja almacenamiento, validación y metadatos de archivos.
 """
 
-from pathlib import Path
+import re
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 from uuid import uuid4
-import re
 
 from fastapi import UploadFile
 
+from app.config import get_settings
 
-# Configuración
-UPLOAD_DIR = Path(__file__).parent.parent.parent.parent / "storage" / "uploads"
+# Antes: Path(__file__).parent.parent.parent.parent / "storage" / "uploads",
+# que resolvía a "/storage/uploads" (en la raíz del contenedor, fuera de
+# /app) — no era un volumen, así que se perdía al recrear el contenedor.
+# settings.UPLOAD_DIR ya existe para esto (plan fase 7.2); subcarpeta
+# "uploads" para no mezclarse con documents.py, que comparte la misma raíz.
+UPLOAD_DIR = Path(get_settings().UPLOAD_DIR) / "uploads"
 ALLOWED_EXTENSIONS = {
     # Código
     ".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".cpp", ".c", ".cs", ".rb", ".go", ".rs",
@@ -78,7 +83,7 @@ class FileService:
         # Guardar archivo con validación de tamaño
         try:
             bytes_written = 0
-            with open(file_path, "wb") as f:
+            with open(file_path, "wb") as f:  # noqa: ASYNC230 — deuda conocida: bloquea el event loop (plan fase 7.2)
                 while True:
                     chunk = await file.read(1024 * 1024)  # 1 MB chunks
                     if not chunk:

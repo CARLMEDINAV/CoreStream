@@ -14,6 +14,7 @@ import logging
 from arq.connections import RedisSettings
 
 from app.config import get_settings
+from app.redis_client import ARQ_HEALTH_CHECK_KEY, ARQ_QUEUE_NAME
 from app.worker.tasks import deliver_notification
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,11 @@ class WorkerSettings:
     # RedisSettings.from_dsn acepta URLs redis:// o rediss://
     redis_settings = RedisSettings.from_dsn(settings.REDIS_URL)
 
+    # Nombre de cola propio (plan 6.5): debe coincidir con el
+    # default_queue_name del pool creado en main.py, o el worker nunca ve
+    # los jobs que encola la app.
+    queue_name = ARQ_QUEUE_NAME
+
     # Concurrencia y reintentos
     max_jobs = 20
     job_timeout = 30        # segundos antes de matar el job
@@ -50,3 +56,11 @@ class WorkerSettings:
     # Los jobs fallidos se guardan en Redis por 24 h para diagnóstico
     keep_result_forever = False
     keep_result = 86_400
+
+    # ARQ escribe la clave ARQ_HEALTH_CHECK_KEY en Redis cada vez que
+    # transcurre este intervalo, con una expiración a juego. El healthcheck
+    # de Docker (docker-compose.yml) comprueba que esa clave exista para
+    # saber si el worker sigue vivo. El valor por defecto de ARQ es 3600s
+    # (una hora) — demasiado lento para detectar un worker colgado a tiempo.
+    health_check_interval = 30
+    health_check_key = ARQ_HEALTH_CHECK_KEY

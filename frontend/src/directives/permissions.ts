@@ -1,5 +1,6 @@
 import type { Directive, DirectiveBinding } from 'vue'
 import { UserRole } from '@/types'
+import { useAuthStore } from '@/stores/auth'
 
 type PermissionBindingValue =
   | UserRole
@@ -22,7 +23,13 @@ function normalizeRole(role: unknown): UserRole | null {
 }
 
 function getCurrentRole(): UserRole | null {
-  return normalizeRole(localStorage.getItem('userRole'))
+  /**
+   * Antes leía localStorage.getItem('userRole'). Desde que el estado de
+   * sesión vive en el store de Pinia (plan 3.2: el access token ya no se
+   * persiste), esa clave puede no reflejar la sesión real. useAuthStore()
+   * es seguro de llamar aquí: Pinia ya está instalado en toda la app.
+   */
+  return normalizeRole(useAuthStore().userRole)
 }
 
 function isAllowed(bindingValue: PermissionBindingValue, currentRole: UserRole | null): boolean {

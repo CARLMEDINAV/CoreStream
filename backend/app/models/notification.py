@@ -2,13 +2,21 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
+from typing import TYPE_CHECKING
 from uuid import UUID as PyUUID
 
-from sqlalchemy import Boolean, DateTime, Enum as SQLEnum, ForeignKey, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, String
+from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base, BaseEntity
+
+if TYPE_CHECKING:
+    # Solo para anotaciones: en runtime SQLAlchemy resuelve estas relaciones
+    # desde su registro, por eso van como cadenas.
+    from .ticket import Ticket
+    from .user import User
 
 
 class NotificationType(str, Enum):
@@ -46,5 +54,5 @@ class Notification(Base, BaseEntity):
         DateTime(timezone=True), nullable=True, default=None
     )
 
-    user: Mapped["User"] = relationship(back_populates="notifications")  # type: ignore[name-defined] # noqa: F821
-    ticket: Mapped["Ticket | None"] = relationship()  # type: ignore[name-defined] # noqa: F821
+    user: Mapped["User"] = relationship(lazy="raise_on_sql", back_populates="notifications")  # type: ignore[name-defined]
+    ticket: Mapped["Ticket | None"] = relationship(lazy="raise_on_sql")  # type: ignore[name-defined]

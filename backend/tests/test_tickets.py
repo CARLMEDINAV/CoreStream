@@ -7,20 +7,23 @@ Sección C: State transitions con log de eventos.
 Sección D: Prioridades y filtrado.
 """
 
+
 import pytest
-from uuid import uuid4
-from datetime import datetime, timezone
-
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.middleware.auth import hash_password
 from app.models import (
-    User, Role, Application, Epic, Ticket,
-    TicketStatus, TicketEventType, TicketEvent
+    Application,
+    Epic,
+    Role,
+    Ticket,
+    TicketEvent,
+    TicketEventType,
+    TicketStatus,
+    User,
 )
 from app.services.ticket_state_machine import TicketStateMachine
-from app.middleware.auth import hash_password
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures locales (nombres distintos a los del conftest para evitar conflictos)

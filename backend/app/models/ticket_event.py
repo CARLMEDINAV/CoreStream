@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID as PyUUID
 
-from sqlalchemy import Enum as SQLEnum, ForeignKey
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.models.ticket import Ticket
@@ -70,10 +70,11 @@ class TicketEvent(Base, BaseEntity):
         nullable=True,
     )
 
-    ticket: Mapped["Ticket"] = relationship(back_populates="events")
+    ticket: Mapped["Ticket"] = relationship(lazy="raise_on_sql", back_populates="events")
     user: Mapped["User | None"] = relationship(
+        lazy="raise_on_sql",
         back_populates="events",
         foreign_keys=[user_id],
     )
-    from_user: Mapped["User | None"] = relationship(foreign_keys=[from_user_id])
-    to_user: Mapped["User | None"] = relationship(foreign_keys=[to_user_id])
+    from_user: Mapped["User | None"] = relationship(lazy="raise_on_sql", foreign_keys=[from_user_id])
+    to_user: Mapped["User | None"] = relationship(lazy="raise_on_sql", foreign_keys=[to_user_id])

@@ -8,31 +8,49 @@ Proporciona endpoints para:
 - Eliminar documentos
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status, Response
-from fastapi.responses import FileResponse
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
-from typing import List, Optional
-from uuid import UUID
-from pathlib import Path as FilePath
 import os
 import re
 from datetime import datetime
+from pathlib import Path as FilePath
+from typing import List, Optional
+from uuid import UUID
 
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+    status,
+)
+from fastapi.responses import FileResponse
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.config import get_settings
 from app.database import get_db
-from app.models import Document, Epic
-from app.schemas.document import DocumentResponse, TranslateRequest, TranslateResponse
 from app.middleware.auth import get_current_user
+from app.models import Document, Epic, User
+from app.schemas.document import DocumentResponse, TranslateRequest, TranslateResponse
+from app.services.ticket_permissions import is_admin_or_leader
 from app.services.translation_service import (
-    translate_long_text,
-    extract_text_from_file,
     create_translated_file,
+    extract_text_from_file,
+    translate_long_text,
 )
 
 router = APIRouter(tags=["Documentos"])
 
-UPLOAD_DIR = "/app/storage/documents"
+# Antes hardcodeado a "/app/storage/documents": settings.UPLOAD_DIR existía
+# en .env.example documentado como "el sitio donde configurar esto" pero
+# nadie lo leía (plan fase 7.2). Subcarpeta "documents" para no mezclar con
+# los adjuntos genéricos de uploads.py (services/file_service.py), que
+# comparten la misma raíz configurable.
+UPLOAD_DIR = os.path.join(get_settings().UPLOAD_DIR, "documents")
 MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
 
 ALLOWED_EXTENSIONS = {
@@ -150,7 +168,7 @@ async def upload_document(
     safe_filename = f"{timestamp}_{clean_filename}"
     file_path = os.path.join(UPLOAD_DIR, safe_filename)
 
-    with open(file_path, "wb") as f:
+    with open(file_path, "wb") as f:  # noqa: ASYNC230 — deuda conocida: bloquea el event loop (plan fase 7.2)
         f.write(contents)
 
     # Validate doc_type against allowed values
@@ -194,7 +212,7 @@ async def download_document(
             detail=f"Documento con ID {doc_id} no encontrado"
         )
 
-    if not os.path.exists(document.file_path):
+    if not os.path.exists(document.file_path):  # noqa: ASYNC240 — deuda conocida: bloquea el event loop (plan fase 7.2)
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
             detail="Archivo no encontrado en el sistema de archivos"
@@ -267,7 +285,7 @@ async def translate_document(
             ),
         )
 
-    if not os.path.exists(document.file_path):
+    if not os.path.exists(document.file_path):  # noqa: ASYNC240 — deuda conocida: bloquea el event loop (plan fase 7.2)
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
             detail="Archivo no encontrado en el sistema de archivos"
@@ -316,7 +334,7 @@ async def translate_document_download(
             ),
         )
 
-    if not os.path.exists(document.file_path):
+    if not os.path.exists(document.file_path):  # noqa: ASYNC240 — deuda conocida: bloquea el event loop (plan fase 7.2)
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
             detail="Archivo no encontrado en el sistema de archivos"
@@ -344,7 +362,7 @@ async def translate_document_download(
 )
 async def delete_document(
     doc_id: UUID,
-    current_user=Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     result = await db.execute(select(Document).where(Document.id == doc_id))
@@ -356,7 +374,13 @@ async def delete_document(
             detail=f"Documento con ID {doc_id} no encontrado"
         )
 
-    if os.path.exists(document.file_path):
+    if document.uploaded_by_id != current_user.id and not is_admin_or_leader(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo quien subió el documento, ADMIN o TEAM_LEADER pueden eliminarlo",
+        )
+
+    if os.path.exists(document.file_path):  # noqa: ASYNC240 — deuda conocida: bloquea el event loop (plan fase 7.2)
         os.remove(document.file_path)
 
     await db.delete(document)

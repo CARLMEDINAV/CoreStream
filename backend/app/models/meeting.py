@@ -2,18 +2,20 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
+from typing import TYPE_CHECKING
 from uuid import UUID as PyUUID
 
-from sqlalchemy import DateTime, Enum as SQLEnum, ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.models.application import Application
     from app.models.user import User
 
 from .base import Base, BaseEntity
+
 
 class MeetingType(str, Enum):
     DAILY = "DAILY"
@@ -52,10 +54,11 @@ class Meeting(Base, BaseEntity):
         index=True,
     )
 
-    application: Mapped["Application | None"] = relationship(foreign_keys=[application_id])
-    created_by: Mapped["User | None"] = relationship(foreign_keys=[created_by_id])
+    application: Mapped["Application | None"] = relationship(lazy="raise_on_sql", foreign_keys=[application_id])
+    created_by: Mapped["User | None"] = relationship(lazy="raise_on_sql", foreign_keys=[created_by_id])
     
     attendances: Mapped[list["MeetingAttendance"]] = relationship(
+        lazy="raise_on_sql",
         back_populates="meeting",
         cascade="all, delete-orphan",
     )
@@ -83,5 +86,5 @@ class MeetingAttendance(Base, BaseEntity):
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    meeting: Mapped["Meeting"] = relationship(back_populates="attendances")
-    user: Mapped["User"] = relationship()
+    meeting: Mapped["Meeting"] = relationship(lazy="raise_on_sql", back_populates="attendances")
+    user: Mapped["User"] = relationship(lazy="raise_on_sql")

@@ -11,5 +11,13 @@ export default defineConfig({
     supportFile: 'cypress/support/e2e.ts',
     defaultCommandTimeout: 10000,
     requestTimeout: 15000,
+    setupNodeEvents(on) {
+      on('task', {
+        log(message) {
+          console.log(message)
+          return null
+        },
+      })
+    },
   },
 })

@@ -10,7 +10,12 @@ from app.middleware.auth import get_current_user, require_role
 from app.models.incident import Incident
 from app.models.role import UserRole
 from app.models.user import User
-from app.schemas.incident import IncidentCreate, IncidentResponse, IncidentStatusUpdate, IncidentUpdate
+from app.schemas.incident import (
+    IncidentCreate,
+    IncidentResponse,
+    IncidentStatusUpdate,
+    IncidentUpdate,
+)
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
 

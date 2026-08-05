@@ -1,31 +1,43 @@
 /**
  * Composable useWebSocket.ts
- * 
+ *
  * Composable de WebSocket para notificaciones en tiempo real en CoreStream.
  * Conecta al servidor FastAPI a través de WebSocket y recibe eventos push.
  * Implementa reconexión automática con backoff exponencial para mayor confiabilidad.
- * 
- * Características:
- * - Conexión automática al servidor WebSocket
- * - Heartbeat cada 30 segundos para mantener la conexión viva
- * - Reconexión automática con backoff exponencial (máximo 10 intentos)
- * - Parseo de mensajes JSON y gestión de notificaciones
- * - Limpieza automática al desmontar el componente
- *  
+ *
+ * DISEÑO — estado a nivel de módulo, no por llamada:
+ * Antes, socket/isConnected/reconnectAttempts vivían DENTRO de useWebSocket(),
+ * así que cada llamada creaba su propia conexión aislada sin relación con las
+ * demás. Nada en la app llamaba nunca a connect() (solo ActionDock.vue
+ * importaba el composable sin usarlo), así que ese defecto nunca se notó.
+ * Ahora que stores/auth.ts sí llama a connect()/disconnect() en login/logout,
+ * hace falta un singleton real: el estado vive a nivel de módulo, y cada
+ * useWebSocket() devuelve referencias a la MISMA conexión.
+ *
+ * Por el mismo motivo se quitó el onUnmounted() que traía antes: solo
+ * funciona si el composable se invoca dentro del setup() de un componente,
+ * y aquí se invoca desde un store de Pinia. El ciclo de vida de la conexión
+ * lo decide quien la abrió (login) y quien la cierra (logout), no el
+ * montaje de un componente cualquiera.
+ *
+ * Autenticación del handshake (plan 3.2):
+ * connect(userId) primero cambia el access token actual por un ticket de un
+ * solo uso (POST /auth/ws-ticket) y lo manda como ?ticket=... — no el JWT
+ * directamente, que quedaría escrito en los logs de acceso de cualquier
+ * proxy delante de la app durante toda su vida útil.
+ *
  * Uso:
  * const { isConnected, connect, disconnect, send } = useWebSocket()
- * onMounted(() => connect('user-id-123'))
+ * await connect('user-id-123')
  */
 
-import { ref, onUnmounted } from 'vue'
+import { ref } from 'vue'
 import type { Ref } from 'vue'
 import { useNotificationsStore } from '@/stores/notifications'
 import { NotificationType } from '@/types'
 import { eventBus } from '@/utils/eventBus'
+import api from '@/services/api'
 
-/**
- * Interfaz para mensajes recibidos por WebSocket
- */
 interface WebSocketMessage {
   type: 'notification' | 'update' | 'error' | 'ping' | 'pong' | 'connected'
   data?: any
@@ -33,460 +45,273 @@ interface WebSocketMessage {
   timestamp?: string
 }
 
-/**
- * Composable para gestionar conexión WebSocket
- * Proporciona métodos para conectar, enviar y recibir mensajes en tiempo real
- * 
- * @returns Objeto con propiedades y métodos para el WebSocket
- */
-export function useWebSocket() {
-  // =========================================================================
-  // ESTADO REACTIVO - Variables para rastrear el estado de la conexión
-  // =========================================================================
+// =========================================================================
+// ESTADO A NIVEL DE MÓDULO — compartido por todas las llamadas a useWebSocket()
+// =========================================================================
 
-  /**
-   * Instancia de conexión WebSocket
-   * null si no está conectado, WebSocket si está activo
-   */
-  const socket: Ref<WebSocket | null> = ref(null)
+const socket: Ref<WebSocket | null> = ref(null)
+const isConnected: Ref<boolean> = ref(false)
+const reconnectAttempts: Ref<number> = ref(0)
+let heartbeatIntervalId: ReturnType<typeof setInterval> | null = null
 
-  /**
-   * Indica si la conexión WebSocket está activa
-   * Se actualiza automáticamente cuando la conexión cambia de estado
-   */
-  const isConnected: Ref<boolean> = ref(false)
+/** Usuario de la conexión actual, para poder reconectar sin que el caller lo repita. */
+let currentUserId: string | null = null
 
-  /**
-   * Número actual de intentos de reconexión
-   * Se reinicia a 0 cuando la conexión es exitosa
-   */
-  const reconnectAttempts: Ref<number> = ref(0)
+/** Evita reconexiones simultáneas si handleClose se disparase más de una vez. */
+let reconnectTimeoutId: ReturnType<typeof setTimeout> | null = null
 
-  /**
-   * ID del intervalo de heartbeat
-   * Se usa para cancelar el intervalo cuando se desconecta
-   */
-  let heartbeatIntervalId: ReturnType<typeof setInterval> | null = null
+const maxReconnectAttempts = 10
+const baseDelay = 1000
+const maxDelay = 30000
+const heartbeatInterval = 30000
 
-  // =========================================================================
-  // CONSTANTES - Configuración de reconexión y timing
-  // =========================================================================
+function calculateBackoffDelay(): number {
+  const exponentialDelay = baseDelay * Math.pow(2, reconnectAttempts.value)
+  return Math.min(exponentialDelay, maxDelay)
+}
 
-  /**
-   * Número máximo de intentos de reconexión
-   * Después de alcanzar este número, la reconexión se detiene
-   */
-  const maxReconnectAttempts = 10
+function generateId(): string {
+  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+}
 
-  /**
-   * Retraso base en milisegundos para el backoff exponencial
-   * Valor inicial: 1000ms (1 segundo)
-   */
-  const baseDelay = 1000
+function startHeartbeat(): void {
+  if (heartbeatIntervalId) {
+    clearInterval(heartbeatIntervalId)
+  }
 
-  /**
-   * Retraso máximo en milisegundos para no esperar demasiado
-   * Límite: 30 segundos (30000ms)
-   */
-  const maxDelay = 30000
+  heartbeatIntervalId = setInterval(() => {
+    if (isConnected.value && socket.value) {
+      try {
+        send({ type: 'ping', timestamp: new Date().toISOString() })
+      } catch (error) {
+        console.warn('Error enviando heartbeat:', error)
+      }
+    }
+  }, heartbeatInterval)
+}
 
-  /**
-   * Intervalo de heartbeat en milisegundos para mantener viva la conexión
-   * Se envía un ping cada 30 segundos
-   */
-  const heartbeatInterval = 30000
+function stopHeartbeat(): void {
+  if (heartbeatIntervalId) {
+    clearInterval(heartbeatIntervalId)
+    heartbeatIntervalId = null
+  }
+}
 
-  // =========================================================================
-  // ACCESO A STORES - Pinia stores para gestionar notificaciones
-  // =========================================================================
-
-  /**
-   * Store de notificaciones para guardar mensajes recibidos
-   */
+function handleMessage(event: MessageEvent): void {
   const notificationStore = useNotificationsStore()
 
-  // =========================================================================
-  // MÉTODOS PRIVADOS - Funciones internas para manejo de WebSocket
-  // =========================================================================
+  try {
+    const message: WebSocketMessage = JSON.parse(event.data)
 
-  /**
-   * Calcula el retraso para el siguiente intento de reconexión
-   * Usa backoff exponencial: delay = baseDelay * 2^intentos
-   * Capped al máximo para evitar esperas excesivas
-   * 
-   * @returns Retraso en milisegundos para el siguiente intento
-   */
-  function calculateBackoffDelay(): number {
-    // Fórmula: baseDelay * 2^intentos, ejemplo: 1000 * 2^3 = 8000ms
-    const exponentialDelay = baseDelay * Math.pow(2, reconnectAttempts.value)
-    // Limitar al máximo de 30 segundos
-    return Math.min(exponentialDelay, maxDelay)
-  }
-
-  /**
-   * Inicia el intervalo de heartbeat
-   * Envía un ping cada 30 segundos para mantener la conexión viva
-   * Previene que el servidor cierre la conexión por inactividad
-   */
-  function startHeartbeat(): void {
-    // Limpiar intervalo anterior si existe
-    if (heartbeatIntervalId) {
-      clearInterval(heartbeatIntervalId)
-    }
-
-    // Crear nuevo intervalo que envía ping periódicamente
-    heartbeatIntervalId = setInterval(() => {
-      if (isConnected.value && socket.value) {
-        try {
-          // Enviar mensaje de tipo 'ping' para heartbeat
-          send({
-            type: 'ping',
-            timestamp: new Date().toISOString()
-          })
-        } catch (error) {
-          console.warn('Error enviando heartbeat:', error)
-        }
-      }
-    }, heartbeatInterval)
-  }
-
-  /**
-   * Detiene el intervalo de heartbeat
-   * Se llama al desconectar para liberar recursos
-   */
-  function stopHeartbeat(): void {
-    if (heartbeatIntervalId) {
-      clearInterval(heartbeatIntervalId)
-      heartbeatIntervalId = null
-    }
-  }
-
-  /**
-   * Maneja los mensajes recibidos del servidor WebSocket
-   * Valida el formato JSON y procesa según el tipo de mensaje
-   * 
-   * Tipos de eventos soportados:
-   * - notification: Notificación general (TICKET_ASSIGNED, TICKET_STATUS_CHANGED, etc.)
-   * - update: Actualización en tiempo real de datos
-   * - ping: Heartbeat del servidor
-   * - pong: Respuesta a heartbeat del cliente
-   * - error: Mensaje de error
-   * 
-   * @param event - Evento de mensaje WebSocket
-   */
-  function handleMessage(event: MessageEvent): void {
-    try {
-      // Parsear el mensaje JSON recibido
-      const message: WebSocketMessage = JSON.parse(event.data)
-
-      // Procesar según el tipo de mensaje
-      switch (message.type) {
-        case 'notification':
-          if (message.data) {
-            // ARQ notification — has a real DB id and structured fields from notification_service
-            if (message.data.id && message.data.created_at !== undefined) {
-              notificationStore.addNotification({
-                id: message.data.id,
-                userId: '',
-                title: message.data.title ?? '',
-                message: message.data.message ?? '',
-                type: (message.data.type as NotificationType) ?? NotificationType.SYSTEM,
-                isRead: message.data.is_read ?? false,
-                ticketId: message.data.ticket_id ?? undefined,
-                createdAt: message.data.created_at ?? message.timestamp ?? new Date().toISOString(),
-              })
+    switch (message.type) {
+      case 'notification':
+        if (message.data) {
+          if (message.data.id && message.data.created_at !== undefined) {
+            notificationStore.addNotification({
+              id: message.data.id,
+              userId: '',
+              title: message.data.title ?? '',
+              message: message.data.message ?? '',
+              type: (message.data.type as NotificationType) ?? NotificationType.SYSTEM,
+              isRead: message.data.is_read ?? false,
+              ticketId: message.data.ticket_id ?? undefined,
+              createdAt: message.data.created_at ?? message.timestamp ?? new Date().toISOString(),
+            })
+          } else {
+            const eventType = message.data.eventType || message.data.type
+            if (eventType === 'TIMER_SYNC') {
+              eventBus.emit('timer-sync', message.data)
             } else {
-              // Legacy WebSocket event (workbench real-time update, timer sync, etc.)
-              const eventType = message.data.eventType || message.data.type
-              if (eventType === 'TIMER_SYNC') {
-                eventBus.emit('timer-sync', message.data)
-              } else {
-                notificationStore.addNotification({
-                  id: message.data.id || generateId(),
-                  userId: '',
-                  title: message.data.title || 'Notificación',
-                  message: message.data.message || '',
-                  type: (message.data.type as NotificationType) || NotificationType.SYSTEM,
-                  isRead: false,
-                  ticketId: message.data.ticketId || message.data.ticket_id || undefined,
-                  createdAt: message.timestamp || new Date().toISOString(),
-                })
-              }
+              notificationStore.addNotification({
+                id: message.data.id || generateId(),
+                userId: '',
+                title: message.data.title || 'Notificación',
+                message: message.data.message || '',
+                type: (message.data.type as NotificationType) || NotificationType.SYSTEM,
+                isRead: false,
+                ticketId: message.data.ticketId || message.data.ticket_id || undefined,
+                createdAt: message.timestamp || new Date().toISOString(),
+              })
             }
           }
-          break
-
-        case 'update':
-          // Procesar actualización de datos en tiempo real
-          // // console.log('Actualización en tiempo real recibida:', message.data)
-          // Disparar evento personalizado para que los componentes reaccionen
-          eventBus.emit('ws-update', message.data)
-          break
-
-        case 'ping':
-          // Responder con pong al servidor
-          try {
-            send({ type: 'pong' })
-            console.debug('Pong enviado al servidor')
-          } catch {
-            // Ignorer errores de envío
-          }
-          break
-
-        case 'pong':
-          // Respuesta a heartbeat - no hacer nada especial
-          console.debug('Heartbeat pong recibido')
-          break
-
-        case 'connected':
-          // Mensaje de conexión exitosa
-          // // console.log('Conexión confirmada por servidor:', message.message)
-          break
-
-        case 'error':
-          // Mensaje de error del servidor
-          console.error('Error del servidor WebSocket:', message.message)
-          notificationStore.addNotification({
-            userId: '',
-            id: generateId(),
-            title: 'Error',
-            message: message.message || 'Error del servidor',
-            type: NotificationType.SYSTEM,
-            createdAt: message.timestamp || new Date().toISOString(),
-            isRead: false
-          })
-          break
-
-        default:
-          console.warn('Tipo de mensaje desconocido:', message.type)
-      }
-    } catch (error) {
-      console.error('Error procesando mensaje WebSocket:', error)
-    }
-  }
-
-  /**
-   * Maneja el evento de cierre de la conexión WebSocket
-   * Intenta reconectar con backoff exponencial
-   * 
-   * @param event - Evento de cierre WebSocket
-   */
-  function handleClose(event: CloseEvent): void {
-    // // console.log('Conexión WebSocket cerrada:', event.code, event.reason)
-    isConnected.value = false
-    socket.value = null
-
-    // Detener heartbeat cuando se cierra la conexión
-    stopHeartbeat()
-
-    // Intentar reconectar si no hemos superado el máximo de intentos
-    if (reconnectAttempts.value < maxReconnectAttempts) {
-      const delay = calculateBackoffDelay()
-
-      // Incrementar contador de intentos
-      reconnectAttempts.value++
-
-      // Programar reconexión después del retraso calculado
-      setTimeout(() => {
-        // Obtener userId del almacenamiento local o del store de autenticación
-        const userId = localStorage.getItem('userId') || ''
-        const token = localStorage.getItem('accessToken') || ''
-        if (userId && token) {
-          connect(userId, token)
         }
-      }, delay)
-    } else {
-      console.error(
-        `No se pudo conectar después de ${maxReconnectAttempts} intentos`
-      )
-      notificationStore.addNotification({
-        userId: '',
-        id: generateId(),
-        title: 'Conexión perdida',
-        message: 'No se pudo establecer la conexión con el servidor',
-        type: NotificationType.SYSTEM,
-        createdAt: new Date().toISOString(),
-        isRead: false
-      })
-    }
-  }
+        break
 
-  /**
-   * Maneja los errores de conexión WebSocket
-   * Registra el error y dispara un evento de reconexión
-   * 
-   * @param event - Evento de error WebSocket
-   */
-  function handleError(event: Event): void {
-    console.error('Error de WebSocket:', event)
-    notificationStore.addNotification({
+      case 'update':
+        eventBus.emit('ws-update', message.data)
+        break
+
+      case 'ping':
+        try {
+          send({ type: 'pong' })
+        } catch {
+          /* ignorar errores de envío del pong */
+        }
+        break
+
+      case 'pong':
+        break
+
+      case 'connected':
+        break
+
+      case 'error':
+        console.error('Error del servidor WebSocket:', message.message)
+        notificationStore.addNotification({
+          userId: '',
+          id: generateId(),
+          title: 'Error',
+          message: message.message || 'Error del servidor',
+          type: NotificationType.SYSTEM,
+          createdAt: message.timestamp || new Date().toISOString(),
+          isRead: false
+        })
+        break
+
+      default:
+        console.warn('Tipo de mensaje desconocido:', message.type)
+    }
+  } catch (error) {
+    console.error('Error procesando mensaje WebSocket:', error)
+  }
+}
+
+function handleClose(event: CloseEvent): void {
+  isConnected.value = false
+  socket.value = null
+  stopHeartbeat()
+
+  // Cierre intencional (disconnect()): no reconectar.
+  if (event.code === 1000) return
+
+  if (!currentUserId) return
+
+  if (reconnectAttempts.value < maxReconnectAttempts) {
+    const delay = calculateBackoffDelay()
+    reconnectAttempts.value++
+
+    if (reconnectTimeoutId) clearTimeout(reconnectTimeoutId)
+    reconnectTimeoutId = setTimeout(() => {
+      if (currentUserId) {
+        connect(currentUserId)
+      }
+    }, delay)
+  } else {
+    console.error(`No se pudo conectar después de ${maxReconnectAttempts} intentos`)
+    useNotificationsStore().addNotification({
       userId: '',
       id: generateId(),
-      title: 'Error de conexión',
-      message: 'Hubo un error en la conexión WebSocket',
+      title: 'Conexión perdida',
+      message: 'No se pudo establecer la conexión con el servidor',
       type: NotificationType.SYSTEM,
       createdAt: new Date().toISOString(),
       isRead: false
     })
   }
+}
 
-  /**
-   * Genera un ID único para notificaciones
-   * Usa timestamp + número aleatorio para garantizar unicidad
-   * 
-   * @returns ID único como string
-   */
-  function generateId(): string {
-    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-  }
-
-  // =========================================================================
-  // MÉTODOS PÚBLICOS - API del composable
-  // =========================================================================
-
-  /**
-   * Conecta al servidor WebSocket
-   * Establece la conexión a ws://{host}/api/ws/{userId}?token=JWT_TOKEN
-   * Configura los event listeners y reinicia el contador de intentos
-   * 
-   * @param userId - ID del usuario para la conexión personalizada
-   * @param token - JWT token para autenticación (opcional, se obtiene del localStorage si no se proporciona)
-   */
-  function connect(userId: string, token?: string): void {
-    try {
-      // No intentar conectar si ya hay una conexión activa
-      if (socket.value && isConnected.value) {
-        console.warn('Ya hay una conexión WebSocket activa')
-        return
-      }
-
-      // Obtener token de localStorage o del parámetro
-      const jwtToken = token || localStorage.getItem('accessToken')
-      if (!jwtToken) {
-        console.error('No hay token JWT disponible para autenticación WebSocket')
-        notificationStore.addNotification({
-          userId: '',
-          id: generateId(),
-          title: 'Error de autenticación',
-          message: 'No hay token disponible para conectar al servidor en tiempo real',
-          type: NotificationType.SYSTEM,
-          createdAt: new Date().toISOString(),
-          isRead: false
-        })
-        return
-      }
-
-      // Construir URL del WebSocket apuntando al backend de FastAPI
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      // VITE_BACKEND_URL = "http://localhost:8000" (URL completa del backend)
-      // VITE_API_BASE_URL = "/api" (prefijo para el proxy de Vite — NO usar aquí)
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
-      const backendHost = backendUrl.replace(/^https?:\/\//, '')
-      const wsUrl = `${protocol}//${backendHost}/api/ws/${userId}?token=${encodeURIComponent(jwtToken)}`
-
-      // // console.log('Conectando a WebSocket:', `${protocol}//${backendHost}/api/ws/${userId}?token=***`)
-
-      // Crear nueva instancia de WebSocket
-      socket.value = new WebSocket(wsUrl)
-
-      // Configurar event listeners
-      socket.value.addEventListener('open', () => {
-        // // console.log('WebSocket conectado exitosamente')
-        isConnected.value = true
-        reconnectAttempts.value = 0 // Resetear contador de intentos
-        startHeartbeat() // Iniciar heartbeat al conectar
-
-        notificationStore.addNotification({
-          userId: '',
-          id: generateId(),
-          title: 'Conexión establecida',
-          message: 'Conectado al servidor en tiempo real',
-          type: NotificationType.SYSTEM,
-          createdAt: new Date().toISOString(),
-          isRead: false
-        })
-      })
-
-      socket.value.addEventListener('message', handleMessage)
-      socket.value.addEventListener('close', handleClose)
-      socket.value.addEventListener('error', handleError)
-    } catch (error) {
-      console.error('Error al conectar WebSocket:', error)
-      isConnected.value = false
-    }
-  }
-
-  /**
-   * Desconecta del servidor WebSocket
-   * Cierra la conexión limpiamente y detiene el heartbeat
-   */
-  function disconnect(): void {
-    try {
-      // Detener heartbeat primero
-      stopHeartbeat()
-
-      // Cerrar conexión si existe
-      if (socket.value) {
-        socket.value.close(1000, 'Desconexión voluntaria del cliente')
-        socket.value = null
-      }
-
-      isConnected.value = false
-      reconnectAttempts.value = 0
-
-      // // console.log('WebSocket desconectado')
-    } catch (error) {
-      console.error('Error al desconectar WebSocket:', error)
-    }
-  }
-
-  /**
-   * Envía un mensaje al servidor a través del WebSocket
-   * El mensaje se serializa a JSON automáticamente
-   * 
-   * @param data - Objeto a enviar (se serializa a JSON)
-   * @throws Error si la conexión no está activa
-   */
-  function send(data: any): void {
-    if (!socket.value || !isConnected.value) {
-      console.error('No hay conexión WebSocket activa')
-      return
-    }
-
-    try {
-      // Serializar data a JSON y enviar
-      const message = JSON.stringify({
-        ...data,
-        timestamp: data.timestamp || new Date().toISOString()
-      })
-      socket.value.send(message)
-    } catch (error) {
-      console.error('Error enviando mensaje WebSocket:', error)
-    }
-  }
-
-  // =========================================================================
-  // LIMPIEZA - Hook de desmontaje del componente
-  // =========================================================================
-
-  /**
-   * Hook de ciclo de vida: se ejecuta cuando el componente es desmontado
-   * Garantiza la desconexión limpia y liberación de recursos
-   */
-  onUnmounted(() => {
-    disconnect()
+function handleError(event: Event): void {
+  console.error('Error de WebSocket:', event)
+  useNotificationsStore().addNotification({
+    userId: '',
+    id: generateId(),
+    title: 'Error de conexión',
+    message: 'Hubo un error en la conexión WebSocket',
+    type: NotificationType.SYSTEM,
+    createdAt: new Date().toISOString(),
+    isRead: false
   })
+}
 
-  // =========================================================================
-  // RETORNO DEL COMPOSABLE - API pública
-  // =========================================================================
+/**
+ * Conecta al servidor WebSocket para `userId`.
+ *
+ * Cambia el access token actual por un ticket de un solo uso (15s de vida)
+ * y lo manda como ?ticket=... — nunca el JWT en claro.
+ */
+async function connect(userId: string): Promise<void> {
+  if (socket.value && isConnected.value) {
+    console.warn('Ya hay una conexión WebSocket activa')
+    return
+  }
 
+  currentUserId = userId
+
+  try {
+    const ticket = await api.auth.getWsTicket()
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
+    const backendHost = backendUrl.replace(/^https?:\/\//, '')
+    const wsUrl = `${protocol}//${backendHost}/api/ws/${userId}?ticket=${encodeURIComponent(ticket)}`
+
+    socket.value = new WebSocket(wsUrl)
+
+    socket.value.addEventListener('open', () => {
+      isConnected.value = true
+      reconnectAttempts.value = 0
+      startHeartbeat()
+    })
+
+    socket.value.addEventListener('message', handleMessage)
+    socket.value.addEventListener('close', handleClose)
+    socket.value.addEventListener('error', handleError)
+  } catch (error) {
+    console.error('Error al conectar WebSocket:', error)
+    isConnected.value = false
+  }
+}
+
+/**
+ * Desconecta del servidor WebSocket. code=1000 le indica a handleClose que
+ * es un cierre intencional y no debe disparar reconexión.
+ */
+function disconnect(): void {
+  try {
+    currentUserId = null
+    if (reconnectTimeoutId) {
+      clearTimeout(reconnectTimeoutId)
+      reconnectTimeoutId = null
+    }
+    stopHeartbeat()
+
+    if (socket.value) {
+      socket.value.close(1000, 'Desconexión voluntaria del cliente')
+      socket.value = null
+    }
+
+    isConnected.value = false
+    reconnectAttempts.value = 0
+  } catch (error) {
+    console.error('Error al desconectar WebSocket:', error)
+  }
+}
+
+function send(data: any): void {
+  if (!socket.value || !isConnected.value) {
+    console.error('No hay conexión WebSocket activa')
+    return
+  }
+
+  try {
+    const message = JSON.stringify({
+      ...data,
+      timestamp: data.timestamp || new Date().toISOString()
+    })
+    socket.value.send(message)
+  } catch (error) {
+    console.error('Error enviando mensaje WebSocket:', error)
+  }
+}
+
+/**
+ * Composable para gestionar la conexión WebSocket (singleton a nivel de
+ * módulo, ver nota de diseño arriba).
+ */
+export function useWebSocket() {
   return {
-    // Propiedades reactivas
     isConnected,
     reconnectAttempts,
-
-    // Métodos públicos
     connect,
     disconnect,
     send

@@ -7,17 +7,19 @@ Maneja operaciones CRUD para aplicaciones del sistema:
 - Requiere permisos de ADMIN para crear, actualizar y eliminar
 """
 
+from datetime import datetime, timezone
 from typing import List
 from uuid import UUID
-from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import and_, case, func, select
+from sqlalchemy import delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, delete as sa_delete
+
 from app.database import get_db
-from app.models import Application, Epic, Ticket, TicketStatus
-from app.schemas import ApplicationResponse, ApplicationCreate, ApplicationUpdate
 from app.middleware import get_current_user, require_role
-from app.models import User, UserRole
+from app.models import Application, Epic, Ticket, TicketStatus, User, UserRole
+from app.schemas import ApplicationCreate, ApplicationResponse, ApplicationUpdate
 
 # Router para endpoints de aplicaciones
 router = APIRouter(tags=["Aplicaciones"])
@@ -57,70 +59,42 @@ async def list_applications(
     Returns:
         List[ApplicationResponse]: Lista paginada de aplicaciones con conteos reales
     """
-    # Obtener todas las aplicaciones con paginación
+    # Antes: 1 query para listar + 3 queries POR aplicación (épicas,
+    # pendientes, retrasados) — con 5 apps son 16 queries, con 100 son más de
+    # 300 por carga de página (plan fase 9). Una sola query agregada con
+    # LEFT JOIN + COUNT(DISTINCT ...) condicional evita el N+1: el DISTINCT
+    # protege los conteos del fan-out que produce el join con Ticket (una
+    # épica con varios tickets no debe inflar epic_count).
+    now = datetime.now(timezone.utc)
+
+    epic_count_expr = func.count(func.distinct(Epic.id))
+    pending_count_expr = func.count(
+        func.distinct(case((Ticket.status == TicketStatus.TODO, Ticket.id)))
+    )
+    overdue_count_expr = func.count(
+        func.distinct(
+            case((and_(Ticket.due_date < now, Ticket.status != TicketStatus.COMPLETED), Ticket.id))
+        )
+    )
+
     result = await db.execute(
-        select(Application)
+        select(Application, epic_count_expr, pending_count_expr, overdue_count_expr)
+        .outerjoin(Epic, Epic.application_id == Application.id)
+        .outerjoin(Ticket, Ticket.epic_id == Epic.id)
+        .group_by(Application.id)
         .order_by(Application.created_at.desc())
         .offset(skip)
         .limit(limit)
     )
-    applications = result.scalars().all()
 
-    # Construir respuestas con conteos REALES
     app_responses = []
-    
-    for app in applications:
-        # 1️⃣ CONTAR ÉPICAS DE LA APP
-        epic_count_result = await db.execute(
-            select(func.count(Epic.id))
-            .where(Epic.application_id == app.id)
-        )
-        epic_count = epic_count_result.scalar() or 0
-
-        # 2️⃣ CONTAR PENDIENTES (TODO)
-        # Tickets con status = TODO que están en épicas de esta app
-        pending_count_result = await db.execute(
-            select(func.count(Ticket.id))
-            .select_from(Ticket)
-            .join(Epic, Ticket.epic_id == Epic.id)
-            .where(
-                and_(
-                    Epic.application_id == app.id,
-                    Ticket.status == TicketStatus.TODO
-                )
-            )
-        )
-        pending_count = pending_count_result.scalar() or 0
-
-        # 3️⃣ CONTAR RETRASADOS (Overdue)
-        # Tickets que vencieron hace tiempo y no están completados
-        now = datetime.now(timezone.utc)
-        overdue_count_result = await db.execute(
-            select(func.count(Ticket.id))
-            .select_from(Ticket)
-            .join(Epic, Ticket.epic_id == Epic.id)
-            .where(
-                and_(
-                    Epic.application_id == app.id,
-                    Ticket.due_date < now,
-                    Ticket.status != TicketStatus.COMPLETED
-                )
-            )
-        )
-        overdue_count = overdue_count_result.scalar() or 0
-
-        # 4️⃣ CONSTRUIR RESPUESTA CON CONTEOS REALES
-        # Primero creamos el objeto mapeando los datos de la app desde la DB
+    for app, epic_count, pending_count, overdue_count in result.all():
         app_view = ApplicationResponse.model_validate(app)
-        
-        # Segundo, le inyectamos los conteos que calculamos arriba
         app_view.epic_count = epic_count
         app_view.pending_count = pending_count
         app_view.delayed_count = overdue_count
-        
-        # Finalmente, lo agregamos a la lista que devolverá el endpoint
         app_responses.append(app_view)
-    
+
     return app_responses
 
 

@@ -8,8 +8,7 @@ describe('Levantar Pregunta', () => {
   })
 
   beforeEach(() => {
-    cy.loginAsDeveloper()
-    cy.visit('/#/dev/workbench')
+    cy.loginAsDeveloper('/dev/workbench')
   })
 
   it('Sección Levantar Pregunta visible al abrir ticket en progreso', () => {

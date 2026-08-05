@@ -8,22 +8,33 @@ Gestiona el ciclo de vida de épicas:
 - Épicas contienen tickets que son los elementos de trabajo reales
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, text, delete as sa_delete
-from sqlalchemy.orm import selectinload
+import logging
 from typing import List
 from uuid import UUID
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import delete as sa_delete
+from sqlalchemy import func, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from app.database import get_db
-from app.models import Epic, Application, Ticket, User
-from app.schemas import EpicResponse, EpicCreate, EpicUpdate
+
 # Aún no creado
 # from app.schemas import DocumentResponse
-from app.middleware.auth import get_current_user
+from app.middleware.auth import get_current_user, require_role
+from app.models import Application, Epic, Ticket, User, UserRole
+from app.schemas import EpicCreate, EpicResponse, EpicUpdate
+
+# ADMIN y TEAM_LEADER gestionan la estructura del backlog (aplicaciones,
+# épicas, tickets); DEVELOPER no. Antes epics.py no usaba require_role NI UNA
+# SOLA VEZ — verificado en la auditoría: un DEVELOPER creaba épicas con 201
+# (plan fase 4).
+_MANAGERS = [UserRole.ADMIN, UserRole.TEAM_LEADER]
 
 # Router para épicas
 router = APIRouter(tags=["Épicas"])
+logger = logging.getLogger("corestream.epics")
 
 
 @router.get(
@@ -101,7 +112,7 @@ async def get_application_epics(
 )
 async def create_epic(
     epic_data: EpicCreate,
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_role(_MANAGERS)),
     db: AsyncSession = Depends(get_db)
 ) -> EpicResponse:
     """
@@ -233,7 +244,7 @@ async def get_epic(
 async def update_epic(
     epic_id: UUID,
     epic_update: EpicUpdate,
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_role(_MANAGERS)),
     db: AsyncSession = Depends(get_db)
 ) -> EpicResponse:
     """
@@ -309,7 +320,7 @@ async def update_epic(
 )
 async def delete_epic(
     epic_id: UUID,
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_role(_MANAGERS)),
     db: AsyncSession = Depends(get_db)
 ) -> None:
     """
@@ -355,7 +366,7 @@ async def delete_epic(
 async def reorder_epic(
     epic_id: UUID,
     new_order: dict,
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_role(_MANAGERS)),
     db: AsyncSession = Depends(get_db)
 ) -> EpicResponse:
     """
@@ -481,8 +492,7 @@ async def reorder_epic(
         try:
             return EpicResponse.model_validate(epic_reloaded)
         except Exception:
-            import traceback
-            print(f"[REORDER] Serialization error: {traceback.format_exc()}")
+            logger.exception("Error de serialización en reorder_epic")
             return {"status": "ok", "id": str(epic_id)}
 
     except ValueError as e:

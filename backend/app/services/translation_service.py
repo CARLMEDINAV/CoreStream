@@ -34,7 +34,7 @@ def extract_text_from_file(file_path: str, mime_type: str, filename: str) -> str
     # --- PDF ---
     if ext == ".pdf" or base_mime == "application/pdf":
         try:
-            import PyPDF2  # noqa: PLC0415
+            import PyPDF2
             with open(file_path, "rb") as f:
                 reader = PyPDF2.PdfReader(f)
                 pages = [page.extract_text() or "" for page in reader.pages]
@@ -57,7 +57,7 @@ def extract_text_from_file(file_path: str, mime_type: str, filename: str) -> str
         "application/msword",
     ):
         try:
-            import docx  # noqa: PLC0415
+            import docx
             document = docx.Document(file_path)
             paragraphs = [p.text for p in document.paragraphs if p.text.strip()]
             text = "\n".join(paragraphs)
@@ -98,6 +98,17 @@ async def _call_azure_translator(
     Maneja todos los errores de red, timeout y respuesta de servicio.
     """
     settings = get_settings()
+
+    if not settings.AZURE_TRANSLATOR_KEY:
+        # Antes: sin credenciales, se llamaba a Azure igual con la clave
+        # vacía, Azure respondía 401, y eso se traducía a 502 — un error de
+        # "servidor roto" para lo que en realidad es una función no
+        # configurada. Se distingue con 503 y un mensaje claro (plan fase 8).
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="La traducción de documentos no está configurada en este servidor "
+            "(falta AZURE_TRANSLATOR_KEY).",
+        )
 
     params: dict = {"api-version": "3.0", "to": target_lang}
     if source_lang != "auto":
@@ -279,7 +290,7 @@ async def _translate_batch(texts: list[str], target_lang: str) -> list[str]:
                     for k in range(len(batch))
                 )
                 if all_valid:
-                    for (orig_idx, _), translated_text in zip(batch, parsed):
+                    for (orig_idx, _), translated_text in zip(batch, parsed, strict=True):
                         results[orig_idx] = translated_text
                     batch_applied = True
         except Exception:
@@ -312,10 +323,10 @@ async def _translate_to_docx(
       3. Escribir el DOCX de salida en el orden original.
     """
     try:
-        import docx  # noqa: PLC0415
-        from docx.oxml.ns import qn  # noqa: PLC0415
-        from docx.text.paragraph import Paragraph as DocxParagraph  # noqa: PLC0415
-        from docx.table import Table as DocxTable  # noqa: PLC0415
+        import docx
+        from docx.oxml.ns import qn
+        from docx.table import Table as DocxTable
+        from docx.text.paragraph import Paragraph as DocxParagraph
     except ImportError:
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
@@ -329,14 +340,14 @@ async def _translate_to_docx(
     # ------------------------------------------------------------------ PDF --
     if ext == ".pdf" or base_mime == "application/pdf":
         try:
-            import PyPDF2  # noqa: PLC0415
+            import PyPDF2
         except ImportError:
             raise HTTPException(
                 status_code=status.HTTP_501_NOT_IMPLEMENTED,
                 detail="Soporte para PDF no disponible. Instale 'pypdf2'.",
             )
         all_paras: list[str] = []
-        with open(file_path, "rb") as f:
+        with open(file_path, "rb") as f:  # noqa: ASYNC230 — deuda conocida: bloquea el event loop (plan fase 7.2)
             reader = PyPDF2.PdfReader(f)
             for page in reader.pages:
                 all_paras.extend(_split_pdf_paragraphs(page.extract_text() or ""))
@@ -409,7 +420,7 @@ async def _translate_to_docx(
                 all_cell_refs.extend(e['cells'])
         all_cell_texts = [c['text'] for c in all_cell_refs]
         translated_cell_texts = await _translate_batch(all_cell_texts, target_lang)
-        for cell_ref, translated in zip(all_cell_refs, translated_cell_texts):
+        for cell_ref, translated in zip(all_cell_refs, translated_cell_texts, strict=True):
             cell_ref['_translated'] = translated
 
         # Fase 3: escribir el DOCX de salida en orden
@@ -446,7 +457,7 @@ async def _translate_csv(file_path: str, target_lang: str) -> bytes:
     Omite celdas vacías y numéricas para no alterar datos estructurados.
     Retorna bytes UTF-8-BOM (compatible con Excel).
     """
-    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+    with open(file_path, "r", encoding="utf-8", errors="replace") as f:  # noqa: ASYNC230 — deuda conocida: bloquea el event loop (plan fase 7.2)
         raw = f.read()
 
     rows = list(csv.reader(io.StringIO(raw)))
@@ -488,7 +499,7 @@ async def _translate_json_file(file_path: str, target_lang: str) -> bytes:
     """
     Traduce solo los valores string de un JSON, dejando intactas las claves y estructura.
     """
-    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+    with open(file_path, "r", encoding="utf-8", errors="replace") as f:  # noqa: ASYNC230 — deuda conocida: bloquea el event loop (plan fase 7.2)
         data = json.loads(f.read())
     translated = await _translate_json_values(data, target_lang)
     return json.dumps(translated, indent=2, ensure_ascii=False).encode("utf-8")
@@ -498,7 +509,7 @@ async def _translate_xml(file_path: str, target_lang: str) -> bytes:
     """
     Traduce XML usando el modo 'html' de Azure Translator, que preserva los tags nativamente.
     """
-    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+    with open(file_path, "r", encoding="utf-8", errors="replace") as f:  # noqa: ASYNC230 — deuda conocida: bloquea el event loop (plan fase 7.2)
         content = f.read()
     if not content.strip():
         raise HTTPException(
@@ -514,7 +525,7 @@ async def _translate_plaintext(file_path: str, target_lang: str) -> bytes:
     Traduce un archivo de texto plano con chunking para documentos largos.
     Usado para: md, txt, rst, sql, yaml, yml, toml, env, y todos los archivos de código.
     """
-    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+    with open(file_path, "r", encoding="utf-8", errors="replace") as f:  # noqa: ASYNC230 — deuda conocida: bloquea el event loop (plan fase 7.2)
         content = f.read()
     translated = await translate_long_text(content, "auto", target_lang)
     return translated.encode("utf-8")

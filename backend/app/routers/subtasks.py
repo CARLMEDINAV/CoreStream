@@ -10,17 +10,19 @@ Permiten:
 """
 
 from datetime import datetime, timezone
-from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 from typing import List
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Subtask, Ticket, TicketEventType
-from app.schemas import SubtaskResponse, SubtaskCreate, SubtaskUpdate
-from app.services.ticket_state_machine import ticket_state_machine
 from app.middleware.auth import get_current_user
+from app.models import Subtask, Ticket, TicketEventType, User
+from app.schemas import SubtaskCreate, SubtaskResponse, SubtaskUpdate
+from app.services.ticket_permissions import assert_can_manage_ticket
+from app.services.ticket_state_machine import ticket_state_machine
 
 # Router para subtareas
 router = APIRouter(tags=["Subtareas"])
@@ -55,7 +57,7 @@ async def list_subtasks(
 async def create_subtask(
     ticket_id: UUID,
     subtask_data: SubtaskCreate,
-    current_user = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ) -> SubtaskResponse:
     """
@@ -79,11 +81,13 @@ async def create_subtask(
     ticket_check = await db.execute(
         select(Ticket).where(Ticket.id == resolved_ticket_id)
     )
-    if not ticket_check.scalar_one_or_none():
+    parent_ticket = ticket_check.scalar_one_or_none()
+    if not parent_ticket:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Ticket con ID {ticket_id} no encontrado"
         )
+    assert_can_manage_ticket(parent_ticket, current_user)
 
     try:
         # Obtener el siguiente order_index disponible
@@ -131,7 +135,7 @@ async def update_subtask(
     ticket_id: UUID,
     subtask_id: UUID,
     subtask_update: SubtaskUpdate,
-    current_user = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ) -> SubtaskResponse:
     """
@@ -160,13 +164,18 @@ async def update_subtask(
             detail=f"Subtarea con ID {subtask_id} no encontrada"
         )
 
-    try:
-        # Obtener ticket para registrar evento
-        ticket = await db.execute(
-            select(Ticket).where(Ticket.id == ticket_id)
+    ticket_result = await db.execute(
+        select(Ticket).where(Ticket.id == ticket_id)
+    )
+    ticket = ticket_result.scalar_one_or_none()
+    if not ticket:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Ticket con ID {ticket_id} no encontrado"
         )
-        ticket = ticket.scalar_one_or_none()
+    assert_can_manage_ticket(ticket, current_user)
 
+    try:
         # Aplicar cambios a los campos proporcionados
         update_data = subtask_update.model_dump(exclude_unset=True)
         old_completion_status = subtask.is_completed
@@ -211,7 +220,7 @@ async def update_subtask(
 async def delete_subtask(
     ticket_id: UUID,
     subtask_id: UUID,
-    current_user = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ) -> None:
     """
@@ -235,6 +244,17 @@ async def delete_subtask(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Subtarea con ID {subtask_id} no encontrada"
         )
+
+    ticket_result = await db.execute(
+        select(Ticket).where(Ticket.id == ticket_id)
+    )
+    ticket = ticket_result.scalar_one_or_none()
+    if not ticket:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Ticket con ID {ticket_id} no encontrado"
+        )
+    assert_can_manage_ticket(ticket, current_user)
 
     try:
         # Eliminar subtarea
@@ -264,7 +284,7 @@ async def delete_subtask(
 async def reorder_subtasks(
     ticket_id: UUID,
     reorder_data: dict,
-    current_user = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ) -> List[SubtaskResponse]:
     """
@@ -288,6 +308,17 @@ async def reorder_subtasks(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Lista de IDs de subtareas vacía"
         )
+
+    ticket_result = await db.execute(
+        select(Ticket).where(Ticket.id == ticket_id)
+    )
+    ticket = ticket_result.scalar_one_or_none()
+    if not ticket:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Ticket con ID {ticket_id} no encontrado"
+        )
+    assert_can_manage_ticket(ticket, current_user)
 
     try:
         # Obtener todas las subtareas en el nuevo orden

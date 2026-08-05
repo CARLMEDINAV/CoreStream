@@ -6,7 +6,7 @@ Flujo:
       └─► notification_service.enqueue_notification()   [fire-and-forget]
                   └─► ARQ Redis queue
                               └─► deliver_notification()  [este archivo]
-                                      ├─► redis.publish("user:{id}:notifications", …)
+                                      ├─► redis.publish("corestream:user:{id}:notifications", …)
                                       └─► retry automático (max_tries=3, backoff=5 s)
 
 El DB save ocurre ANTES de encolar (en notification_service.create_notification,
@@ -22,6 +22,7 @@ import logging
 import redis.asyncio as aioredis
 
 from app.config import get_settings
+from app.redis_client import user_notifications_channel
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -42,7 +43,7 @@ async def deliver_notification(
     ARQ task: publica la notificación al canal Redis correcto para
     que el WebSocket la reenvíe al cliente en tiempo real.
 
-    El canal `user:{user_id}:notifications` es el mismo al que
+    El canal `corestream:user:{user_id}:notifications` es el mismo al que
     `websocket.py` está suscrito, cerrando el circuito.
 
     Parámetros se pasan como keyword-only para claridad y para que ARQ
@@ -63,7 +64,7 @@ async def deliver_notification(
         "created_at": created_at,
     })
 
-    channel = f"user:{user_id}:notifications"
+    channel = user_notifications_channel(user_id)
     subscribers = await redis.publish(channel, payload)
     logger.info(
         "Notificación entregada | canal=%s | tipo=%s | suscriptores=%d",

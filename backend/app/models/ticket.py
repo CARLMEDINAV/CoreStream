@@ -2,19 +2,20 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
+from typing import TYPE_CHECKING
 from uuid import UUID as PyUUID
 
-from sqlalchemy import DateTime, Enum as SQLEnum, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from app.models.document import Document
     from app.models.epic import Epic
-    from app.models.document import Document    
-    from app.models.ticket_event import TicketEvent
     from app.models.subtask import Subtask
-    from app.models.user import User       
+    from app.models.ticket_event import TicketEvent
+    from app.models.user import User
 
 
 from .base import Base, BaseEntity
@@ -124,30 +125,36 @@ class Ticket(Base, BaseEntity):
         index=True,
     )
 
-    epic: Mapped["Epic | None"] = relationship(back_populates="tickets")
+    epic: Mapped["Epic | None"] = relationship(lazy="raise_on_sql", back_populates="tickets")
     linked_ticket: Mapped["Ticket | None"] = relationship(
         "Ticket",
         foreign_keys=[linked_ticket_id],
         remote_side="Ticket.id",
+        lazy="raise_on_sql",
     )
     assignee: Mapped["User | None"] = relationship(
+        lazy="raise_on_sql",
         back_populates="assigned_tickets",
         foreign_keys=[assignee_id],
     )
     created_by: Mapped["User | None"] = relationship(
+        lazy="raise_on_sql",
         back_populates="created_tickets",
         foreign_keys=[created_by_id],
     )
 
     subtasks: Mapped[list["Subtask"]] = relationship(
+        lazy="raise_on_sql",
         back_populates="ticket",
         cascade="all, delete-orphan",
     )
     events: Mapped[list["TicketEvent"]] = relationship(
+        lazy="raise_on_sql",
         back_populates="ticket",
         cascade="all, delete-orphan",
     )
     documents: Mapped[list["Document"]] = relationship(
+        lazy="raise_on_sql",
         back_populates="ticket",
         cascade="all, delete-orphan",
         foreign_keys="Document.ticket_id",

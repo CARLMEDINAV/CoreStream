@@ -14,13 +14,14 @@ Tipos de timers:
 
 from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from fastapi import HTTPException, status
 from uuid import UUID
 
+from fastapi import HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+
 from app.models import Ticket
-from app.redis_client import set_cached_value, get_cached_value, delete_cached_value
+from app.redis_client import delete_cached_value, get_cached_value, set_cached_value
 
 
 class TimerService:
@@ -94,7 +95,7 @@ class TimerService:
                 )
 
             # Idempotency: use DB column as authoritative source
-            redis_key = f"ticket:{ticket_id}:timer_start"
+            redis_key = f"corestream:ticket:{ticket_id}:timer_start"
             if db_ticket.timer_started_at is not None:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -175,7 +176,7 @@ class TimerService:
             if not db_ticket:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket no encontrado")
 
-            redis_key = f"ticket:{ticket_id}:timer_start"
+            redis_key = f"corestream:ticket:{ticket_id}:timer_start"
             now = datetime.now(timezone.utc)
             elapsed_seconds = 0
 

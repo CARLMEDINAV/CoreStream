@@ -6,10 +6,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.meeting import AttendanceStatus, MeetingType
 
+
 class MeetingAttendanceBase(BaseModel):
     user_id: UUID
     status: AttendanceStatus = Field(default=AttendanceStatus.PRESENT)
-    notes: Optional[str] = None
+    notes: Optional[str] = Field(None, max_length=5_000)
 
 class MeetingAttendanceCreate(MeetingAttendanceBase):
     pass
@@ -27,7 +28,7 @@ class MeetingBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     meeting_type: MeetingType = Field(default=MeetingType.OTHER)
     scheduled_at: datetime
-    summary_markdown: Optional[str] = None
+    summary_markdown: Optional[str] = Field(None, max_length=50_000)
     application_id: Optional[UUID] = None
 
 class MeetingCreate(MeetingBase):
@@ -37,7 +38,7 @@ class MeetingUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=255)
     meeting_type: Optional[MeetingType] = None
     scheduled_at: Optional[datetime] = None
-    summary_markdown: Optional[str] = None
+    summary_markdown: Optional[str] = Field(None, max_length=50_000)
     application_id: Optional[UUID] = None
 
 class MeetingResponse(MeetingBase):

@@ -65,31 +65,18 @@ const handleSubmit = async () => {
 
   isSubmitting.value = true
   try {
-    // Array of updates
+    // El backend registra la asistencia de un usuario por llamada
+    // (POST /meetings/{meeting_id}/attendance recibe UN MeetingAttendanceCreate,
+    // no una lista), así que se dispara una petición por asistente.
     const payload = Object.entries(attendanceMap.value).map(([userId, data]) => ({
       user_id: userId,
       status: data.status,
       notes: data.notes || undefined
     }))
-    
-    // Backend API takes a list: POST /meetings/{meeting_id}/attendance takes ONE record? 
-    // Wait, let's check. Actually, the backend takes a SINGLE MeetingAttendanceCreate according to `schemas/meeting.py`.
-    // Wait, the backend router definition:
-    // @router.post("/{meeting_id}/attendance", response_model=MeetingAttendanceResponse)
-    // async def record_attendance(meeting_id: UUID, attendance_in: MeetingAttendanceCreate, ...)
-    // It takes ONE at a time. I need to iterate and send sequentially or Promise.all.
-    
-    const promises = payload.map(item => 
-      api.meetings.setAttendance(props.meeting!.id, [item] as any) // api.ts was changed? No, api.ts takes any[], but let's just use raw apiClient if needed.
+
+    await Promise.all(
+      payload.map(item => api.meetings.setAttendance(props.meeting!.id, item))
     )
-    
-    // Let's just use the api.ts method which expects data: any[] but actually backend wants one?
-    // Let's import apiClient and do it safely since we know the backend endpoint.
-    const promisesFixed = payload.map(item => 
-      api.meetings.setAttendance(props.meeting!.id, item as any) 
-    )
-    
-    await Promise.all(promisesFixed)
     
     emit('updated')
     handleClose()

@@ -21,7 +21,11 @@ describe('Autenticación', () => {
   it('Logout redirige a /login', () => {
     cy.loginAsAdmin()
     cy.url().should('include', '#/admin')
-    cy.contains('Volver al login').click()
+    cy.contains('Cerrar sesión').click()
     cy.url().should('include', '#/login')
+    // La sesión cacheada por cy.login (ver support/e2e.ts) ya no es válida:
+    // el próximo loginAsAdmin() de este spec debe volver a autenticarse de
+    // verdad en vez de asumir que la cookie sigue viva.
+    cy.forgetLogin()
   })
 })

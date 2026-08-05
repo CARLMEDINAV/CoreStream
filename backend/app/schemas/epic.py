@@ -10,20 +10,21 @@ CAMBIOS REALIZADOS:
 """
 
 from datetime import datetime, timezone
-from typing import Optional, List
+from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, field_validator, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.ticket import TicketResponse
+
 
 class EpicCreate(BaseModel):
     """
     Esquema para crear una nueva épica en el sistema.
     Una épica agrupa múltiples tickets relacionados por un objetivo común.
     """
-    title: str
-    description: Optional[str] = None
+    title: str = Field(..., max_length=255)
+    description: Optional[str] = Field(None, max_length=10_000)
     application_id: UUID
     due_date: Optional[datetime] = None
 
@@ -49,8 +50,8 @@ class EpicUpdate(BaseModel):
     Todos los campos son opcionales para permitir actualizaciones parciales.
     NOTA: application_id no se permite modificar para mantener integridad referencial.
     """
-    title: Optional[str] = None
-    description: Optional[str] = None
+    title: Optional[str] = Field(None, max_length=255)
+    description: Optional[str] = Field(None, max_length=10_000)
     order_index: Optional[int] = None
     due_date: Optional[datetime] = None
     is_collapsed: Optional[bool] = None

@@ -40,6 +40,6 @@ describe('Separación de roles Admin/Developer', () => {
   it('Developer ve su sidebar correcto', () => {
     cy.loginAsDeveloper()
     cy.contains('Workbench').should('be.visible')
-    cy.contains('Mis Cargas').should('be.visible')
+    cy.contains('Mis Archivos').should('be.visible')
   })
 })

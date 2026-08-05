@@ -1,21 +1,20 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 from uuid import UUID as PyUUID
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Boolean
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from typing import TYPE_CHECKING
 
 # Importamos la base necesaria para SQLAlchemy
 from .base import Base, BaseEntity
 
 if TYPE_CHECKING:
     from app.models.application import Application
-    from app.models.ticket import Ticket
     from app.models.document import Document
+    from app.models.ticket import Ticket
 
 class Epic(Base, BaseEntity):
     """
@@ -61,17 +60,19 @@ class Epic(Base, BaseEntity):
     )
 
     # Relación inversa con la aplicación propietaria
-    application: Mapped["Application"] = relationship(back_populates="epics")
+    application: Mapped["Application"] = relationship(lazy="raise_on_sql", back_populates="epics")
     
     # Una épica contiene tickets que son los elementos de trabajo reales
     # Se eliminan en cascada si la épica desaparece
     tickets: Mapped[list["Ticket"]] = relationship(
+        lazy="raise_on_sql",
         back_populates="epic",
         cascade="all, delete-orphan",
     )
     
     # Documentos técnicos asociados a esta épica
     documents: Mapped[list["Document"]] = relationship(
+        lazy="raise_on_sql",
         back_populates="epic",
         cascade="all, delete-orphan",
         foreign_keys="Document.epic_id",

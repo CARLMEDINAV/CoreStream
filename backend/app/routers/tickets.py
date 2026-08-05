@@ -14,45 +14,66 @@ Cada operación de cambio de estado utiliza la máquina de estados (ticket_state
 para garantizar transiciones válidas y consistencia de datos.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
+import logging
+from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import UUID
-from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
+from app.middleware.auth import get_current_user, require_role
 from app.models import (
-    Ticket, User, Epic, TicketStatus, TicketEvent,
-    TicketEventType, Role
+    Epic,
+    Role,
+    Ticket,
+    TicketEvent,
+    TicketEventType,
+    TicketStatus,
+    User,
+    UserRole,
 )
+from app.redis_client import TICKETS_UPDATES_CHANNEL, publish_message
 from app.schemas.ticket import (
-    TicketResponse, TicketCreate, TicketUpdate, TicketMoveEpic,
-    TicketComplete, TicketQuestion, TicketRedirect, TicketResolveQuestion,
-    TicketEventResponse, TicketReorder
+    TicketComplete,
+    TicketCreate,
+    TicketEventResponse,
+    TicketMoveEpic,
+    TicketQuestion,
+    TicketReorder,
+    TicketResolveQuestion,
+    TicketResponse,
+    TicketUpdate,
+)
+from app.services.notification_service import (
+    flush_pending_notifications,
+    notify_question_raised,
+    notify_status_changed,
+    notify_ticket_assigned,
+    notify_ticket_completed,
+)
+from app.services.ticket_permissions import (
+    assert_can_manage_ticket,
+    assert_is_current_assignee,
+    claim_or_assert_assignee,
+    is_admin_or_leader,
+    require_non_admin,
 )
 from app.services.ticket_state_machine import ticket_state_machine
 from app.services.timer_service import timer_service
-from app.services.notification_service import (
-    notify_status_changed,
-    notify_ticket_completed,
-    notify_question_raised,
-    notify_ticket_redirected,
-    flush_pending_notifications,
-)
-from app.middleware.auth import get_current_user
-from app.redis_client import publish_message
-
 
 # Router para tickets con prefijo y etiqueta
 router = APIRouter(tags=["Tickets"])
+logger = logging.getLogger("corestream.tickets")
 
 
 async def _publish_ticket_status(ticket_id: UUID | str, new_status: str) -> None:
-    """Publica cambio de estado al canal general tickets:updates (fire-and-forget)."""
+    """Publica cambio de estado al canal general corestream:tickets:updates (fire-and-forget)."""
     try:
-        await publish_message("tickets:updates", {
+        await publish_message(TICKETS_UPDATES_CHANNEL, {
             "type": "TICKET_STATUS_UPDATE",
             "ticket_id": str(ticket_id),
             "new_status": new_status,
@@ -61,22 +82,28 @@ async def _publish_ticket_status(ticket_id: UUID | str, new_status: str) -> None
         pass
 
 
-def _require_non_admin(current_user: User) -> None:
-    """Raises 403 if the authenticated user is an ADMIN.
-
-    Complete/start/question/redirect actions belong to developers and team
-    leaders. Admins manage the system but do not execute ticket work.
+async def _get_ticket_with_relations(db: AsyncSession, ticket_id: UUID) -> Ticket:
     """
-    role_name = (
-        current_user.role.name
-        if hasattr(current_user.role, "name")
-        else str(current_user.role)
-    )
-    if role_name == "ADMIN":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Los administradores no pueden ejecutar acciones de trabajo en tickets",
+    Recarga un ticket con todas las relaciones que TicketResponse serializa.
+
+    db.refresh() por sí solo solo actualiza las columnas propias del objeto,
+    no sus relaciones: devolver el `ticket` tal cual tras un refresh() sigue
+    disparando un lazy-load fuera de contexto async al serializar la
+    respuesta (MissingGreenlet). Este helper es el punto único para recargar
+    un ticket antes de devolverlo, evitando repetir las mismas cuatro
+    selectinload en cada endpoint.
+    """
+    result = await db.execute(
+        select(Ticket)
+        .where(Ticket.id == ticket_id)
+        .options(
+            selectinload(Ticket.assignee).selectinload(User.role),
+            selectinload(Ticket.epic).selectinload(Epic.application),
+            selectinload(Ticket.subtasks),
         )
+    )
+    return result.scalar_one()
+
 
 
 @router.get(
@@ -153,10 +180,17 @@ async def get_epic_tickets(
             detail=f"Épica con ID {epic_id} no encontrada"
         )
 
-    # Construir consulta base con carga eagre de epic.application para breadcrumbs
+    # Carga eager de todo lo que TicketResponse serializa: sin assignee.role y
+    # subtasks, Pydantic intenta un lazy-load fuera del contexto async y el
+    # endpoint revienta con 500 (MissingGreenlet) en cuanto la épica tiene
+    # algún ticket.
     query = (
         select(Ticket)
-        .options(selectinload(Ticket.epic).selectinload(Epic.application))
+        .options(
+            selectinload(Ticket.assignee).selectinload(User.role),
+            selectinload(Ticket.epic).selectinload(Epic.application),
+            selectinload(Ticket.subtasks),
+        )
         .where(Ticket.epic_id == epic_id)
     )
 
@@ -223,8 +257,7 @@ async def get_my_workbench(
 
         return tickets
     except Exception as e:
-        import traceback
-        print("ERROR en get_my_workbench:", traceback.format_exc())
+        logger.exception("Error en get_my_workbench")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
@@ -237,11 +270,16 @@ async def get_my_workbench(
 )
 async def create_ticket(
     ticket_data: TicketCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.TEAM_LEADER])),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Crea un nuevo ticket en una épica.
+
+    Solo ADMIN o TEAM_LEADER: son quienes construyen el backlog y asignan
+    trabajo (BuilderView, solo accesible con esos roles). Antes cualquier
+    DEVELOPER autenticado podía crear tickets en cualquier épica — no había
+    ningún require_role en este router (plan fase 4).
 
     Args:
         ticket_data (TicketCreate): Datos del nuevo ticket
@@ -272,8 +310,19 @@ async def create_ticket(
             created_by_id=current_user.id
         )
         db.add(new_ticket)
+
+        if new_ticket.assignee_id:
+            await notify_ticket_assigned(
+                db,
+                ticket_id=new_ticket.id,
+                assignee_id=new_ticket.assignee_id,
+                assigner_name=current_user.full_name or current_user.email,
+                ticket_title=new_ticket.title,
+            )
+
         await db.commit()
         await db.refresh(new_ticket)
+        await flush_pending_notifications(db)
     except Exception as e:
         await db.rollback()
         raise HTTPException(
@@ -387,16 +436,45 @@ async def update_ticket(
             detail=f"Ticket con ID {ticket_id} no encontrado"
         )
 
+    # ADMIN/TEAM_LEADER pueden editar cualquier ticket; un DEVELOPER solo el
+    # que tiene asignado (plan fase 4: antes esto no comprobaba nada — cualquier
+    # autenticado podía editar cualquier ticket de cualquiera).
+    assert_can_manage_ticket(ticket, current_user)
+
+    update_data = ticket_update.model_dump(exclude_unset=True)
+    # Reasignar es una acción de gestión (la misma que /redirect, pero sin
+    # justificación ni auditoría): un DEVELOPER no debe poder cambiarse el
+    # assignee_id a través de este endpoint genérico.
+    if 'assignee_id' in update_data and not is_admin_or_leader(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo ADMIN o TEAM_LEADER pueden reasignar un ticket",
+        )
+
+    old_assignee_id = ticket.assignee_id
+
     try:
-        update_data = ticket_update.model_dump(exclude_unset=True)
         if 'assignee_id' in update_data and ticket.status in (TicketStatus.IN_PROGRESS, TicketStatus.BLOCKED, TicketStatus.BLOCKED_QUESTION):
             update_data['status'] = TicketStatus.TODO
         for field, value in update_data.items():
             setattr(ticket, field, value)
 
+        if 'assignee_id' in update_data and ticket.assignee_id and ticket.assignee_id != old_assignee_id:
+            await notify_ticket_assigned(
+                db,
+                ticket_id=ticket.id,
+                assignee_id=ticket.assignee_id,
+                assigner_name=current_user.full_name or current_user.email,
+                ticket_title=ticket.title,
+            )
+
         await db.commit()
         await db.refresh(ticket)
+        await flush_pending_notifications(db)
 
+    except HTTPException:
+        await db.rollback()
+        raise
     except Exception as e:
         await db.rollback()
         raise HTTPException(
@@ -437,15 +515,20 @@ async def update_ticket(
 )
 async def delete_ticket(
     ticket_id: UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.TEAM_LEADER])),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Elimina un ticket del sistema.
 
+    Solo ADMIN o TEAM_LEADER (plan fase 4). Antes cualquier autenticado podía
+    borrar cualquier ticket — verificado en la auditoría: un DEVELOPER
+    lograba un 204 sobre un ticket ajeno, con borrado permanente en cascada
+    de subtareas, eventos y documentos.
+
     Args:
         ticket_id (int): ID del ticket a eliminar
-        current_user (User): Usuario autenticado
+        current_user (User): Usuario autenticado con rol ADMIN o TEAM_LEADER
         db (AsyncSession): Sesión asíncrona de base de datos
 
     Raises:
@@ -523,6 +606,10 @@ async def move_ticket_to_epic(
             detail=f"Ticket con ID {ticket_id} no encontrado"
         )
 
+    # ADMIN/TEAM_LEADER mueven cualquier ticket; un DEVELOPER solo el suyo
+    # (plan fase 4).
+    assert_can_manage_ticket(ticket, current_user)
+
     # 2️⃣ CARGAR ÉPICA ACTUAL (para obtener application_id)
     current_epic_result = await db.execute(
         select(Epic).where(Epic.id == ticket.epic_id)
@@ -570,7 +657,9 @@ async def move_ticket_to_epic(
     # 5️⃣ VALIDACIÓN: Advertencia si movimiento de ticket completado
     if ticket.status == TicketStatus.COMPLETED:
         # Permitir pero loguear
-        print(f"⚠️  Movimiento de ticket completado: {ticket_id} a {move_data.new_epic_id}")
+        logger.warning(
+            "Movimiento de ticket completado: %s a %s", ticket_id, move_data.new_epic_id
+        )
 
     try:
         # 6️⃣ REALIZAR MOVIMIENTO
@@ -608,8 +697,7 @@ async def move_ticket_to_epic(
         try:
             return TicketResponse.model_validate(ticket_final)
         except Exception:
-            import traceback
-            print(f"[MOVE] Serialization error: {traceback.format_exc()}")
+            logger.exception("Error de serialización en move_ticket_to_epic")
             return {"status": "ok", "id": str(ticket_id)}
 
     except Exception as e:
@@ -658,6 +746,10 @@ async def reorder_ticket(
             detail=f"Ticket con ID {ticket_id} no encontrado"
         )
 
+    # ADMIN/TEAM_LEADER reordenan cualquier ticket; un DEVELOPER solo el suyo
+    # (plan fase 4).
+    assert_can_manage_ticket(ticket, current_user)
+
     try:
         old_index = ticket.order_index
         epic_id = ticket.epic_id
@@ -678,7 +770,7 @@ async def reorder_ticket(
 
         # Si es el mismo índice, no hacer nada
         if old_index == new_index:
-            return ticket
+            return await _get_ticket_with_relations(db, ticket_id)
 
         # Recalcular índices: retirar el ticket y colocarlo en la nueva posición
         if old_index < new_index:
@@ -695,7 +787,6 @@ async def reorder_ticket(
             ticket.order_index = new_index
 
         await db.commit()
-        await db.refresh(ticket)
 
         # Registrar evento
         await ticket_state_machine.log_ticket_event(
@@ -704,7 +795,7 @@ async def reorder_ticket(
             f"Ticket reordenado de posición {old_index} a {new_index}"
         )
 
-        return ticket
+        return await _get_ticket_with_relations(db, ticket_id)
 
     except ValueError as e:
         await db.rollback()
@@ -736,14 +827,17 @@ async def start_ticket_work(
 
     Args:
         ticket_id (int): ID del ticket a iniciar
-        current_user (User): Usuario autenticado (se convierte en asignado)
+        current_user (User): Usuario autenticado. Si el ticket no tiene
+            asignado, lo reclama (flujo de "tirar de la cola"); si ya tiene
+            uno distinto, se rechaza (ver claim_or_assert_assignee).
         db (AsyncSession): Sesión asíncrona de base de datos
 
     Returns:
         TicketResponse: Ticket con estado actualizado a IN_PROGRESS
 
     Raises:
-        HTTPException: Si el ticket no existe (404) o no está en TODO (400)
+        HTTPException: Si el ticket no existe (404), no está en TODO (400),
+            o ya está asignado a otro usuario (403)
     """
     result = await db.execute(
         select(Ticket).where(Ticket.id == ticket_id)
@@ -756,9 +850,21 @@ async def start_ticket_work(
             detail=f"Ticket con ID {ticket_id} no encontrado"
         )
 
-    _require_non_admin(current_user)
+    require_non_admin(current_user)
 
-    print(f"[START] ticket={ticket_id} status={ticket.status!r} assignee={ticket.assignee_id} user={current_user.email!r}")
+    # Antes, TicketStateMachine.transition_to_in_progress reasignaba el
+    # ticket a quien llamara SIN comprobar nada: cualquier DEVELOPER podía
+    # "robarse" un ticket ya asignado a otro con solo llamar a /start
+    # (verificado en la auditoría: 200 OK, y el ticket pasaba a estar
+    # asignado a quien no tenía nada que ver). claim_or_assert_assignee corta
+    # esto ANTES de la máquina de estados: si no hay asignado, lo reclama; si
+    # ya hay uno distinto, rechaza con 403.
+    claim_or_assert_assignee(ticket, current_user)
+
+    logger.info(
+        "[START] ticket=%s status=%r assignee=%s user=%r",
+        ticket_id, ticket.status, ticket.assignee_id, current_user.email,
+    )
 
     # Validar que el ticket está en estado TODO
     if ticket.status != TicketStatus.TODO:
@@ -868,7 +974,8 @@ async def complete_ticket(
             detail=f"Ticket con ID {ticket_id} no encontrado"
         )
 
-    _require_non_admin(current_user)
+    require_non_admin(current_user)
+    assert_is_current_assignee(ticket, current_user)
 
     if ticket.status != TicketStatus.IN_PROGRESS:
         raise HTTPException(
@@ -956,9 +1063,14 @@ async def raise_ticket_question(
             detail=f"Ticket con ID {ticket_id} no encontrado"
         )
 
-    _require_non_admin(current_user)
+    require_non_admin(current_user)
+    assert_is_current_assignee(ticket, current_user)
 
-    print(f"[QUESTION] ticket={ticket_id} status={ticket.status!r} assignee={ticket.assignee_id} user={current_user.email!r} q_len={len(question_data.question_text)}")
+    logger.info(
+        "[QUESTION] ticket=%s status=%r assignee=%s user=%r q_len=%d",
+        ticket_id, ticket.status, ticket.assignee_id, current_user.email,
+        len(question_data.question_text),
+    )
 
     if ticket.status != TicketStatus.IN_PROGRESS:
         raise HTTPException(
@@ -1047,16 +1159,22 @@ async def raise_ticket_question(
 async def resolve_ticket_question(
     ticket_id: UUID,
     resolution_data: TicketResolveQuestion,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.TEAM_LEADER])),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Resuelve una pregunta bloqueante y reanuda el trabajo.
 
+    Solo ADMIN o TEAM_LEADER (plan fase 4): quien resuelve no es el propio
+    desarrollador bloqueado (está esperando la respuesta), así que aquí no
+    aplica una comprobación de "assignee actual" como en start/complete —
+    es una acción de quien responde, no de quien trabaja el ticket. Antes
+    este endpoint no tenía ningún control de acceso.
+
     Args:
         ticket_id (int): ID del ticket
         resolution_data (dict): Contiene 'resolution' con la respuesta
-        current_user (User): Usuario autenticado
+        current_user (User): Usuario autenticado con rol ADMIN o TEAM_LEADER
         db (AsyncSession): Sesión asíncrona de base de datos
 
     Returns:
@@ -1111,98 +1229,6 @@ async def resolve_ticket_question(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Error al resolver pregunta: {str(e)}"
-        )
-
-
-@router.post(
-    "/{ticket_id}/redirect",
-    response_model=TicketResponse,
-    summary="Redirigir ticket a otro usuario",
-    description="Transfiere un ticket a otro usuario con motivo documentado"
-)
-async def redirect_ticket(
-    ticket_id: UUID,
-    redirect_data: TicketRedirect,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    Redirige un ticket a otro usuario documentando el motivo.
-
-    Args:
-        ticket_id (int): ID del ticket a redirigir
-        redirect_data (dict): Contiene 'target_user_id' y 'reason'
-        current_user (User): Usuario autenticado
-        db (AsyncSession): Sesión asíncrona de base de datos
-
-    Returns:
-        TicketResponse: Ticket reasignado
-
-    Raises:
-        HTTPException: Si el ticket o usuario destino no existen (404) o hay error (400)
-    """
-    result = await db.execute(
-        select(Ticket).where(Ticket.id == ticket_id)
-    )
-    ticket = result.scalar_one_or_none()
-
-    if not ticket:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Ticket con ID {ticket_id} no encontrado"
-        )
-
-    _require_non_admin(current_user)
-
-    target_user_id = redirect_data.to_user_id
-
-    # Verificar que el usuario destino existe
-    user_check = await db.execute(
-        select(User).where(User.id == target_user_id)
-    )
-    if not user_check.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Usuario con ID {target_user_id} no encontrado"
-        )
-
-    try:
-        # La state machine pausa el timer (si IN_PROGRESS), reasigna el ticket,
-        # setea TODO y registra el evento de redirección con timestamp preciso.
-        await ticket_state_machine.transition_to_redirected(
-            ticket, current_user, redirect_data.to_user_id, redirect_data.reason, db
-        )
-
-        # Notificar al nuevo asignado (antes del commit)
-        await notify_ticket_redirected(
-            db,
-            ticket_id=ticket_id,
-            new_assignee_id=redirect_data.to_user_id,
-            redirector_name=current_user.full_name or current_user.email,
-            ticket_title=ticket.title,
-            justification=redirect_data.reason,
-        )
-
-        await db.commit()
-        await db.refresh(ticket)
-        await flush_pending_notifications(db)
-
-        result_final = await db.execute(
-            select(Ticket)
-            .where(Ticket.id == ticket_id)
-            .options(
-                selectinload(Ticket.epic).selectinload(Epic.application),
-                selectinload(Ticket.subtasks),
-                selectinload(Ticket.assignee).selectinload(User.role)
-            )
-        )
-        return result_final.scalar_one()
-
-    except Exception as e:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Error al redirigir ticket: {str(e)}"
         )
 
 

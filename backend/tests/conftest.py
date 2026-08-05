@@ -1,74 +1,77 @@
 """
-Fixtures compartidas para los tests de CS-044.
+Fixtures compartidas para los tests unitarios.
 
-ORDEN CRÍTICO:
-1. sys.modules mock de app.database (crea engine al importar, incompatible con SQLite)
-2. Variables de entorno para get_settings() con lru_cache
-3. Imports de app modules
+Estos tests cubren lógica pura: máquina de estados de tickets, validaciones de
+esquemas y cálculo de analítica. Usan SQLite en memoria, que es suficiente
+porque no dependen de comportamiento específico de PostgreSQL.
+
+Los tests que sí ejercitan la aplicación completa (HTTP, RBAC, contratos de
+API) viven en tests/integration/ y corren contra PostgreSQL real.
+
+NOTA HISTÓRICA: este fichero sustituía app.database, redis, arq y psycopg2 por
+MagicMock antes de importar la aplicación. Eso hacía que 154 tests pasaran en
+verde sin ejercitar nada de la capa de datos, y por eso no detectaron ninguno
+de los fallos encontrados en la auditoría. El mock era necesario porque
+app.database creaba el engine al importarse; ahora la creación es perezosa
+(app/database.py: get_engine), así que importar la app no requiere PostgreSQL
+y no hace falta falsear ningún módulo.
 """
 
 import os
-import sys
-from unittest.mock import MagicMock, AsyncMock
+from datetime import datetime, timedelta, timezone
 
-# ── Bloquear app.database antes de cualquier import de la app ──────────────
-# app.database crea el engine PostgreSQL con pool_size/max_overflow en el nivel
-# de módulo, lo que falla en SQLite. Lo reemplazamos con un mock.
-_mock_db_module = MagicMock()
-_mock_db_module.get_db = AsyncMock()
-_mock_db_module.engine = MagicMock()
-_mock_db_module.async_session_maker = MagicMock()
-sys.modules["app.database"] = _mock_db_module
-
-# ── Dependencias solo disponibles en Docker; mock para permitir imports ─────
-# Permite que test_validations.py importe los routers sin tener
-# psycopg2/arq/redis instalados localmente.
-for _mod in [
-    "psycopg2", "psycopg2.extras", "psycopg2.extensions",
-    "arq", "arq.connections",
-    "redis", "redis.asyncio",
-    "aiofiles",
-]:
-    sys.modules.setdefault(_mod, MagicMock())
-
-# ── Variables de entorno para Settings (antes de que lru_cache se active) ──
-os.environ.setdefault("SECRET_KEY", "test-secret-key-for-cs044-unit-tests")
+# ── Configuración para Settings, antes de que lru_cache la capture ──────────
+os.environ.setdefault("SECRET_KEY", "test-secret-key-solo-para-tests-unitarios")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 os.environ.setdefault("ALGORITHM", "HS256")
 os.environ.setdefault("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
 os.environ.setdefault("REFRESH_TOKEN_EXPIRE_DAYS", "7")
+os.environ.setdefault("ENVIRONMENT", "test")
 
-# ── Patch SQLite para soportar JSONB (usado en TicketEvent.detail) ───────
-# SQLAlchemy no tiene un visitor para JSONB en SQLite; lo delegamos a JSON.
+# ── SQLite no tiene un compilador para JSONB (usado en TicketEvent.detail) ──
+# Se delega al visitor de JSON, que es equivalente a efectos de estos tests.
 from sqlalchemy.dialects.sqlite.base import SQLiteTypeCompiler
+
 
 def _visit_JSONB(self, type_, **kw):
     return self.visit_JSON(type_, **kw)
 
+
 SQLiteTypeCompiler.visit_JSONB = _visit_JSONB  # type: ignore[attr-defined]
 
-# ── Imports de app (ahora seguros) ────────────────────────────────────────
 import pytest
-from datetime import datetime, timedelta, timezone
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
-from app.models import Base, Role, User, Application, Epic, Ticket, TicketStatus
 from app.middleware.auth import hash_password
+from app.models import (
+    Application,
+    Base,
+    Epic,
+    Role,
+    Ticket,
+    TicketStatus,
+    User,
+)
 
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 
 
 @pytest.fixture
 async def db_session():
-    """Sesión SQLite en memoria con todas las tablas. Se destruye al finalizar cada test."""
+    """Sesión SQLite en memoria con todas las tablas. Se destruye tras cada test."""
     engine = create_async_engine(TEST_DB_URL, echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with factory() as session:
         yield session
+
     await engine.dispose()
 
 

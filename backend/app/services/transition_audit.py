@@ -26,8 +26,9 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
+from fastapi import HTTPException
+from fastapi import status as http_status
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import HTTPException, status as http_status
 
 from app.models.ticket_event import TicketEvent, TicketEventType
 

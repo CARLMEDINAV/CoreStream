@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class ApplicationCreate(BaseModel):
@@ -19,10 +19,10 @@ class ApplicationCreate(BaseModel):
         color: Código hexadecimal de color para la interfaz (opcional)
         icon: Identificador o URL del ícono de la aplicación (opcional)
     """
-    name: str
-    description: Optional[str] = None
-    color: Optional[str] = None
-    icon: Optional[str] = None
+    name: str = Field(..., max_length=255)
+    description: Optional[str] = Field(None, max_length=5_000)
+    color: Optional[str] = Field(None, max_length=7)
+    icon: Optional[str] = Field(None, max_length=100)
 
     @field_validator("name")
     @classmethod
@@ -80,10 +80,10 @@ class ApplicationUpdate(BaseModel):
         color: Nuevo código de color (opcional)
         icon: Nuevo ícono (opcional)
     """
-    name: Optional[str] = None
-    description: Optional[str] = None
-    color: Optional[str] = None
-    icon: Optional[str] = None
+    name: Optional[str] = Field(None, max_length=255)
+    description: Optional[str] = Field(None, max_length=5_000)
+    color: Optional[str] = Field(None, max_length=7)
+    icon: Optional[str] = Field(None, max_length=100)
 
     @field_validator("name")
     @classmethod

@@ -6,30 +6,29 @@ La mayoría son funciones puras (sin DB), exceptuando require_permissions
 que necesita un mock de current_user.
 """
 
-import pytest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 from uuid import uuid4
 
+import pytest
 from fastapi import HTTPException
 from jose import jwt
 
-from app.middleware.rbac import (
-    RBACRole,
-    _normalize_role,
-    _extract_current_role,
-    require_permissions,
-)
+from app.config import get_settings
 from app.middleware.auth import (
-    hash_password,
-    verify_password,
+    _normalize_role_value,
     create_access_token,
     create_refresh_token,
+    hash_password,
+    verify_password,
     verify_token,
-    _normalize_role_value,
 )
-from app.config import get_settings
-
+from app.middleware.rbac import (
+    RBACRole,
+    _extract_current_role,
+    _normalize_role,
+    require_permissions,
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -56,7 +55,7 @@ class TestNormalizeRole:
         assert _normalize_role(RBACRole.ADMIN) == "ADMIN"
 
     def test_enum_group_leader_returns_uppercase_string(self):
-        assert _normalize_role(RBACRole.GROUP_LEADER) == "GROUP_LEADER"
+        assert _normalize_role(RBACRole.TEAM_LEADER) == "TEAM_LEADER"
 
     def test_enum_developer_returns_uppercase_string(self):
         assert _normalize_role(RBACRole.DEVELOPER) == "DEVELOPER"
@@ -65,7 +64,7 @@ class TestNormalizeRole:
         assert _normalize_role("admin") == "ADMIN"
 
     def test_mixed_case_string_normalized(self):
-        assert _normalize_role("Group_Leader") == "GROUP_LEADER"
+        assert _normalize_role("Team_Leader") == "TEAM_LEADER"
 
     def test_invalid_role_raises_value_error(self):
         with pytest.raises(ValueError):
@@ -94,8 +93,8 @@ class TestExtractCurrentRole:
         assert _extract_current_role(user) == "DEVELOPER"
 
     def test_extracts_role_from_dict(self):
-        user_dict = {"role": "GROUP_LEADER"}
-        assert _extract_current_role(user_dict) == "GROUP_LEADER"
+        user_dict = {"role": "TEAM_LEADER"}
+        assert _extract_current_role(user_dict) == "TEAM_LEADER"
 
     def test_none_user_raises_runtime_error(self):
         with pytest.raises(RuntimeError):
@@ -137,16 +136,16 @@ class TestRequirePermissions:
         assert exc.value.status_code == 403
 
     async def test_multiple_allowed_roles_any_passes(self):
-        @require_permissions("ADMIN", "GROUP_LEADER")
+        @require_permissions("ADMIN", "TEAM_LEADER")
         async def endpoint(**kwargs):
             return "ok"
 
-        user = make_user_with_role(RBACRole.GROUP_LEADER)
+        user = make_user_with_role(RBACRole.TEAM_LEADER)
         result = await endpoint(current_user=user)
         assert result == "ok"
 
     async def test_developer_blocked_when_only_admin_allowed(self):
-        @require_permissions("ADMIN", "GROUP_LEADER")
+        @require_permissions("ADMIN", "TEAM_LEADER")
         async def endpoint(**kwargs):
             return "ok"
 
@@ -231,24 +230,24 @@ class TestJWTTokens:
         delta = exp_dt - datetime.now(timezone.utc)
         assert 0 < delta.total_seconds() <= 310  # 5 min + margen de 10s
 
-    def test_verify_token_valid_returns_token_payload(self):
+    async def test_verify_token_valid_returns_token_payload(self):
         user_id = str(uuid4())
         token = create_access_token({"sub": user_id, "role": "ADMIN"})
-        token_data = verify_token(token)
+        token_data = await verify_token(token)
 
         assert token_data.sub == user_id
         assert token_data.role == "ADMIN"
 
-    def test_verify_token_expired_raises_401(self):
+    async def test_verify_token_expired_raises_401(self):
         token = create_access_token(
             {"sub": str(uuid4()), "role": "ADMIN"},
             expires_delta=timedelta(seconds=-1),
         )
         with pytest.raises(HTTPException) as exc:
-            verify_token(token)
+            await verify_token(token)
         assert exc.value.status_code == 401
 
-    def test_verify_token_invalid_signature_raises_401(self):
+    async def test_verify_token_invalid_signature_raises_401(self):
         # Token firmado con clave diferente
         invalid_token = jwt.encode(
             {"sub": str(uuid4()), "role": "ADMIN", "exp": datetime.utcnow() + timedelta(hours=1)},
@@ -256,10 +255,10 @@ class TestJWTTokens:
             algorithm="HS256",
         )
         with pytest.raises(HTTPException) as exc:
-            verify_token(invalid_token)
+            await verify_token(invalid_token)
         assert exc.value.status_code == 401
 
-    def test_verify_token_missing_role_field_raises_401(self):
+    async def test_verify_token_missing_role_field_raises_401(self):
         settings = get_settings()
         # Token sin campo "role"
         incomplete_token = jwt.encode(
@@ -268,10 +267,10 @@ class TestJWTTokens:
             algorithm=settings.ALGORITHM,
         )
         with pytest.raises(HTTPException) as exc:
-            verify_token(incomplete_token)
+            await verify_token(incomplete_token)
         assert exc.value.status_code == 401
 
-    def test_verify_token_missing_sub_field_raises_401(self):
+    async def test_verify_token_missing_sub_field_raises_401(self):
         settings = get_settings()
         # Token sin campo "sub"
         incomplete_token = jwt.encode(
@@ -280,7 +279,7 @@ class TestJWTTokens:
             algorithm=settings.ALGORITHM,
         )
         with pytest.raises(HTTPException) as exc:
-            verify_token(incomplete_token)
+            await verify_token(incomplete_token)
         assert exc.value.status_code == 401
 
     def test_create_refresh_token_has_longer_expiry_than_access(self):
@@ -403,6 +402,6 @@ class TestNormalizeRoleValue:
 
     def test_object_with_value_attr_uses_value_when_no_name(self):
         obj = MagicMock(spec=["value"])
-        obj.value = "GROUP_LEADER"
+        obj.value = "TEAM_LEADER"
         result = _normalize_role_value(obj)
-        assert result == "GROUP_LEADER"
+        assert result == "TEAM_LEADER"

@@ -5,18 +5,24 @@ Usa DB SQLite en memoria con datos creados explícitamente dentro de cada test.
 Se validan cálculos de eficiencia, bloqueo, churn, heatmap y burndown.
 """
 
-import pytest
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
+import pytest
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import (
-    Application, Epic, Ticket, TicketEvent, User, Role,
-    TicketStatus, TicketEventType,
-)
 from app.middleware.auth import hash_password
+from app.models import (
+    Application,
+    Epic,
+    Role,
+    Ticket,
+    TicketEvent,
+    TicketEventType,
+    TicketStatus,
+    User,
+)
 from app.services.analytics_service import AnalyticsService
 
 # Fecha fija de lunes conocido (2 Jun 2025 = weekday 0)

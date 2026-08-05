@@ -4,7 +4,8 @@ from enum import Enum
 from typing import TYPE_CHECKING
 from uuid import UUID as PyUUID
 
-from sqlalchemy import CheckConstraint, Enum as SQLEnum, ForeignKey, Integer, String
+from sqlalchemy import CheckConstraint, ForeignKey, Integer, String
+from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -60,6 +61,6 @@ class Document(Base, BaseEntity):
         index=True,
     )
 
-    epic: Mapped["Epic | None"] = relationship(back_populates="documents", foreign_keys=[epic_id])
-    ticket: Mapped["Ticket | None"] = relationship(back_populates="documents", foreign_keys=[ticket_id])
-    uploaded_by: Mapped["User | None"] = relationship(back_populates="uploaded_documents")
+    epic: Mapped["Epic | None"] = relationship(lazy="raise_on_sql", back_populates="documents", foreign_keys=[epic_id])
+    ticket: Mapped["Ticket | None"] = relationship(lazy="raise_on_sql", back_populates="documents", foreign_keys=[ticket_id])
+    uploaded_by: Mapped["User | None"] = relationship(lazy="raise_on_sql", back_populates="uploaded_documents")

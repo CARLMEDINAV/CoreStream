@@ -8,20 +8,23 @@ Sección D: Transiciones de estado del workflow de soporte
 Sección E: Validación de que los dev-tickets no se afectan
 """
 
+
 import pytest
-from uuid import uuid4
-from datetime import datetime, timezone
-
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.middleware.auth import hash_password
 from app.models import (
-    User, Role, Application, Epic, Ticket,
-    TicketStatus, TicketType, SupportSeverity,
+    Application,
+    Epic,
+    Role,
+    SupportSeverity,
+    Ticket,
+    TicketStatus,
+    TicketType,
+    User,
 )
 from app.services.ticket_state_machine import TicketStateMachine
-from app.middleware.auth import hash_password
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures locales
