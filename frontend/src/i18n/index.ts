@@ -5,6 +5,7 @@
  */
  
 import { createI18n } from 'vue-i18n'
+import type { MessageCompiler } from 'vue-i18n'
 import es from './es'
 import en from './en'
 import fr from './fr'
@@ -18,12 +19,42 @@ import pt from './pt'
 type MessageSchema = typeof es
 
 /**
+ * Compilador de mensajes propio, sin JIT.
+ *
+ * Por defecto vue-i18n compila cada mensaje a una función con `new Function`
+ * la primera vez que se usa (JIT compilation) — esto viola la CSP
+ * `script-src 'self'` del contenedor (frontend/nginx/default.conf), que a
+ * propósito no incluye 'unsafe-eval'.
+ *
+ * Se probó primero precompilar en build time con @intlify/unplugin-vue-i18n,
+ * pero introduce un bug de números de código de error duplicados entre
+ * chunks (SyntaxError vacío, code=24) al combinarse con el code-splitting
+ * de Vite en esta versión de vue-i18n — con o sin dropMessageCompiler.
+ *
+ * Como todos los mensajes en es/en/fr/de/pt.ts solo usan interpolación
+ * simple con nombre (`{n}`, `{year}`, `{count}` — sin plural ICU ni mensajes
+ * enlazados `@:`), un compilador propio minimalista cubre el 100% de los
+ * casos reales sin depender de eval en ninguna forma.
+ */
+const messageCompiler: MessageCompiler = (message, { onError }) => {
+  if (typeof message !== 'string') {
+    onError?.(new Error('CoreStream i18n: solo se soportan mensajes de texto plano'))
+    return () => ''
+  }
+  return (ctx) => message.replace(/\{(\w+)\}/g, (match, name) => {
+    const value = ctx.named(name)
+    return value === undefined ? match : String(value)
+  })
+}
+
+/**
  * Configuración de la instancia de vue-i18n
  * - locale: idioma por defecto (español)
  * - fallbackLocale: idioma alternativo si una traducción no existe
  * - messages: importa todos los archivos de idioma
  * - globalInjection: permite acceso global al objeto $t
  * - legacy: false para usar API de Composition
+ * - messageCompiler: ver comentario arriba
  */
 const i18n = createI18n({
   locale: 'es',
@@ -37,6 +68,7 @@ const i18n = createI18n({
   },
   globalInjection: true,
   legacy: false,
+  messageCompiler,
 } as any)
 
 export default i18n
