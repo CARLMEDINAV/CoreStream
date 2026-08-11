@@ -5,7 +5,7 @@
  */
  
 import { createI18n } from 'vue-i18n'
-import type { MessageCompiler } from 'vue-i18n'
+import type { MessageCompiler, MessageContext } from 'vue-i18n'
 import es from './es'
 import en from './en'
 import fr from './fr'
@@ -36,12 +36,12 @@ type MessageSchema = typeof es
  * enlazados `@:`), un compilador propio minimalista cubre el 100% de los
  * casos reales sin depender de eval en ninguna forma.
  */
-const messageCompiler: MessageCompiler = (message, { onError }) => {
+const messageCompiler: MessageCompiler = (message, { onError, key }) => {
   if (typeof message !== 'string') {
-    onError?.(new Error('CoreStream i18n: solo se soportan mensajes de texto plano'))
+    onError?.({ name: 'CompileError', message: `CoreStream i18n: mensaje no textual en la clave '${key}'`, code: -1 } as any)
     return () => ''
   }
-  return (ctx) => message.replace(/\{(\w+)\}/g, (match, name) => {
+  return (ctx: MessageContext) => message.replace(/\{(\w+)\}/g, (match, name) => {
     const value = ctx.named(name)
     return value === undefined ? match : String(value)
   })

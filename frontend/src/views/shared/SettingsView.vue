@@ -304,9 +304,9 @@ async function changePassword() {
   pwSuccess.value = false
   try {
     await api.auth.changePassword({
-      old_password: pwForm.current,
-      new_password: pwForm.next,
-    } as any)
+      oldPassword: pwForm.current,
+      newPassword: pwForm.next,
+    })
     pwForm.current = ''
     pwForm.next = ''
     pwForm.confirm = ''
