@@ -13,6 +13,7 @@
 
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite'
 import path from 'path'
 import os from 'os'
 
@@ -31,7 +32,20 @@ const getLocalIP = () => {
 
 export default defineConfig({
   // Plugins: activamos el plugin de Vue 3 para procesar componentes .vue
-  plugins: [vue()],
+  //
+  // VueI18nPlugin precompila los mensajes de src/i18n/*.ts a funciones JS en
+  // build time. Sin esto, vue-i18n compila los mensajes en el navegador con
+  // `new Function` (JIT), lo que viola la CSP `script-src 'self'` del
+  // contenedor (frontend/nginx/default.conf) — sin 'unsafe-eval' a propósito.
+  // dropMessageCompiler quita ese compilador runtime del bundle: no hay
+  // ninguna ruta de código que pueda intentar eval, precompilado o no.
+  plugins: [
+    vue(),
+    VueI18nPlugin({
+      include: [path.resolve(__dirname, './src/i18n/{es,en,fr,de,pt}.ts')],
+      dropMessageCompiler: true,
+    }),
+  ],
 
   // Resolución de módulos: configuramos alias para importaciones más limpias
   resolve: {

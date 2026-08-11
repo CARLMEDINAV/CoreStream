@@ -18,7 +18,40 @@
  * @tailwind components: clases de componentes
  * @tailwind utilities: clases de utilidad
  */
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700&display=swap');
+/**
+ * Nunito se auto-hospeda (src/assets/fonts) en vez de cargarse desde
+ * fonts.googleapis.com: la CSP del contenedor (frontend/nginx/default.conf)
+ * es intencionalmente estricta (style-src/font-src 'self') y no debe abrirse
+ * a dominios externos de Google solo por una tipografía.
+ */
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('../fonts/nunito-300.woff') format('woff');
+}
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../fonts/nunito-400.woff') format('woff');
+}
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../fonts/nunito-600.woff') format('woff');
+}
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../fonts/nunito-700.woff') format('woff');
+}
 
 @tailwind base;
 @tailwind components;

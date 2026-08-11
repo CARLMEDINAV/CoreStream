@@ -29,6 +29,7 @@
     "vuedraggable": "next"
   },
   "devDependencies": {
+    "@intlify/unplugin-vue-i18n": "^11.2.4",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^20.19.41",
     "@vitejs/plugin-vue": "^5.2.4",
