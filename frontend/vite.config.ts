@@ -41,7 +41,19 @@ export default defineConfig({
        * Permite escribir: import X from '@/components/...'
        * En lugar de: import X from '../../../components/...'
        */
-      '@': path.resolve(__dirname, './src')
+      '@': path.resolve(__dirname, './src'),
+
+      /**
+       * @iconify/vue por defecto, ante un ícono no precargado, intenta
+       * buscarlo en APIs públicas (api.iconify.design y espejos) — viola la
+       * CSP `connect-src 'self'` del contenedor. La build "offline" del
+       * mismo paquete no incluye ese código de red en absoluto: los íconos
+       * deben registrarse a mano (ver main.ts, addCollection + mdi-subset).
+       * Este alias hace que los `import { Icon } from '@iconify/vue'`
+       * existentes en toda la app resuelvan a esa build sin tocar cada
+       * componente.
+       */
+      '@iconify/vue': path.resolve(__dirname, './node_modules/@iconify/vue/dist/offline.mjs')
     }
   },
 

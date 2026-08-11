@@ -44,6 +44,20 @@ import i18n from '@/i18n'
 import { vCan } from '@/directives'
 
 /**
+ * Iconos (Iconify): registro offline
+ *
+ * @iconify/vue por defecto, si un icono no está precargado, lo busca en
+ * APIs públicas (api.iconify.design, api.unisvg.com, api.simplesvg.com) —
+ * viola connect-src 'self' de la CSP del contenedor y deja el ícono roto en
+ * producción (sin acceso a internet saliente). mdi-subset.json contiene los
+ * datos de los ~33 íconos "mdi:*" que usa la app (generados una vez desde
+ * @iconify-json/mdi, ver git log), registrados aquí antes de montar.
+ */
+import { addCollection } from '@iconify/vue'
+import mdiSubset from '@/assets/icons/mdi-subset.json'
+addCollection(mdiSubset as any)
+
+/**
  * Estilos globales: Tailwind CSS
  * Se importa como un archivo normal, no como módulo CSS
  * Vite se encargará de procesarlo a través de PostCSS

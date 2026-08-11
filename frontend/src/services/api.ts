@@ -251,8 +251,14 @@ const createApiClient = (): AxiosInstance => {
      * Base URL para todas las solicitudes
      * Las URLs relativas se combinarán con esta base
      * El proxy de Vite redirigirá /api a http://localhost:8000
+     *
+     * `||` a propósito, no `??`: el ARG de Docker (docker-compose.yml,
+     * VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}) se expande a '' cuando la
+     * variable no está definida en el host, no a "sin definir" — Vite la
+     * incrusta como string vacío, así que `?? '/api'` nunca activaba el
+     * fallback y las peticiones salían sin el prefijo /api (405 en prod).
      */
-    baseURL: import.meta.env.VITE_API_BASE_URL ?? '/api',
+    baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
 
     /**
      * Timeout en milisegundos para todas las solicitudes
