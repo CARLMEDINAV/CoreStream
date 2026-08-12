@@ -195,7 +195,12 @@ export const useTeamStore = defineStore('team', () => {
 
     try {
       const invitation = await api.invitations.create({ email: data.email, role: data.role })
-      return `${window.location.origin}/invite/${invitation.token}`
+      // El router usa hash history (router/index.ts) — la ruta real es
+      // /#/invite/:token. Sin el '#' el navegador pide /invite/<token> al
+      // servidor; nginx cae al fallback de index.html (sirve la SPA igual),
+      // pero vue-router lee location.hash para decidir la ruta, lo ve vacío,
+      // y el guard beforeEach termina mandando a /login por no haber sesión.
+      return `${window.location.origin}/#/invite/${invitation.token}`
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error al invitar miembro'
       error.value = message

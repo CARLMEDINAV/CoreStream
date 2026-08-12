@@ -85,7 +85,14 @@ const initializeApp = async (): Promise<void> => {
     await authStore.initialize()
   } catch (error) {
     console.warn('Failed to initialize auth, clearing session', error)
-    if (router.currentRoute.value.name !== 'Login') {
+    // initialize() falla en CUALQUIER visita sin sesión (primera carga sin
+    // cookie, sesión expirada, etc.) — no es un error real, ver comentario
+    // en authStore.initialize(). Antes esto mandaba a /login comparando por
+    // nombre de ruta ('Login'), así que cualquier OTRA ruta pública (p. ej.
+    // /invite/:token, donde el invitado nunca tuvo sesión) también terminaba
+    // ahí. Se compara contra requiresAuth en vez de listar rutas públicas a
+    // mano, para que cubra cualquier ruta pública presente o futura.
+    if (router.currentRoute.value.meta.requiresAuth) {
       await router.push({ name: 'Login' })
     }
   }
