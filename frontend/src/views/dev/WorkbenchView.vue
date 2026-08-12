@@ -232,54 +232,18 @@
       />
 
       <!-- Modal: Nueva aplicación (TEAM_LEADER/ADMIN). El "+" de la barra
-           lateral no tenía @click — botón muerto, nunca creó nada. -->
-      <div
-        v-if="showCreateAppModal"
-        class="fixed inset-0 z-[100] flex items-center justify-center bg-[var(--bg-app)]/80 px-4 backdrop-blur-sm"
-      >
-        <div class="w-full max-w-md rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-6">
-          <div class="mb-4 flex items-center justify-between">
-            <h3 class="text-lg font-semibold text-[var(--text-primary)]">{{ t('builderView.newApplicationTitle') }}</h3>
-            <button type="button" class="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-panel)] px-3 py-1 text-sm text-[var(--text-secondary)]" @click="closeCreateAppModal">✕</button>
-          </div>
-
-          <form class="space-y-4" @submit.prevent="submitCreateApp">
-            <div>
-              <label class="mb-1 block text-sm font-medium text-[var(--text-secondary)]">{{ t('builderView.formName') }}</label>
-              <input
-                v-model="newAppForm.name"
-                type="text"
-                required
-                class="w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--teal)] focus:outline-none"
-              />
-            </div>
-            <div>
-              <label class="mb-1 block text-sm font-medium text-[var(--text-secondary)]">{{ t('builderView.formDescription') }}</label>
-              <textarea
-                v-model="newAppForm.description"
-                rows="3"
-                :placeholder="t('builderView.appDescPlaceholder')"
-                class="w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--teal)] focus:outline-none"
-              />
-            </div>
-
-            <p v-if="createAppError" class="text-sm text-red-500">{{ createAppError }}</p>
-
-            <div class="flex gap-3 pt-2">
-              <button type="button" class="flex-1 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] px-4 py-3 font-semibold text-[var(--text-primary)] transition hover:bg-[var(--bg-card)]/10" @click="closeCreateAppModal">
-                {{ t('builderView.close') }}
-              </button>
-              <button
-                type="submit"
-                :disabled="creatingApp || !newAppForm.name.trim()"
-                class="flex-1 rounded-xl bg-[var(--teal)] px-4 py-3 font-semibold text-white transition hover:bg-[var(--teal-90)] disabled:opacity-50"
-              >
-                {{ creatingApp ? t('builderView.saving') : t('builderView.saveApplication') }}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
+           lateral no tenía @click — botón muerto, nunca creó nada. Mismo
+           componente que usa BuilderView (nombre, descripción, color e
+           ícono) para que ambos flujos de creación queden idénticos. -->
+      <ApplicationFormModal
+        :open="showCreateAppModal"
+        :title="t('builderView.newApplicationTitle')"
+        :saving="creatingApp"
+        :error="createAppError"
+        :form="newAppForm"
+        @close="closeCreateAppModal"
+        @submit="submitCreateApp"
+      />
     </div>
   </div>
 </template>
@@ -290,6 +254,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import AppIcon from '@/components/shared/AppIcon.vue'
+import ApplicationFormModal from '@/components/shared/ApplicationFormModal.vue'
 import WorkbenchDashboard from '@/components/workbench/WorkbenchDashboard.vue'
 import { api } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
@@ -328,7 +293,7 @@ const appSortBy = ref('default')
 
 // Modal "Nueva aplicación" (TEAM_LEADER/ADMIN)
 const showCreateAppModal = ref(false)
-const newAppForm = ref({ name: '', description: '' })
+const newAppForm = ref({ name: '', description: '', color: '#06B7B2', icon: 'Folder' })
 const creatingApp = ref(false)
 const createAppError = ref('')
 
@@ -441,7 +406,7 @@ const onAppChange = () => {
 }
 
 const openCreateAppModal = () => {
-  newAppForm.value = { name: '', description: '' }
+  newAppForm.value = { name: '', description: '', color: '#06B7B2', icon: 'Folder' }
   createAppError.value = ''
   showCreateAppModal.value = true
 }
@@ -456,12 +421,7 @@ const submitCreateApp = async () => {
   creatingApp.value = true
   createAppError.value = ''
   try {
-    const created = await applicationsStore.create({
-      name: newAppForm.value.name,
-      description: newAppForm.value.description,
-      color: '#06B7B2',
-      icon: 'Folder',
-    })
+    const created = await applicationsStore.create({ ...newAppForm.value })
     applications.value.push(created)
     selectedAppId.value = created.id
     showCreateAppModal.value = false
