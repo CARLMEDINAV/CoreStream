@@ -64,7 +64,12 @@
           <h2 class="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
             {{ applications.length }} {{ applications.length === 1 ? t('workbenchView.applicationSingular') : t('workbenchView.applicationPlural') }}
           </h2>
-          <button class="w-6 h-6 bg-[var(--lime)] text-[var(--dark-gray)] rounded flex items-center justify-center text-lg hover:opacity-90 transition-colors font-semibold">+</button>
+          <button
+            v-if="isTeamLeaderOrAdmin"
+            type="button"
+            @click="openCreateAppModal"
+            class="w-6 h-6 bg-[var(--lime)] text-[var(--dark-gray)] rounded flex items-center justify-center text-lg hover:opacity-90 transition-colors font-semibold"
+          >+</button>
         </div>
 
         <!-- Opciones de ordenamiento -->
@@ -225,6 +230,56 @@
         @close="isPanelOpen = false; selectedTicketId = null; selectedTicket = null"
         @updated="refreshTicket"
       />
+
+      <!-- Modal: Nueva aplicación (TEAM_LEADER/ADMIN). El "+" de la barra
+           lateral no tenía @click — botón muerto, nunca creó nada. -->
+      <div
+        v-if="showCreateAppModal"
+        class="fixed inset-0 z-[100] flex items-center justify-center bg-[var(--bg-app)]/80 px-4 backdrop-blur-sm"
+      >
+        <div class="w-full max-w-md rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-6">
+          <div class="mb-4 flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-[var(--text-primary)]">{{ t('builderView.newApplicationTitle') }}</h3>
+            <button type="button" class="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-panel)] px-3 py-1 text-sm text-[var(--text-secondary)]" @click="closeCreateAppModal">✕</button>
+          </div>
+
+          <form class="space-y-4" @submit.prevent="submitCreateApp">
+            <div>
+              <label class="mb-1 block text-sm font-medium text-[var(--text-secondary)]">{{ t('builderView.formName') }}</label>
+              <input
+                v-model="newAppForm.name"
+                type="text"
+                required
+                class="w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--teal)] focus:outline-none"
+              />
+            </div>
+            <div>
+              <label class="mb-1 block text-sm font-medium text-[var(--text-secondary)]">{{ t('builderView.formDescription') }}</label>
+              <textarea
+                v-model="newAppForm.description"
+                rows="3"
+                :placeholder="t('builderView.appDescPlaceholder')"
+                class="w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--teal)] focus:outline-none"
+              />
+            </div>
+
+            <p v-if="createAppError" class="text-sm text-red-500">{{ createAppError }}</p>
+
+            <div class="flex gap-3 pt-2">
+              <button type="button" class="flex-1 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] px-4 py-3 font-semibold text-[var(--text-primary)] transition hover:bg-[var(--bg-card)]/10" @click="closeCreateAppModal">
+                {{ t('builderView.close') }}
+              </button>
+              <button
+                type="submit"
+                :disabled="creatingApp || !newAppForm.name.trim()"
+                class="flex-1 rounded-xl bg-[var(--teal)] px-4 py-3 font-semibold text-white transition hover:bg-[var(--teal-90)] disabled:opacity-50"
+              >
+                {{ creatingApp ? t('builderView.saving') : t('builderView.saveApplication') }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -238,6 +293,7 @@ import AppIcon from '@/components/shared/AppIcon.vue'
 import WorkbenchDashboard from '@/components/workbench/WorkbenchDashboard.vue'
 import { api } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useApplicationsStore } from '@/stores/applications'
 import { useTicketsStore } from '@/stores/tickets'
 import { useWorkbenchTickets } from '@/composables/useWorkbenchTickets'
 import type { Ticket } from '@/types'
@@ -257,6 +313,7 @@ const router = useRouter()
 const { t } = useI18n()
 const authStore = useAuthStore()
 const ticketsStore = useTicketsStore()
+const applicationsStore = useApplicationsStore()
 
 const isTeamLeaderOrAdmin = computed(() =>
   authStore.user?.role === 'TEAM_LEADER' || authStore.user?.role === 'ADMIN'
@@ -268,6 +325,12 @@ const activeView = ref<'tickets' | 'epics'>('tickets')
 const applications = ref<any[]>([])
 const selectedAppId = ref('')
 const appSortBy = ref('default')
+
+// Modal "Nueva aplicación" (TEAM_LEADER/ADMIN)
+const showCreateAppModal = ref(false)
+const newAppForm = ref({ name: '', description: '' })
+const creatingApp = ref(false)
+const createAppError = ref('')
 
 // Ticket Panel state
 const selectedTicketId = ref<string | null>(null)
@@ -375,6 +438,38 @@ const fetchApplications = async () => {
 
 const onAppChange = () => {
   // La lógica está manejada por el componente EpicManager
+}
+
+const openCreateAppModal = () => {
+  newAppForm.value = { name: '', description: '' }
+  createAppError.value = ''
+  showCreateAppModal.value = true
+}
+
+const closeCreateAppModal = () => {
+  showCreateAppModal.value = false
+}
+
+const submitCreateApp = async () => {
+  if (!newAppForm.value.name.trim()) return
+
+  creatingApp.value = true
+  createAppError.value = ''
+  try {
+    const created = await applicationsStore.create({
+      name: newAppForm.value.name,
+      description: newAppForm.value.description,
+      color: '#06B7B2',
+      icon: 'Folder',
+    })
+    applications.value.push(created)
+    selectedAppId.value = created.id
+    showCreateAppModal.value = false
+  } catch (error: any) {
+    createAppError.value = error?.response?.data?.detail || 'Error al crear la aplicación'
+  } finally {
+    creatingApp.value = false
+  }
 }
 
 // Abre el panel lateral para el ticketId que viene del query param de notificación
