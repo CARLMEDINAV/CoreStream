@@ -52,7 +52,7 @@
 
             <!-- Botón Delete (solo para admins) -->
             <button
-              v-if="isAdmin"
+              v-if="isAdminOrLeader"
               @click.stop="handleDeleteApp(app.id)"
               class="opacity-0 group-hover:opacity-100 ml-2 p-1 text-gray-400 hover:text-red-600 transition-all"
               title="Eliminar aplicación"
@@ -212,7 +212,8 @@ const dialogStore = useDialogStore()
 // Computed
 const applications = computed(() => appsStore.sortedByName)
 const selectedApp = computed(() => appsStore.selectedApp)
-const isAdmin = computed(() => authStore.user?.role === 'ADMIN')
+// Borrar aplicación es ADMIN+TEAM_LEADER en el backend (_MANAGERS, applications.py)
+const isAdminOrLeader = computed(() => ['ADMIN', 'TEAM_LEADER'].includes(authStore.user?.role ?? ''))
 
 // State
 const showCreateDialog = ref(false)

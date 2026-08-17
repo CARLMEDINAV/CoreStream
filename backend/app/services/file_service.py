@@ -117,6 +117,15 @@ class FileService:
         }
 
     @staticmethod
+    def get_original_filename(file_path: Path) -> str:
+        """Reconstruir el nombre original a partir del nombre físico en disco
+        ({unique_id}_{user_id}_{nombre_original}{ext})."""
+        parts = file_path.name.split("_", 2)
+        if len(parts) == 3:
+            return parts[2]
+        return file_path.name
+
+    @staticmethod
     def get_file_path(file_id: str, user_id: Optional[str] = None) -> Optional[Path]:
         """Obtener ruta del archivo si existe y pertenece al usuario (opcional)."""
         FileService._ensure_upload_dir()
@@ -164,7 +173,7 @@ class FileService:
 
                 files_list.append({
                     "id": file_id,
-                    "filename": file.name,
+                    "filename": FileService.get_original_filename(file),
                     "size": stat.st_size,
                     "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat(),
                 })
@@ -181,7 +190,7 @@ class FileService:
         stat = file_path.stat()
         return {
             "id": file_id,
-            "filename": file_path.name,
+            "filename": FileService.get_original_filename(file_path),
             "size": stat.st_size,
             "extension": file_path.suffix,
             "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat(),

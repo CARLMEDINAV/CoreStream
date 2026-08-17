@@ -113,12 +113,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/layouts/AdminLayout.vue'),
     /**
      * Guards de navegación específicos para rutas admin.
-     * ADMIN entra a todo este layout; TEAM_LEADER solo entra porque
-     * necesita llegar a /admin/builder (crear/gestionar aplicaciones) — esa
-     * ruta hija tiene su propio requiredRoles más permisivo (ver abajo) que
-     * pisa a este durante el matching. El resto de las rutas hijas se
-     * quedan con su propio ['ADMIN'] explícito, así que siguen bloqueadas
-     * para TEAM_LEADER aunque este nivel ya no lo esté.
+     * ADMIN entra a todo este layout. TEAM_LEADER es quien gestiona el
+     * día a día del equipo (builder, analytics, incidents, meetings), así
+     * que también entra a esas rutas hijas — cada una trae su propio
+     * requiredRoles explícito. team/uploads/code-docs/settings/support
+     * quedan ['ADMIN'] porque son administración de la plataforma en sí
+     * (gestión de usuarios/roles, configuración del sistema).
      */
     meta: {
       requiresAuth: true,
@@ -164,7 +164,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/AnalyticsView.vue'),
         meta: {
           requiresAuth: true,
-          requiredRoles: ['ADMIN'],
+          requiredRoles: ['ADMIN', 'TEAM_LEADER'],
           title: 'Analítica - CoreStream Admin'
         }
       },
@@ -178,7 +178,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/IncidentsView.vue'),
         meta: {
           requiresAuth: true,
-          requiredRoles: ['ADMIN'],
+          requiredRoles: ['ADMIN', 'TEAM_LEADER'],
           title: 'Incidentes - CoreStream Admin'
         }
       },
@@ -192,7 +192,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/MeetingsView.vue'),
         meta: {
           requiresAuth: true,
-          requiredRoles: ['ADMIN'],
+          requiredRoles: ['ADMIN', 'TEAM_LEADER'],
           title: 'Reuniones - CoreStream Admin'
         }
       },

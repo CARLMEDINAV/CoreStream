@@ -135,14 +135,16 @@
 
           <!-- Ticket Drop Zone mejorada -->
           <div
-            class="min-h-[120px] border-2 border-dashed rounded-lg flex flex-col items-center justify-center transition-all duration-200"
+            v-if="!isCreatingTicket"
+            class="min-h-[120px] border-2 border-dashed rounded-lg flex flex-col items-center justify-center transition-all duration-200 cursor-pointer"
             :class="[
-              dragOverTarget === 'tickets-' + epic.id 
-                ? 'border-[var(--teal)] bg-[var(--teal)]/10 text-[var(--teal)] scale-[1.02]' 
+              dragOverTarget === 'tickets-' + epic.id
+                ? 'border-[var(--teal)] bg-[var(--teal)]/10 text-[var(--teal)] scale-[1.02]'
                 : 'border-slate-600 bg-[var(--bg-card)]/30 text-slate-500 hover:border-slate-500 hover:bg-slate-700/20'
             ]"
             @dragover.prevent="dragOver($event, 'tickets-' + epic.id)"
             @drop="handleTicketDrop"
+            @click="startCreatingTicket"
           >
             <div class="text-center">
               <div class="w-8 h-8 mx-auto mb-3 rounded-full bg-slate-700 flex items-center justify-center">
@@ -154,6 +156,24 @@
               <span class="text-xs opacity-75"> o haz clic para agregar</span>
             </div>
           </div>
+
+          <!-- Formulario inline de creación de ticket -->
+          <div
+            v-else
+            class="rounded-lg p-4 border-2 border-dashed border-[var(--teal)] bg-[var(--bg-card)]/30"
+          >
+            <input
+              ref="newTicketInputEl"
+              v-model="newTicketTitle"
+              type="text"
+              placeholder="Título del ticket..."
+              class="w-full px-3 py-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--teal)] focus:ring-1 focus:ring-[var(--teal)]"
+              @keydown.enter="saveNewTicket"
+              @keydown.esc="cancelCreatingTicket"
+              @blur="saveNewTicket"
+            />
+            <p class="text-xs mt-2 text-[var(--text-muted)]">↵ Enter para crear • Esc para cancelar</p>
+          </div>
         </div>
       </div>
     </transition>
@@ -161,7 +181,7 @@
 </template>
 
 <script setup>
-import { ref, inject, computed } from 'vue'
+import { ref, inject, computed, nextTick } from 'vue'
 import { useDragDrop } from '@/composables/useDragDrop'
 import { useTicketsStore } from '@/stores/tickets'
 import { api } from '@/services/api'
@@ -190,12 +210,45 @@ const {
 
 const ticketsStore = useTicketsStore()
 const reorderEpics = inject('reorderEpics')
+const createTicket = inject('createTicket')
 
 // Estado local para controlar si el acordeón está abierto o cerrado
 // Inicializamos con el valor que viene de la BD (is_collapsed)
 const isCollapsed = ref(props.epic.collapsed || false);
 
 const epicTickets = computed(() => props.epic.tickets || [])
+
+// Estado local del formulario inline de creación de ticket
+const isCreatingTicket = ref(false)
+const newTicketTitle = ref('')
+const newTicketInputEl = ref(null)
+
+const startCreatingTicket = () => {
+  isCreatingTicket.value = true
+  nextTick(() => newTicketInputEl.value?.focus())
+}
+
+const cancelCreatingTicket = () => {
+  isCreatingTicket.value = false
+  newTicketTitle.value = ''
+}
+
+const saveNewTicket = async () => {
+  const title = newTicketTitle.value.trim()
+  if (!title) {
+    cancelCreatingTicket()
+    return
+  }
+  try {
+    if (createTicket) {
+      await createTicket(props.epic.id, title)
+    }
+  } catch (err) {
+    console.error('Error al crear ticket:', err)
+  } finally {
+    cancelCreatingTicket()
+  }
+}
 
 // Función para colapsar/expandir
 const toggleCollapse = () => {
