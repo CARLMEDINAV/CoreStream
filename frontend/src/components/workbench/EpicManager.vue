@@ -51,12 +51,14 @@ import { ref, watch, provide } from 'vue'
 // @ts-ignore
 import EpicSwimlane from './EpicSwimlane.vue'
 import { useEpicsStore } from '@/stores/epics'
+import { useTicketsStore } from '@/stores/tickets'
 
 const props = defineProps({
   applicationId: { type: String, required: true }
 })
 
 const epicsStore = useEpicsStore()
+const ticketsStore = useTicketsStore()
 const showForm = ref(false)
 const newEpicTitle = ref('')
 
@@ -99,7 +101,14 @@ const reorderEpics = async (draggedId: string, targetId: string) => {
   }
 }
 
+const createTicket = async (epicId: string, title: string) => {
+  const created = await ticketsStore.create({ epicId, title })
+  const epic = epicsStore.withProgress.find((e: any) => e.id === epicId)
+  epicsStore.setEpicTickets(epicId, [...(epic?.tickets || []), created])
+}
+
 provide('reorderEpics', reorderEpics)
+provide('createTicket', createTicket)
 
 watch(() => props.applicationId, fetchEpics, { immediate: true })
 </script>

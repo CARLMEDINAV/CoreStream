@@ -1521,14 +1521,19 @@ const realApi = {
         { responseType: 'blob' }
       )
 
-      // Crea un link temporal para descargar
+      // Con un blob: URL el navegador ignora Content-Disposition — hay que
+      // parsearlo a mano y pasarlo a link.download (igual que translateDownload).
+      const disposition: string = (response.headers as any)['content-disposition'] ?? ''
+      const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+      const filename = match ? match[1].replace(/['"]/g, '') : documentId
+
       const url = window.URL.createObjectURL(response.data)
       const link = document.createElement('a')
       link.href = url
-      // Fuerza la descarga en lugar de abrir en nueva pestaña.
-      // El header Content-Disposition del backend define el nombre final.
-      link.download = documentId
+      link.download = filename
+      document.body.appendChild(link)
       link.click()
+      document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
     },
 

@@ -88,7 +88,7 @@ async def download_file(
 
     return FileResponse(
         path=file_path,
-        filename=file_path.name,
+        filename=FileService.get_original_filename(file_path),
         media_type="application/octet-stream",
     )
 
