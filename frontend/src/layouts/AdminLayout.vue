@@ -30,26 +30,18 @@
           {{ t('nav.builder') }}
         </router-link>
 
-        <!-- Constructor: el único punto de este layout que TEAM_LEADER
-             también puede usar (crear/editar aplicaciones). El resto sigue
-             siendo exclusivo de ADMIN — mostrarlo igual sería un enlace que
-             redirige solo al hacer click, la clase de "botón muerto" que ya
-             se evitó en el resto de la app. -->
-        <template v-if="isAdmin">
+        <!-- Analytics/Incidents/Meetings: TEAM_LEADER gestiona el día a día
+             del equipo (backend ya lo permite en analytics.py, incidents.py
+             y meetings.py), así que también las ve. code-docs/team/support
+             quedan exclusivas de ADMIN — son administración de la
+             plataforma en sí (usuarios/roles, config del sistema). -->
+        <template v-if="isAdminOrLeader">
           <router-link
             to="/admin/analytics"
             class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
             active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm"
           >
             {{ t('nav.analytics') }}
-          </router-link>
-
-          <router-link
-            to="/admin/code-docs"
-            class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
-            active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm"
-          >
-            {{ t('nav.documentation') }}
           </router-link>
 
           <router-link
@@ -66,6 +58,16 @@
             active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm"
           >
             Reuniones
+          </router-link>
+        </template>
+
+        <template v-if="isAdmin">
+          <router-link
+            to="/admin/code-docs"
+            class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
+            active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm"
+          >
+            {{ t('nav.documentation') }}
           </router-link>
 
           <router-link
@@ -133,6 +135,7 @@ const authStore = useAuthStore()
 const { t } = useI18n()
 
 const isAdmin = computed(() => authStore.userRole === 'ADMIN')
+const isAdminOrLeader = computed(() => isAdmin.value || authStore.userRole === 'TEAM_LEADER')
 
 const isSidebarOpen = ref(false)
 const toggleSidebar = () => {
