@@ -92,30 +92,6 @@
 
     <!-- Contenido principal -->
     <main class="flex-1 overflow-auto">
-      <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-subtle)] bg-[color-mix(in_srgb,var(--bg-header)_80%,transparent)] backdrop-blur">
-        <div class="flex items-center gap-4">
-          <button 
-            @click="toggleSidebar" 
-            class="md:hidden p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-800 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]"
-            aria-label="Alternar menú de navegación"
-            :aria-expanded="isSidebarOpen"
-            aria-controls="admin-sidebar"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-          </button>
-          <div>
-            <p class="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">CoreStream</p>
-            <h1 class="text-lg font-semibold text-[var(--text-primary)]">{{ t('nav.adminPanel') }}</h1>
-          </div>
-        </div>
-        <button
-          type="button"
-          @click="logout"
-          class="px-4 py-2 rounded-lg bg-[var(--priority-urg-bg)] text-white hover:opacity-90 transition-colors"
-        >
-          {{ t('header.logout') }}
-        </button>
-      </div>
       <router-view />
     </main>
   </div>
@@ -125,12 +101,11 @@
 /**
  * AdminLayout - Componente de estructura para vistas de administración
  */
-import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores'
+import { eventBus } from '@/utils/eventBus'
 
-const router = useRouter()
 const authStore = useAuthStore()
 const { t } = useI18n()
 
@@ -142,8 +117,8 @@ const toggleSidebar = () => {
   isSidebarOpen.value = !isSidebarOpen.value
 }
 
-const logout = async () => {
-  await authStore.logout()
-  await router.push('/login')
-}
+// El botón hamburguesa vive en AppHeader (cada vista de admin lo renderiza),
+// así que el toggle del sidebar de este layout se coordina por eventBus.
+onMounted(() => eventBus.on('toggle-sidebar', toggleSidebar))
+onUnmounted(() => eventBus.off('toggle-sidebar', toggleSidebar))
 </script>

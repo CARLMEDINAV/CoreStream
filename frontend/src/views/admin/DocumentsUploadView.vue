@@ -5,7 +5,9 @@
   El administrador puede asociar archivos a cualquier épica o ticket del sistema.
 -->
 <template>
-  <div class="flex-1 overflow-auto p-6 lg:p-8 bg-slate-50 dark:bg-slate-900 min-h-screen">
+  <div class="flex-1 overflow-auto bg-slate-50 dark:bg-slate-900 min-h-screen">
+    <AppHeader />
+    <div class="p-6 lg:p-8">
     <!-- Encabezado -->
     <div class="mb-6">
       <h1 class="text-3xl font-bold mb-1 text-slate-800 dark:text-white">
@@ -146,6 +148,7 @@
         </div>
       </div>
     </div>
+    </div>
   </div>
 </template>
 
@@ -153,6 +156,7 @@
 import { ref, computed, onMounted, defineAsyncComponent } from 'vue'
 import { api } from '@/services/api'
 import type { Application, Epic, Ticket } from '@/types'
+import AppHeader from '@/components/layout/AppHeader.vue'
 
 const FileUpload = defineAsyncComponent(() => 
   import('@/components/FileUpload.vue')

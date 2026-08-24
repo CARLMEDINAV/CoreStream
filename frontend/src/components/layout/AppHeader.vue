@@ -3,9 +3,18 @@
   <!-- Proporciona navegación principal, cambio de rol, notificaciones y opciones de usuario -->
   <header class="bg-[var(--bg-header)] border-b border-[var(--border-subtle)] sticky top-0 z-[100]">
     <div class="px-4 py-3 flex items-center justify-between gap-4">
-      
+
       <!-- Sección izquierda: Logo y cambio de rol (Admin/Developer) -->
       <div class="flex items-center gap-6 min-w-0">
+        <!-- Botón para alternar el sidebar del layout (solo móvil) -->
+        <button
+          @click="eventBus.emit('toggle-sidebar')"
+          class="md:hidden p-2 -ml-2 rounded hover:bg-[var(--bg-panel)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]"
+          aria-label="Alternar menú de navegación"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        </button>
+
         <!-- Logo y nombre de CoreStream -->
         <div class="flex items-center gap-2 flex-shrink-0">
           <img
@@ -57,6 +66,18 @@
             </div>
           </div>
         </div>
+
+        <!-- Divisor visual -->
+        <div class="w-px h-6 bg-[var(--border-subtle)]"></div>
+
+        <!-- Cerrar sesión -->
+        <button
+          type="button"
+          @click="logout"
+          class="px-3 py-2 rounded-lg bg-[var(--priority-urg-bg)] text-white text-sm font-medium hover:opacity-90 transition-colors whitespace-nowrap"
+        >
+          {{ t('header.logout') }}
+        </button>
       </div>
     </div>
   </header>
@@ -228,6 +249,7 @@ import type { Theme } from '@/stores/theme'
 import { api } from '@/services/api'
 import NotificationBell from '@/components/shared/NotificationBell.vue'
 import logoUrl from '@/assets/logo-corestream.jpeg'
+import { eventBus } from '@/utils/eventBus'
 
 // ============================================================================
 // ESTADOS REACTIVOS
@@ -343,6 +365,14 @@ const userInitials = computed(() => {
     .join('')
     .toUpperCase()
 })
+
+/**
+ * Cierra la sesión del usuario y redirige al login
+ */
+const logout = async () => {
+  await authStore.logout()
+  await router.push('/login')
+}
 
 // ============================================================================
 // CONFIGURACIÓN (CS-043)

@@ -192,6 +192,7 @@
           <EpicManager
             :key="selectedAppId"
             :application-id="selectedAppId"
+            @ticket-selected="selectTicket"
           />
         </div>
 

@@ -64,6 +64,15 @@ export const useEpicsStore = defineStore('epics', () => {
   /** Última app cargada; se usa para refrescar tras reordenar (PATCH) */
   const lastAppId = ref<string | null>(null)
 
+  /**
+   * Contador de peticiones en vuelo para fetchByApp. Si dos llamadas se
+   * disparan casi al mismo tiempo (p.ej. un watcher y una llamada directa
+   * seleccionando la misma o distinta app) y la más antigua responde
+   * después de la más nueva, sin esto pisaría el estado con datos viejos
+   * y una épica/aplicación podría "desaparecer" de la lista sin motivo.
+   */
+  let fetchRequestId = 0
+
   // ========== GETTERS COMPUTADOS ==========
 
   /**
@@ -140,6 +149,8 @@ export const useEpicsStore = defineStore('epics', () => {
     isLoading.value = true
     error.value = null
 
+    const requestId = ++fetchRequestId
+
     try {
       // Validar que appId sea un UUID válido
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -149,6 +160,14 @@ export const useEpicsStore = defineStore('epics', () => {
 
       console.log('Fetching epics for app:', appId)
       const data = await api.epics.list(appId)
+
+      // Si mientras esperábamos esta respuesta se disparó una petición más
+      // reciente (otra app u otro fetchByApp concurrente), la descartamos:
+      // aplicarla ahora pisaría datos más nuevos con datos obsoletos.
+      if (requestId !== fetchRequestId) {
+        return undefined
+      }
+
       lastAppId.value = appId
       epics.value = [...data].sort((a, b) => a.orderIndex - b.orderIndex)
       collapsedEpics.value.clear()
@@ -159,12 +178,18 @@ export const useEpicsStore = defineStore('epics', () => {
       }
       return epics.value
     } catch (err) {
+      if (requestId !== fetchRequestId) {
+        // Respuesta obsoleta que además falló: no pisar el estado actual con un error viejo.
+        return undefined
+      }
       const message = err instanceof Error ? err.message : 'Error al obtener épicos'
       error.value = message
       epics.value = []
       console.error('Error en fetchByApp:', err)
     } finally {
-      isLoading.value = false
+      if (requestId === fetchRequestId) {
+        isLoading.value = false
+      }
     }
   }
 

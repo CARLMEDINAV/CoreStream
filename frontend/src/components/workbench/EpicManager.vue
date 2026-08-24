@@ -41,6 +41,7 @@
         :key="epic.id"
         :epic="epic"
         @reorder="reorderEpics"
+        @select-ticket="$emit('ticketSelected', $event)"
       />
     </div>
   </div>
@@ -56,6 +57,8 @@ import { useTicketsStore } from '@/stores/tickets'
 const props = defineProps({
   applicationId: { type: String, required: true }
 })
+
+const emit = defineEmits(['ticketSelected'])
 
 const epicsStore = useEpicsStore()
 const ticketsStore = useTicketsStore()
@@ -102,9 +105,11 @@ const reorderEpics = async (draggedId: string, targetId: string) => {
 }
 
 const createTicket = async (epicId: string, title: string) => {
-  const created = await ticketsStore.create({ epicId, title })
-  const epic = epicsStore.withProgress.find((e: any) => e.id === epicId)
-  epicsStore.setEpicTickets(epicId, [...(epic?.tickets || []), created])
+  // Antes esto solo actualizaba el mapa de progreso (associatedTickets), que no es
+  // lo que lee la plantilla (epic.tickets) — el ticket nuevo no aparecía hasta
+  // recargar la página. Recargamos la épica completa para mantener todo en sync.
+  await ticketsStore.create({ epicId, title })
+  await fetchEpics()
 }
 
 provide('reorderEpics', reorderEpics)

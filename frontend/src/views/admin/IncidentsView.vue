@@ -16,6 +16,7 @@ import type { Incident } from '@/types'
 import { TicketStatus } from '@/types'
 import CreateIncidentModal from '@/components/dev/CreateIncidentModal.vue'
 import ManageIncidentModal from '@/components/dev/ManageIncidentModal.vue'
+import AppHeader from '@/components/layout/AppHeader.vue'
 
 const authStore = useAuthStore()
 
@@ -67,6 +68,7 @@ onMounted(() => {
 
 <template>
   <div class="h-full bg-slate-50 dark:bg-[var(--bg-body)]">
+    <AppHeader />
     <!-- Header -->
     <header class="bg-white dark:bg-[var(--bg-panel)] border-b border-slate-200 dark:border-[var(--border-subtle)] px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>

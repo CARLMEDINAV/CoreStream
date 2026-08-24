@@ -130,6 +130,7 @@
               v-for="ticket in epicTickets"
               :key="ticket.id"
               :ticket="ticket"
+              @select="$emit('selectTicket', ticket)"
             />
           </div>
 
@@ -189,11 +190,13 @@ import WorkbenchTicketCard from './WorkbenchTicketCard.vue'
 
 // Definimos las propiedades que recibe del padre (EpicManager)
 const props = defineProps({
-  epic: { 
-    type: Object, 
+  epic: {
+    type: Object,
     required: true // Necesitamos el objeto épica completo que viene del backend
   }
 });
+
+const emit = defineEmits(['reorder', 'selectTicket'])
 
 const { 
   dragStart, 

@@ -14,6 +14,7 @@ import type { Meeting } from '@/types'
 import CreateMeetingModal from '@/components/dev/CreateMeetingModal.vue'
 import MeetingAttendanceModal from '@/components/dev/MeetingAttendanceModal.vue'
 import MeetingSummaryModal from '@/components/dev/MeetingSummaryModal.vue'
+import AppHeader from '@/components/layout/AppHeader.vue'
 
 const authStore = useAuthStore()
 const meetings = ref<Meeting[]>([])
@@ -104,6 +105,7 @@ onMounted(() => {
 
 <template>
   <div class="h-full bg-slate-50 dark:bg-[var(--bg-body)]">
+    <AppHeader />
     <!-- Header -->
     <header class="bg-white dark:bg-[var(--bg-panel)] border-b border-slate-200 dark:border-[var(--border-subtle)] px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
