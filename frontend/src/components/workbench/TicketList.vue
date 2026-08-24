@@ -367,7 +367,7 @@ const getStatusLabel = (status: string): string => {
 const getPriorityColor = (priority: string): string => {
   switch (priority) {
     case 'LOW':
-      return 'bg-[var(--status-done-bg)]'
+      return 'bg-[var(--priority-low-bg)]'
     case 'MEDIUM':
       return 'bg-[var(--priority-med-bg)]'
     case 'HIGH':

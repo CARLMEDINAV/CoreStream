@@ -70,16 +70,24 @@
               {{ ticket.assignee ? getAssigneeName(ticket.assignee) : 'Sin asignar' }}
             </span>
 
-            <select
-              v-model="editedPriority"
-              @change="saveTicket"
-              class="text-xs font-semibold bg-[var(--bg-panel)] text-[var(--text-secondary)] border border-[var(--border-subtle)] rounded-md px-2 py-1.5 focus:outline-none focus:border-[var(--lime)] ml-2 cursor-pointer hover:bg-[var(--bg-input)] transition-colors"
-            >
-              <option value="LOW">🟢 Baja</option>
-              <option value="MEDIUM">🟡 Media</option>
-              <option value="HIGH">🟠 Alta</option>
-              <option value="URGENT">🔴 Urgente</option>
-            </select>
+            <div class="flex items-center gap-1.5 ml-2">
+              <!-- Mismo mapeo de color que las tarjetas del Workbench (WorkbenchTicketCard),
+                   para que la prioridad se vea igual dentro y fuera del ticket. -->
+              <span
+                :class="['w-2.5 h-2.5 rounded-full flex-shrink-0', priorityDotClass]"
+                :title="`Prioridad: ${editedPriority}`"
+              />
+              <select
+                v-model="editedPriority"
+                @change="saveTicket"
+                class="text-xs font-semibold bg-[var(--bg-panel)] text-[var(--text-secondary)] border border-[var(--border-subtle)] rounded-md px-2 py-1.5 focus:outline-none focus:border-[var(--lime)] cursor-pointer hover:bg-[var(--bg-input)] transition-colors"
+              >
+                <option value="LOW">Baja</option>
+                <option value="MEDIUM">Media</option>
+                <option value="HIGH">Alta</option>
+                <option value="URGENT">Urgente</option>
+              </select>
+            </div>
 
             <div class="flex-1" />
 
@@ -527,6 +535,18 @@ const isPrLinkValid = computed(() => {
 const isAdminOrLeader = computed(() => {
   const userRole = authStore.user?.role
   return userRole === UserRole.ADMIN || userRole === UserRole.TEAM_LEADER
+})
+
+// Mismo mapeo de color de prioridad que WorkbenchTicketCard/TicketList,
+// para que el punto de color coincida con el que se ve fuera del panel.
+const priorityDotClass = computed(() => {
+  const map: Record<string, string> = {
+    LOW: 'bg-[var(--priority-low-bg)]',
+    MEDIUM: 'bg-[var(--priority-med-bg)]',
+    HIGH: 'bg-[var(--priority-high-bg)]',
+    URGENT: 'bg-[var(--priority-urg-bg)]',
+  }
+  return map[editedPriority.value] ?? 'bg-[var(--text-secondary)]'
 })
 
 // Ticket con estado optimista para que ActionDock refleje cambios de inmediato

@@ -63,11 +63,16 @@ class Epic(Base, BaseEntity):
     application: Mapped["Application"] = relationship(lazy="raise_on_sql", back_populates="epics")
     
     # Una épica contiene tickets que son los elementos de trabajo reales
-    # Se eliminan en cascada si la épica desaparece
+    # Se eliminan en cascada si la épica desaparece.
+    # order_by explícito: sin esto, Postgres no garantiza el orden de la
+    # colección (puede cambiar tras cualquier UPDATE sobre un ticket), lo que
+    # hacía que un ticket pareciera "moverse" o desaparecer de donde el
+    # usuario lo esperaba después de editarlo.
     tickets: Mapped[list["Ticket"]] = relationship(
         lazy="raise_on_sql",
         back_populates="epic",
         cascade="all, delete-orphan",
+        order_by="Ticket.order_index, Ticket.created_at",
     )
     
     # Documentos técnicos asociados a esta épica
