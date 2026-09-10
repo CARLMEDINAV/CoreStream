@@ -250,7 +250,7 @@ async function connect(userId: string): Promise<void> {
     // (incluido el upgrade de WebSocket, ver vite.config.ts) desde el mismo
     // origen, así que esto funciona igual en ambos casos.
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//${window.location.host}/api/ws/${userId}?ticket=${encodeURIComponent(ticket)}`
+    const wsUrl = `${protocol}//${window.location.host}/api/ws/notifications?ticket=${encodeURIComponent(ticket)}`
 
     socket.value = new WebSocket(wsUrl)
 

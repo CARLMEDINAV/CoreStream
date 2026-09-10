@@ -24,10 +24,10 @@ const toNotification = (raw: any): Notification => ({
   type: (raw.type ?? raw.notification_type ?? 'SYSTEM') as NotificationType,
   isRead: raw.isRead ?? raw.is_read ?? false,
   ticketId: raw.ticketId ?? raw.ticket_id ?? undefined,
+  incidentId: raw.incidentId ?? raw.incident_id ?? undefined,
   createdAt: raw.createdAt ?? raw.created_at ?? '',
   readAt: raw.readAt ?? raw.read_at ?? undefined,
 })
-
 export const useNotificationsStore = defineStore('notifications', () => {
   // ========== ESTADO REACTIVO ==========
 

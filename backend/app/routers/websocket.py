@@ -1,39 +1,15 @@
 """
 Router de WebSocket para Notificaciones en Tiempo Real.
 
-El cliente se conecta a /api/ws/{user_id}?ticket=TICKET (ver websocket_notifications
-más abajo para el porqué de un ticket y no el JWT directamente) y recibe
-eventos cada vez que hay actividad relevante para ese usuario (asignaciones,
-cambios de estado, preguntas, redirecciones) o cambios generales de tickets.
+Endpoints disponibles:
+- /api/ws/notifications?ticket=TICKET (Requerimiento WEB-20: Seguro, sin user_id en la URL)
+- /api/ws/{user_id}?ticket=TICKET (Deprecado: Mantenido por retrocompatibilidad)
 
-DISEÑO DE LA ESPERA (importante, ver nota histórica más abajo):
-
+DISEÑO DE LA ESPERA:
 Por cada conexión se lanzan dos tareas de larga vida que compiten en
 asyncio.wait(..., return_when=FIRST_COMPLETED):
-
-  - _forward_redis_messages: espera con pubsub.get_message(timeout=N) hasta
-    N segundos por un mensaje. Es una espera async real (delegada al socket
-    de Redis), no un sondeo. Si no llega nada en ese intervalo, envía un
-    ping — así el heartbeat y el reenvío de mensajes comparten una sola
-    espera, sin una tarea de heartbeat aparte.
-
-  - _listen_for_client: espera en bucle a que el cliente mande algo (p. ej.
-    'pong') y, sobre todo, a que se desconecte. `receive_text()` levanta
-    WebSocketDisconnect en cuanto el cliente cierra, que es justo la señal
-    que usamos para liberar la conexión.
-
-En cuanto una de las dos termina (desconexión, o un fallo de Redis), se
-cancela la otra y se limpia todo en el `finally`. Ninguna de las dos tareas
-se recrea en cada vuelta: viven mientras dura la conexión.
-
-NOTA HISTÓRICA — por qué esto no era así:
-Antes, cada iteración del bucle llamaba a pubsub.get_message() SIN timeout
-(por defecto es 0.0, que pide una lectura no bloqueante e inmediata) y creaba
-un par de tareas nuevas (receive_text/get_message) que se cancelaban en cada
-vuelta. El resultado medido: 0 conexiones = ~0% de CPU, 3 conexiones inactivas
-= ~104% de CPU, y la cifra no bajaba al cerrar los clientes porque
-`receive_text()` se cancelaba antes de tener ocasión de recibir el mensaje de
-desconexión, así que la corrutina nunca se enteraba de que debía terminar.
+  - _forward_redis_messages: espera con pubsub.get_message(timeout=N)
+  - _listen_for_client: espera en bucle mensajes del cliente (pong/desconexión)
 """
 
 from __future__ import annotations
@@ -65,21 +41,11 @@ router = APIRouter(tags=["WebSocket"])
 settings = get_settings()
 REDIS_URL = settings.REDIS_URL
 
-# Intervalo tanto del heartbeat como del máximo tiempo de espera por un
-# mensaje de Redis antes de comprobar que la conexión sigue viva.
 HEARTBEAT_INTERVAL_SECONDS = 30.0
 
 
 class ConnectionManager:
-    """
-    Registro de conexiones activas, usado para diagnóstico y limpieza local.
-
-    La entrega real de mensajes va por Redis pub/sub (publish_ticket_event),
-    no por este registro: en producción, con varios workers de uvicorn, cada
-    uno ve solo sus propias conexiones aquí, pero todos están suscritos a los
-    mismos canales de Redis, así que la entrega funciona igual. No usar
-    active_connections para nada que no sea contar/depurar conexiones locales.
-    """
+    """Registro de conexiones activas, usado para diagnóstico y limpieza local."""
 
     def __init__(self) -> None:
         self.active_connections: dict[str, list[WebSocket]] = {}
@@ -111,14 +77,6 @@ class ConnectionManager:
     async def publish_ticket_event(
         self, event_type: str, ticket_data: dict, target_user_id: str | None = None
     ) -> None:
-        """
-        Publica eventos de tickets para notificaciones en tiempo real.
-
-        Args:
-            event_type: Tipo de evento (TICKET_ASSIGNED, TICKET_STATUS_CHANGED, TIMER_SYNC)
-            ticket_data: Datos del ticket
-            target_user_id: ID del usuario destino (si aplica)
-        """
         try:
             await self.init_redis()
 
@@ -143,22 +101,6 @@ manager = ConnectionManager()
 
 
 async def _forward_redis_messages(pubsub, websocket: WebSocket, user_id: str) -> None:
-    """
-    Reenvía al cliente los mensajes de los canales suscritos; si no llega
-    ninguno en HEARTBEAT_INTERVAL_SECONDS, envía un ping.
-
-    El plazo del heartbeat se mide por reloj (deadline), no por número de
-    llamadas a get_message(): con ignore_subscribe_messages=True, las
-    confirmaciones de subscribe/unsubscribe TAMBIÉN devuelven None — igual que
-    un timeout genuino — así que contar "None" como "no llegó nada" enviaba un
-    ping de más justo al conectar (una confirmación por canal suscrito). Con
-    un deadline explícito, esas confirmaciones solo acortan el timeout de la
-    siguiente espera, sin adelantar el heartbeat.
-
-    Termina propagando la excepción si Redis falla — eso hace que la tarea
-    hermana (_listen_for_client) se cancele y la conexión se cierre, en vez de
-    quedar viva sin poder entregar nada.
-    """
     loop = asyncio.get_event_loop()
     deadline = loop.time() + HEARTBEAT_INTERVAL_SECONDS
 
@@ -176,8 +118,6 @@ async def _forward_redis_messages(pubsub, websocket: WebSocket, user_id: str) ->
         message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=remaining)
 
         if message is None:
-            # Timeout genuino, o una confirmación de subscribe/unsubscribe
-            # filtrada: en ambos casos, solo re-evaluamos el deadline.
             continue
 
         deadline = loop.time() + HEARTBEAT_INTERVAL_SECONDS
@@ -201,12 +141,6 @@ async def _forward_redis_messages(pubsub, websocket: WebSocket, user_id: str) ->
 
 
 async def _listen_for_client(websocket: WebSocket, user_id: str) -> None:
-    """
-    Espera indefinidamente mensajes del cliente. No necesitamos su contenido
-    más allá de un posible 'pong'; lo que de verdad importa es que
-    receive_text() levanta WebSocketDisconnect en cuanto el cliente cierra,
-    que es la señal para terminar esta tarea y liberar la conexión.
-    """
     while True:
         raw = await websocket.receive_text()
         try:
@@ -217,46 +151,8 @@ async def _listen_for_client(websocket: WebSocket, user_id: str) -> None:
             logger.debug("Pong recibido de usuario %s", user_id)
 
 
-@router.websocket("/ws/{user_id}")
-async def websocket_notifications(
-    websocket: WebSocket, user_id: str, ticket: Optional[str] = Query(None)
-) -> None:
-    """
-    Endpoint WebSocket para recibir notificaciones en tiempo real.
-
-    El cliente se conecta con: ws://host/api/ws/{user_id}?ticket=TICKET
-
-    Antes (plan 3.2) se conectaba con ?token=JWT_TOKEN — el JWT completo
-    quedaba escrito en los logs de acceso de cualquier proxy delante de la
-    app (Nginx incluido) durante los 30 minutos de vida del token. El cliente
-    ahora cambia su access token por un ticket opaco de un solo uso llamando
-    a POST /api/auth/ws-ticket antes de abrir el socket; ese ticket se borra
-    de Redis en cuanto se consume aquí, así que aunque termine en un log ya
-    es inútil para cuando alguien lo lea.
-    """
-    if not ticket:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Ticket no proporcionado")
-        logger.warning("Intento de conexión sin ticket para usuario %s", user_id)
-        return
-
-    ticket_user_id = await consume_ws_ticket(ticket)
-    if ticket_user_id is None:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Ticket inválido o expirado")
-        logger.warning("Ticket inválido o ya usado en conexión WebSocket para usuario %s", user_id)
-        return
-
-    if ticket_user_id != user_id:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Ticket user mismatch")
-        logger.warning("Ticket user mismatch: ticket=%s, solicitado=%s", ticket_user_id, user_id)
-        return
-
-    async with get_session_maker()() as db:
-        result = await db.execute(select(User).where(User.id == user_id))
-        if result.scalar_one_or_none() is None:
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Usuario no encontrado")
-            logger.warning("Intento de conexión con usuario inexistente: %s", user_id)
-            return
-
+async def _handle_connection(websocket: WebSocket, user_id: str) -> None:
+    """Gestiona el ciclo de vida de la suscripción y las tareas del WebSocket."""
     await manager.init_redis()
     await manager.connect(websocket, user_id)
 
@@ -282,8 +178,7 @@ async def websocket_notifications(
         for task in (redis_task, client_task):
             if not task.done():
                 task.cancel()
-        # return_exceptions=True: no dejamos que un WebSocketDisconnect o un
-        # fallo de Redis en una de las tareas impida limpiar la otra.
+
         resultados = await asyncio.gather(redis_task, client_task, return_exceptions=True)
         for resultado in resultados:
             if isinstance(resultado, Exception) and not isinstance(
@@ -298,3 +193,65 @@ async def websocket_notifications(
             await pubsub.close()
 
         logger.info("Usuario %s desconectado de notificaciones", user_id)
+
+
+@router.websocket("/ws/notifications")
+async def websocket_notifications_secure(
+    websocket: WebSocket, ticket: Optional[str] = Query(None)
+) -> None:
+    """
+    Endpoint WebSocket seguro (Requerimiento WEB-20).
+    Resuelve la identidad del usuario desde el ticket en Redis sin exponer user_id en la URL.
+    """
+    if not ticket:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Ticket no proporcionado")
+        logger.warning("Intento de conexión sin ticket en endpoint seguro")
+        return
+
+    ticket_user_id = await consume_ws_ticket(ticket)
+    if ticket_user_id is None:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Ticket inválido o expirado")
+        logger.warning("Ticket inválido o ya usado en endpoint seguro")
+        return
+
+    async with get_session_maker()() as db:
+        result = await db.execute(select(User).where(User.id == ticket_user_id))
+        if result.scalar_one_or_none() is None:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Usuario no encontrado")
+            logger.warning("Intento de conexión con usuario inexistente: %s", ticket_user_id)
+            return
+
+    await _handle_connection(websocket, ticket_user_id)
+
+
+@router.websocket("/ws/{user_id}")
+async def websocket_notifications(
+    websocket: WebSocket, user_id: str, ticket: Optional[str] = Query(None)
+) -> None:
+    """
+    [DEPRECADO] Usar /api/ws/notifications. Mantenido por retrocompatibilidad.
+    """
+    if not ticket:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Ticket no proporcionado")
+        logger.warning("Intento de conexión sin ticket para usuario %s", user_id)
+        return
+
+    ticket_user_id = await consume_ws_ticket(ticket)
+    if ticket_user_id is None:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Ticket inválido o expirado")
+        logger.warning("Ticket inválido o ya usado en conexión WebSocket para usuario %s", user_id)
+        return
+
+    if ticket_user_id != user_id:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Ticket user mismatch")
+        logger.warning("Ticket user mismatch: ticket=%s, solicitado=%s", ticket_user_id, user_id)
+        return
+
+    async with get_session_maker()() as db:
+        result = await db.execute(select(User).where(User.id == user_id))
+        if result.scalar_one_or_none() is None:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Usuario no encontrado")
+            logger.warning("Intento de conexión con usuario inexistente: %s", user_id)
+            return
+
+    await _handle_connection(websocket, user_id)

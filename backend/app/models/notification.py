@@ -13,8 +13,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base, BaseEntity
 
 if TYPE_CHECKING:
-    # Solo para anotaciones: en runtime SQLAlchemy resuelve estas relaciones
-    # desde su registro, por eso van como cadenas.
+    from .incident import Incident
     from .ticket import Ticket
     from .user import User
 
@@ -25,6 +24,8 @@ class NotificationType(str, Enum):
     TICKET_REDIRECTED = "TICKET_REDIRECTED"
     TICKET_COMPLETED  = "TICKET_COMPLETED"
     QUESTION_RAISED   = "QUESTION_RAISED"
+    INCIDENT_REPORTED = "INCIDENT_REPORTED"
+    INCIDENT_ASSIGNED = "INCIDENT_ASSIGNED"
     SYSTEM            = "SYSTEM"
 
 
@@ -43,6 +44,12 @@ class Notification(Base, BaseEntity):
         nullable=True,
         index=True,
     )
+    incident_id: Mapped[PyUUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("incidents.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     message: Mapped[str] = mapped_column(String(1000), nullable=False)
     type: Mapped[NotificationType] = mapped_column(
@@ -56,3 +63,4 @@ class Notification(Base, BaseEntity):
 
     user: Mapped["User"] = relationship(lazy="raise_on_sql", back_populates="notifications")  # type: ignore[name-defined]
     ticket: Mapped["Ticket | None"] = relationship(lazy="raise_on_sql")  # type: ignore[name-defined]
+    incident: Mapped["Incident | None"] = relationship(lazy="raise_on_sql")  # type: ignore[name-defined]

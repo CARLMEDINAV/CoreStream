@@ -28,7 +28,7 @@ from app.database import get_db
 from app.middleware.auth import get_access_token_payload, get_current_user
 from app.middleware.rate_limit import rate_limit_login
 from app.models import Role, User
-from app.redis_client import create_ws_ticket, revoke_jti
+from app.redis_client import create_ws_ticket, is_jti_revoked, revoke_jti
 from app.schemas import (
     LogoutRequest,
     RefreshRequest,
@@ -255,6 +255,13 @@ async def refresh_token_endpoint(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token inválido o expirado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if await is_jti_revoked(token_data.jti):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token revocado",
             headers={"WWW-Authenticate": "Bearer"},
         )
 

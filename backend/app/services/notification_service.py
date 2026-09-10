@@ -49,18 +49,11 @@ async def create_notification(
     message: str,
     notification_type: str,
     ticket_id: Optional[UUID | str] = None,
+    incident_id: Optional[UUID | str] = None,
 ) -> Notification:
-    """
-    Guarda la notificación en PostgreSQL usando la sesión activa del caller.
-
-    NO hace commit propio — el caller debe commitear para mantener atomicidad
-    con la operación que disparó la notificación (ej. cambio de estado de ticket).
-
-    Después del commit del caller, llamar a enqueue_notification() con el
-    objeto Notification resultante para disparar la entrega WebSocket.
-    """
     uid = UUID(str(user_id)) if not isinstance(user_id, UUID) else user_id
     tid = UUID(str(ticket_id)) if ticket_id and not isinstance(ticket_id, UUID) else ticket_id
+    iid = UUID(str(incident_id)) if incident_id and not isinstance(incident_id, UUID) else incident_id
 
     # Validar que el tipo existe en el enum
     try:
@@ -71,6 +64,7 @@ async def create_notification(
     notification = Notification(
         user_id=uid,
         ticket_id=tid,
+        incident_id=iid,
         title=title[:255],
         message=message[:1000],
         type=ntype,

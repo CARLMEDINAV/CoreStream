@@ -198,9 +198,10 @@ export enum NotificationType {
   TICKET_REDIRECTED = 'TICKET_REDIRECTED',
   TICKET_COMPLETED  = 'TICKET_COMPLETED',
   QUESTION_RAISED   = 'QUESTION_RAISED',
+  INCIDENT_REPORTED = 'INCIDENT_REPORTED',
+  INCIDENT_ASSIGNED = 'INCIDENT_ASSIGNED',
   SYSTEM            = 'SYSTEM',
 }
-
 /**
  * Tipos de documentos que se pueden cargar
  */
@@ -764,6 +765,16 @@ export interface Notification {
    * Título breve de la notificación
    */
   title: string
+
+  /**
+   * ID del ticket relacionado (si aplica)
+   */
+  ticketId?: string
+
+  /**
+   * ID de la incidencia relacionada (si aplica)
+   */
+  incidentId?: string
 
   /**
    * Mensaje detallado de la notificación

@@ -8,7 +8,7 @@
  * - Proxy de WebSocket para comunicación en tiempo real
  * 
  * VARIABLES DE ENTORNO:
- * - VITE_API_BASE_URL: URL del backend (ej: http://backend:8000 en Docker, http://localhost:8000 en local)
+ * - VITE_API_TARGET: URL del backend (ej: http://backend:8000 en Docker, http://localhost:8000 en local)
  */
 
 import { defineConfig } from 'vite'
@@ -61,9 +61,9 @@ export default defineConfig({
   server: {
     // Puerto en el que corre el servidor de desarrollo
     port: 5173,
-    // Host para permitir acceso desde otros contenedores Docker
+    // Host para permitir acceso desde otros dispositivos/contenedores
     host: '0.0.0.0',
-    // Permitir que encuentre el puerto dinámicamente
+    // Permitir que encuentre el puerto dinámicamente si 5173 está ocupado
     strictPort: false,
 
     // Configurar HMR para permitir cualquier puerto
@@ -71,15 +71,11 @@ export default defineConfig({
       protocol: 'ws'
     },
 
-    // Proxy de API hacia el backend. Ambos contenedores viven en la misma
-    // red bridge de Docker (docker-compose.dev.yml, sin network_mode: host
-    // desde la fase 6), así que el backend se alcanza por su nombre de
-    // servicio ("backend"), no por localhost — dentro de este contenedor,
-    // localhost es el propio frontend.
+    // Proxy de API y WebSockets hacia el backend FastAPI
     proxy: {
       '/api': {
-        target: process.env.VITE_API_TARGET ?? 'http://backend:8000',
-        changeOrigin: false,
+        target: process.env.VITE_API_TARGET ?? 'http://localhost:8000',
+        changeOrigin: true,
         ws: true,
         rewrite: (path) => path
       }
