@@ -30,6 +30,7 @@ Para desarrollo local siempre se usan los dos juntos:
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 ```
 
+a
 ## Inicio rápido (desarrollo)
 
 1. Copiar las variables de entorno (en la raíz del repositorio, **no** en `backend/`):

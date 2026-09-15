@@ -45,12 +45,13 @@ def _build_engine(database_url: str) -> AsyncEngine:
         kwargs.update(
             pool_size=settings.DB_POOL_SIZE,
             max_overflow=settings.DB_MAX_OVERFLOW,
-            # Verifica la conexión antes de usarla. Imprescindible cuando la
-            # base de datos es remota o compartida y puede cerrar conexiones
-            # ociosas por su cuenta: sin esto, la primera petición tras un
-            # corte devuelve un 500 en lugar de reconectar.
             pool_pre_ping=True,
             pool_recycle=settings.DB_POOL_RECYCLE,
+            # Supabase (y cualquier Postgres detrás de PgBouncer en modo
+            # transacción/sesión) no soporta bien los "prepared statements"
+            # que asyncpg cachea por defecto — sin esto, la app truena con
+            # DuplicatePreparedStatementError al reusar conexiones del pool.
+            connect_args={"statement_cache_size": 0},
         )
 
     return create_async_engine(database_url, **kwargs)
