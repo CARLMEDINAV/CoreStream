@@ -407,3 +407,26 @@ async def change_password(
         new_password=payload.new_password,
     )
     return {"message": "Contraseña actualizada exitosamente"}
+
+
+# H1-T7 (WEB-02) — GET /auth/me
+
+@router.get(
+    "/me",
+    response_model=UserResponse,
+    summary="Perfil del usuario autenticado",
+)
+async def get_me(
+    current_user: User = Depends(get_current_user),
+) -> UserResponse:
+    """
+    Devuelve los datos del usuario autenticado a partir del access token
+    (WEB-02). No hace ninguna consulta extra a la base de datos: el objeto
+    `current_user` que entrega `get_current_user` ya viene con `role`
+    cargado vía `selectinload`, así que no dispara el `lazy="raise_on_sql"`
+    de la relación.
+ 
+    Requiere token válido; `get_current_user` ya se encarga de devolver
+    401 si el token es inválido, expiró, o el usuario ya no existe.
+    """
+    return UserResponse.model_validate(current_user)
