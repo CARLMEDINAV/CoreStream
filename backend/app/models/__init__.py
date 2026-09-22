@@ -1,4 +1,5 @@
 from .application import Application
+from .client import Client
 from .base import Base, BaseEntity
 from .document import Document, DocumentType
 from .epic import Epic
@@ -18,6 +19,7 @@ __all__ = [
     "Role",
     "UserRole",
     "User",
+    "Client", 
     "Application",
     "Epic",
     "Ticket",
