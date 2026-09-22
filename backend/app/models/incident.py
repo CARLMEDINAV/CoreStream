@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from app.models.application import Application
     from app.models.user import User
 
-from .base import Base, BaseEntity
+from .base import Base, BaseEntity, TenantMixin
 
 
 class IncidentSeverity(str, Enum):
@@ -32,7 +32,7 @@ class AffectedEnvironment(str, Enum):
     STAGING = "STAGING"
     DEV = "DEV"
 
-class Incident(Base, BaseEntity):
+class Incident(Base, BaseEntity, TenantMixin):
     __tablename__ = "incidents"
 
     title: Mapped[str] = mapped_column(String(255), nullable=False)

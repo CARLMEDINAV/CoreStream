@@ -11,10 +11,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 if TYPE_CHECKING:
     from app.models.ticket import Ticket
 
-from .base import Base, BaseEntity
+from .base import Base, BaseEntity, TenantMixin
 
 
-class Subtask(Base, BaseEntity):
+class Subtask(Base, BaseEntity, TenantMixin):
     __tablename__ = "subtasks"
 
     # Campos básicos del checklist

@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from app.models.user import User
 
 
-from .base import Base, BaseEntity
+from .base import Base, BaseEntity, TenantMixin
 
 
 class TicketStatus(str, Enum):
@@ -54,7 +54,7 @@ class SupportSeverity(str, Enum):
     LOW = "LOW"
 
 
-class Ticket(Base, BaseEntity):
+class Ticket(Base, BaseEntity, TenantMixin):
     __tablename__ = "tickets"
 
     title: Mapped[str] = mapped_column(String(255), nullable=False)

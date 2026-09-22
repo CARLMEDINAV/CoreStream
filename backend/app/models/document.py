@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from app.models.ticket import Ticket
     from app.models.user import User
 
-from .base import Base, BaseEntity
+from .base import Base, BaseEntity, TenantMixin
 
 
 class DocumentType(str, Enum):
@@ -22,7 +22,7 @@ class DocumentType(str, Enum):
     DOCUMENTATION = "DOCUMENTATION"
 
 
-class Document(Base, BaseEntity):
+class Document(Base, BaseEntity, TenantMixin):
     __tablename__ = "documents"
 
     __table_args__ = (

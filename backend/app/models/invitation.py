@@ -20,10 +20,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 if TYPE_CHECKING:
     from app.models.user import User
 
-from .base import Base, BaseEntity
+from .base import Base, BaseEntity, TenantMixin
 
 
-class Invitation(Base, BaseEntity):
+class Invitation(Base, BaseEntity, TenantMixin):
     __tablename__ = "invitations"
 
     email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)

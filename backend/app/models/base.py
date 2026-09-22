@@ -4,8 +4,8 @@ from datetime import datetime
 from uuid import UUID as PyUUID
 from uuid import uuid4
 
-from sqlalchemy import DateTime, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import DateTime, func, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -46,7 +46,7 @@ class BaseEntity:
     __abstract__ = True
 
     id: Mapped[PyUUID] = mapped_column(
-        UUID(as_uuid=True),
+        PgUUID(as_uuid=True),
         primary_key=True,
         default=uuid4,
         nullable=False,
@@ -64,4 +64,27 @@ class BaseEntity:
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
+    )
+
+class TenantMixin:
+    """
+    Mixin para toda tabla de negocio scoped a un Client (tenant).
+
+    Se agrega client_id directo en cada tabla (no derivado por JOIN),
+    porque varias tablas tienen su FK "padre" como nullable
+    (Ticket.epic_id, Incident.application_id, Meeting.application_id) y
+    no siempre se puede reconstruir el tenant subiendo la jerarquía.
+
+    ondelete="RESTRICT": borrar un Client con datos asociados debe fallar
+    explícitamente, no arrastrar en cascada — mismo criterio que ya usan
+    con role_id en User.
+    """
+
+    __abstract__ = True
+
+    client_id: Mapped[PyUUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("clients.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
     )

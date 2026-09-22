@@ -10,7 +10,7 @@ from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from .base import Base, BaseEntity
+from .base import Base, BaseEntity, TenantMixin
 
 if TYPE_CHECKING:
     from .incident import Incident
@@ -29,7 +29,7 @@ class NotificationType(str, Enum):
     SYSTEM            = "SYSTEM"
 
 
-class Notification(Base, BaseEntity):
+class Notification(Base, BaseEntity, TenantMixin):
     __tablename__ = "notifications"
 
     user_id: Mapped[PyUUID] = mapped_column(

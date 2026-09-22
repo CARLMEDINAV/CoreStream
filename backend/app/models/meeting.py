@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from app.models.application import Application
     from app.models.user import User
 
-from .base import Base, BaseEntity
+from .base import Base, BaseEntity, TenantMixin
 
 
 class MeetingType(str, Enum):
@@ -28,7 +28,7 @@ class AttendanceStatus(str, Enum):
     ABSENT = "ABSENT"
     JUSTIFIED = "JUSTIFIED"
 
-class Meeting(Base, BaseEntity):
+class Meeting(Base, BaseEntity, TenantMixin):
     __tablename__ = "meetings"
 
     title: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -64,7 +64,7 @@ class Meeting(Base, BaseEntity):
     )
 
 
-class MeetingAttendance(Base, BaseEntity):
+class MeetingAttendance(Base, BaseEntity, TenantMixin):
     __tablename__ = "meeting_attendances"
 
     meeting_id: Mapped[PyUUID] = mapped_column(

@@ -9,16 +9,17 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 if TYPE_CHECKING:
     from app.models.application import Application
+    from app.models.client import Client
     from app.models.document import Document
     from app.models.notification import Notification
     from app.models.role import Role
     from app.models.ticket import Ticket
     from app.models.ticket_event import TicketEvent
 
-from .base import Base, BaseEntity
+from .base import Base, BaseEntity, TenantMixin
 
 
-class User(Base, BaseEntity):
+class User(Base, BaseEntity, TenantMixin):
     __tablename__ = "users"
 
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
@@ -43,6 +44,7 @@ class User(Base, BaseEntity):
     )
 
     role: Mapped["Role"] = relationship(lazy="raise_on_sql", back_populates="users")
+    client: Mapped["Client"] = relationship(lazy="raise_on_sql", back_populates="users")
 
     assigned_tickets: Mapped[list["Ticket"]] = relationship(
         lazy="raise_on_sql",

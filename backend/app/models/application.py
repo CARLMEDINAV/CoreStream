@@ -11,10 +11,10 @@ if TYPE_CHECKING:
     from app.models.epic import Epic
     from app.models.user import User
 
-from .base import Base, BaseEntity
+from .base import Base, BaseEntity, TenantMixin   
 
 
-class Application(Base, BaseEntity):
+class Application(Base, BaseEntity, TenantMixin):
     __tablename__ = "applications"
 
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)

@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from app.models.user import User
 
 
-from .base import Base, BaseEntity
+from .base import Base, BaseEntity, TenantMixin
 
 
 class TicketEventType(str, Enum):
@@ -37,7 +37,7 @@ class TicketEventType(str, Enum):
     MOVED = "MOVED"
 
 
-class TicketEvent(Base, BaseEntity):
+class TicketEvent(Base, BaseEntity, TenantMixin):
     __tablename__ = "ticket_events"
 
     ticket_id: Mapped[PyUUID] = mapped_column(

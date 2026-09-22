@@ -9,14 +9,14 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 # Importamos la base necesaria para SQLAlchemy
-from .base import Base, BaseEntity
+from .base import Base, BaseEntity, TenantMixin
 
 if TYPE_CHECKING:
     from app.models.application import Application
     from app.models.document import Document
     from app.models.ticket import Ticket
 
-class Epic(Base, BaseEntity):
+class Epic(Base, BaseEntity, TenantMixin):
     """
     Modelo de Base de Datos para las Épicas (CoreStream).
     
