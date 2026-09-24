@@ -229,9 +229,18 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-  
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Cuenta desactivada",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     current_client_id_ctx.set(user.client_id)
     return user
+
+
+
 
 
 def _normalize_role_value(role: object) -> str:
