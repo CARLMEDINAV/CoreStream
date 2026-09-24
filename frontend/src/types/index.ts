@@ -767,11 +767,6 @@ export interface Notification {
   title: string
 
   /**
-   * ID del ticket relacionado (si aplica)
-   */
-  ticketId?: string
-
-  /**
    * ID de la incidencia relacionada (si aplica)
    */
   incidentId?: string
