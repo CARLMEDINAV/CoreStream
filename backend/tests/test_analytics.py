@@ -24,6 +24,7 @@ from app.models import (
     User,
 )
 from app.services.analytics_service import AnalyticsService
+from tests.factories import get_test_client_id
 
 # Fecha fija de lunes conocido (2 Jun 2025 = weekday 0)
 MONDAY_UTC = datetime(2025, 6, 2, 12, 0, 0, tzinfo=timezone.utc)
@@ -43,6 +44,7 @@ async def create_role(db: AsyncSession, name: str = "DEVELOPER") -> Role:
 
 async def create_user(db: AsyncSession, role_id, full_name: str = "Dev User") -> User:
     user = User(
+        client_id=await get_test_client_id(db),
         email=f"{uuid4()}@test.com",
         full_name=full_name,
         hashed_password=hash_password("pwd"),
@@ -55,7 +57,7 @@ async def create_user(db: AsyncSession, role_id, full_name: str = "Dev User") ->
 
 
 async def create_app(db: AsyncSession) -> Application:
-    app = Application(name=f"App-{uuid4()}", is_active=True)
+    app = Application(client_id=await get_test_client_id(db), name=f"App-{uuid4()}", is_active=True)
     db.add(app)
     await db.flush()
     return app
@@ -63,6 +65,7 @@ async def create_app(db: AsyncSession) -> Application:
 
 async def create_epic(db: AsyncSession, app_id, due_date=None) -> Epic:
     epic = Epic(
+        client_id=await get_test_client_id(db),
         title=f"Epic-{uuid4()}",
         order_index=0,
         application_id=app_id,
@@ -82,6 +85,7 @@ async def create_ticket(
     completed_at=None,
 ) -> Ticket:
     ticket = Ticket(
+        client_id=await get_test_client_id(db),
         title=f"Ticket-{uuid4()}",
         status=status,
         epic_id=epic_id,
@@ -102,6 +106,7 @@ async def create_event(
     created_at=None,
 ) -> TicketEvent:
     event = TicketEvent(
+        client_id=await get_test_client_id(db),
         ticket_id=ticket_id,
         user_id=user_id,
         event_type=event_type,

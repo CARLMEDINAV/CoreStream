@@ -18,6 +18,7 @@ from app.models import Application, Base, Epic, Ticket, TicketStatus
 from app.routers.applications import list_applications
 from app.routers.epics import reorder_epic
 from app.routers.tickets import move_ticket_to_epic
+from tests.factories import get_test_client_id
 
 # ═════════════════════════════════════════════════════════════════════
 # CONFIGURACIÓN DE BASE DE DATOS TEMPORAL PARA TESTS
@@ -71,6 +72,7 @@ async def test_concurrent_reorder_no_duplicates(test_db: AsyncSession):
     
     # SETUP: Crear app y 3 épicas
     app = Application(
+        client_id=await get_test_client_id(test_db),
         id=uuid4(),
         name="Test App - Concurrency",
         owner_id=uuid4(),
@@ -80,18 +82,21 @@ async def test_concurrent_reorder_no_duplicates(test_db: AsyncSession):
     await test_db.flush()
     
     epic1 = Epic(
+        client_id=await get_test_client_id(test_db),
         id=uuid4(),
         title="Epic 1",
         order_index=0,
         application_id=app.id
     )
     epic2 = Epic(
+        client_id=await get_test_client_id(test_db),
         id=uuid4(),
         title="Epic 2",
         order_index=1,
         application_id=app.id
     )
     epic3 = Epic(
+        client_id=await get_test_client_id(test_db),
         id=uuid4(),
         title="Epic 3",
         order_index=2,
@@ -170,12 +175,14 @@ async def test_move_ticket_prevents_cross_app_movement(test_db: AsyncSession):
     
     # SETUP: Crear 2 apps con épicas diferentes
     app_a = Application(
+        client_id=await get_test_client_id(test_db),
         id=uuid4(),
         name="App A (E-Commerce)",
         owner_id=uuid4(),
         is_active=True
     )
     app_b = Application(
+        client_id=await get_test_client_id(test_db),
         id=uuid4(),
         name="App B (CRM)",
         owner_id=uuid4(),
@@ -185,12 +192,14 @@ async def test_move_ticket_prevents_cross_app_movement(test_db: AsyncSession):
     await test_db.flush()
     
     epic_a = Epic(
+        client_id=await get_test_client_id(test_db),
         id=uuid4(),
         title="Epic A1 - Checkout",
         order_index=0,
         application_id=app_a.id
     )
     epic_b = Epic(
+        client_id=await get_test_client_id(test_db),
         id=uuid4(),
         title="Epic B1 - Leads",
         order_index=0,
@@ -200,6 +209,7 @@ async def test_move_ticket_prevents_cross_app_movement(test_db: AsyncSession):
     await test_db.flush()
     
     ticket = Ticket(
+        client_id=await get_test_client_id(test_db),
         id=uuid4(),
         title="Ticket 101 - Fix button color",
         status=TicketStatus.TODO,
@@ -271,6 +281,7 @@ async def test_application_list_has_real_counts(test_db: AsyncSession):
     
     # SETUP: Crear estructura de datos
     app = Application(
+        client_id=await get_test_client_id(test_db),
         id=uuid4(),
         name="App Performance Test",
         owner_id=uuid4(),
@@ -280,18 +291,21 @@ async def test_application_list_has_real_counts(test_db: AsyncSession):
     await test_db.flush()
     
     epic1 = Epic(
+        client_id=await get_test_client_id(test_db),
         id=uuid4(),
         title="Epic 1",
         order_index=0,
         application_id=app.id
     )
     epic2 = Epic(
+        client_id=await get_test_client_id(test_db),
         id=uuid4(),
         title="Epic 2",
         order_index=1,
         application_id=app.id
     )
     epic3 = Epic(
+        client_id=await get_test_client_id(test_db),
         id=uuid4(),
         title="Epic 3",
         order_index=2,
@@ -304,6 +318,7 @@ async def test_application_list_has_real_counts(test_db: AsyncSession):
     now = datetime.now(timezone.utc)
     for i in range(5):
         t = Ticket(
+            client_id=await get_test_client_id(test_db),
             id=uuid4(),
             title=f"Ticket {i+1} - Epic 1",
             status=TicketStatus.TODO,
@@ -314,6 +329,7 @@ async def test_application_list_has_real_counts(test_db: AsyncSession):
     
     for i in range(2):
         t = Ticket(
+            client_id=await get_test_client_id(test_db),
             id=uuid4(),
             title=f"Completed {i+1} - Epic 1",
             status=TicketStatus.COMPLETED,
@@ -325,6 +341,7 @@ async def test_application_list_has_real_counts(test_db: AsyncSession):
     # Tickets en Epic 2: 3 TODO + 1 RETRASADO
     for i in range(3):
         t = Ticket(
+            client_id=await get_test_client_id(test_db),
             id=uuid4(),
             title=f"Ticket {i+1} - Epic 2",
             status=TicketStatus.TODO,
@@ -335,6 +352,7 @@ async def test_application_list_has_real_counts(test_db: AsyncSession):
     
     # Ticket retrasado (ayer)
     t_overdue = Ticket(
+        client_id=await get_test_client_id(test_db),
         id=uuid4(),
         title="Overdue Ticket - Epic 2",
         status=TicketStatus.IN_PROGRESS,

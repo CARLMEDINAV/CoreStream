@@ -232,11 +232,13 @@ class TestJWTTokens:
 
     async def test_verify_token_valid_returns_token_payload(self):
         user_id = str(uuid4())
-        token = create_access_token({"sub": user_id, "role": "ADMIN"})
+        client_id = str(uuid4())
+        token = create_access_token({"sub": user_id, "role": "ADMIN","client_id":client_id})
         token_data = await verify_token(token)
 
         assert token_data.sub == user_id
         assert token_data.role == "ADMIN"
+        assert token_data.client_id == client_id
 
     async def test_verify_token_expired_raises_401(self):
         token = create_access_token(
@@ -262,7 +264,13 @@ class TestJWTTokens:
         settings = get_settings()
         # Token sin campo "role"
         incomplete_token = jwt.encode(
-            {"sub": str(uuid4()), "exp": datetime.utcnow() + timedelta(hours=1)},
+            {
+                "sub": str(uuid4()),
+                "client_id": str(uuid4()),
+                "jti": "test-jti",
+                "type": "access",
+                "exp": datetime.utcnow() + timedelta(hours=1),
+            },
             settings.SECRET_KEY,
             algorithm=settings.ALGORITHM,
         )
@@ -274,7 +282,13 @@ class TestJWTTokens:
         settings = get_settings()
         # Token sin campo "sub"
         incomplete_token = jwt.encode(
-            {"role": "ADMIN", "exp": datetime.utcnow() + timedelta(hours=1)},
+            {
+                "role": "ADMIN",
+                "client_id": str(uuid4()),
+                "jti": "test-jti",
+                "type": "access",
+                "exp": datetime.utcnow() + timedelta(hours=1),
+            },
             settings.SECRET_KEY,
             algorithm=settings.ALGORITHM,
         )

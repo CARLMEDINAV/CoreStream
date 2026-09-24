@@ -24,6 +24,7 @@ from app.models import (
     User,
 )
 from app.services.ticket_state_machine import TicketStateMachine
+from tests.factories import get_test_client_id
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures locales (nombres distintos a los del conftest para evitar conflictos)
@@ -40,6 +41,7 @@ async def dev_role(db_session: AsyncSession) -> Role:
 @pytest.fixture
 async def dev_user(db_session: AsyncSession, dev_role: Role) -> User:
     user = User(
+        client_id=await get_test_client_id(db_session),
         email="dev@test.com",
         full_name="Test Developer",
         hashed_password=hash_password("Test1234!"),
@@ -54,6 +56,7 @@ async def dev_user(db_session: AsyncSession, dev_role: Role) -> User:
 @pytest.fixture
 async def test_app(db_session: AsyncSession) -> Application:
     app = Application(
+        client_id=await get_test_client_id(db_session),
         name="Test App",
         is_active=True,
     )
@@ -65,6 +68,7 @@ async def test_app(db_session: AsyncSession) -> Application:
 @pytest.fixture
 async def test_epic(db_session: AsyncSession, test_app: Application) -> Epic:
     epic = Epic(
+        client_id=await get_test_client_id(db_session),
         title="Test Epic",
         application_id=test_app.id,
         order_index=0,
@@ -81,6 +85,7 @@ async def todo_ticket(
     dev_user: User,
 ) -> Ticket:
     ticket = Ticket(
+        client_id=await get_test_client_id(db_session),
         title="Ticket de prueba",
         status=TicketStatus.TODO,
         priority="MEDIUM",
@@ -99,6 +104,7 @@ async def in_progress_ticket(
     dev_user: User,
 ) -> Ticket:
     ticket = Ticket(
+        client_id=await get_test_client_id(db_session),
         title="Ticket en progreso",
         status=TicketStatus.IN_PROGRESS,
         priority="HIGH",
@@ -166,6 +172,7 @@ class TestTicketCRUD:
         self, db_session: AsyncSession, test_epic: Epic, dev_user: User
     ):
         ticket = Ticket(
+            client_id=await get_test_client_id(db_session),
             title="Nuevo ticket",
             status=TicketStatus.TODO,
             priority="LOW",
@@ -213,6 +220,7 @@ class TestTicketCRUD:
     ):
         for i in range(3):
             ticket = Ticket(
+                client_id=await get_test_client_id(db_session),
                 title=f"Ticket {i}",
                 status=TicketStatus.TODO,
                 priority="MEDIUM",
@@ -349,6 +357,7 @@ class TestTicketPriorities:
         priorities = ["LOW", "MEDIUM", "HIGH", "URGENT"]
         for i, priority in enumerate(priorities):
             ticket = Ticket(
+                client_id=await get_test_client_id(db_session),
                 title=f"Ticket {priority}",
                 status=TicketStatus.TODO,
                 priority=priority,
@@ -372,6 +381,7 @@ class TestTicketPriorities:
     ):
         for i in [2, 0, 1]:
             ticket = Ticket(
+                client_id=await get_test_client_id(db_session),
                 title=f"Ticket orden {i}",
                 status=TicketStatus.TODO,
                 priority="MEDIUM",
@@ -400,6 +410,7 @@ class TestTicketPriorities:
         ]
         for i, status in enumerate(statuses):
             ticket = Ticket(
+                client_id=await get_test_client_id(db_session),
                 title=f"Ticket {status.value}",
                 status=status,
                 priority="MEDIUM",

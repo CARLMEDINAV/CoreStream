@@ -25,6 +25,7 @@ from app.models import (
     User,
 )
 from app.services.ticket_state_machine import TicketStateMachine
+from tests.factories import get_test_client_id
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures locales
@@ -57,6 +58,7 @@ async def admin_role(db_session: AsyncSession) -> Role:
 @pytest.fixture
 async def developer(db_session: AsyncSession, dev_role: Role) -> User:
     user = User(
+        client_id=await get_test_client_id(db_session),
         email="dev@test.com",
         full_name="Developer Test",
         hashed_password=hash_password("Test1234!"),
@@ -71,6 +73,7 @@ async def developer(db_session: AsyncSession, dev_role: Role) -> User:
 @pytest.fixture
 async def team_leader(db_session: AsyncSession, tl_role: Role) -> User:
     user = User(
+        client_id=await get_test_client_id(db_session),
         email="tl@test.com",
         full_name="Team Leader Test",
         hashed_password=hash_password("Test1234!"),
@@ -85,6 +88,7 @@ async def team_leader(db_session: AsyncSession, tl_role: Role) -> User:
 @pytest.fixture
 async def admin(db_session: AsyncSession, admin_role: Role) -> User:
     user = User(
+        client_id=await get_test_client_id(db_session),
         email="admin@test.com",
         full_name="Admin Test",
         hashed_password=hash_password("Test1234!"),
@@ -98,7 +102,7 @@ async def admin(db_session: AsyncSession, admin_role: Role) -> User:
 
 @pytest.fixture
 async def support_app(db_session: AsyncSession) -> Application:
-    app = Application(name="Support Test App", is_active=True)
+    app = Application(client_id=await get_test_client_id(db_session), name="Support Test App", is_active=True)
     db_session.add(app)
     await db_session.flush()
     return app
@@ -107,6 +111,7 @@ async def support_app(db_session: AsyncSession) -> Application:
 @pytest.fixture
 async def support_epic(db_session: AsyncSession, support_app: Application) -> Epic:
     epic = Epic(
+        client_id=await get_test_client_id(db_session),
         title="Support Test Epic",
         order_index=0,
         application_id=support_app.id,
@@ -120,6 +125,7 @@ async def support_epic(db_session: AsyncSession, support_app: Application) -> Ep
 async def support_ticket(db_session: AsyncSession, developer: User) -> Ticket:
     """Ticket de soporte en estado REPORTED creado por un developer."""
     ticket = Ticket(
+        client_id=await get_test_client_id(db_session),
         title="Bug: login falla en producción",
         ticket_type=TicketType.SUPPORT,
         status=TicketStatus.REPORTED,
@@ -138,6 +144,7 @@ async def support_ticket(db_session: AsyncSession, developer: User) -> Ticket:
 async def dev_ticket(db_session: AsyncSession, support_epic: Epic, developer: User) -> Ticket:
     """Ticket de desarrollo normal en estado TODO."""
     ticket = Ticket(
+        client_id=await get_test_client_id(db_session),
         title="Implementar autenticación JWT",
         ticket_type=TicketType.DEVELOPMENT,
         status=TicketStatus.TODO,
@@ -157,6 +164,7 @@ async def dev_ticket(db_session: AsyncSession, support_epic: Epic, developer: Us
 async def test_crear_support_ticket_developer(db_session: AsyncSession, developer: User):
     """Un Developer puede crear un ticket de soporte."""
     ticket = Ticket(
+        client_id=await get_test_client_id(db_session),
         title="Error 500 en endpoint /api/users",
         ticket_type=TicketType.SUPPORT,
         status=TicketStatus.REPORTED,
@@ -181,6 +189,7 @@ async def test_crear_support_ticket_developer(db_session: AsyncSession, develope
 async def test_crear_support_ticket_team_leader(db_session: AsyncSession, team_leader: User):
     """Un Team Leader puede crear un ticket de soporte."""
     ticket = Ticket(
+        client_id=await get_test_client_id(db_session),
         title="Memoria en producción al 95%",
         ticket_type=TicketType.SUPPORT,
         status=TicketStatus.REPORTED,
@@ -198,6 +207,7 @@ async def test_crear_support_ticket_team_leader(db_session: AsyncSession, team_l
 async def test_crear_support_ticket_admin(db_session: AsyncSession, admin: User):
     """Un Admin puede crear un ticket de soporte."""
     ticket = Ticket(
+        client_id=await get_test_client_id(db_session),
         title="Timeout en base de datos",
         ticket_type=TicketType.SUPPORT,
         status=TicketStatus.REPORTED,
@@ -214,6 +224,7 @@ async def test_crear_support_ticket_admin(db_session: AsyncSession, admin: User)
 async def test_support_ticket_campos_especificos(db_session: AsyncSession, developer: User):
     """Los campos específicos de soporte se persisten correctamente."""
     ticket = Ticket(
+        client_id=await get_test_client_id(db_session),
         title="Bug en formulario de registro",
         ticket_type=TicketType.SUPPORT,
         status=TicketStatus.REPORTED,
@@ -247,6 +258,7 @@ async def test_asociar_bug_existente_a_support_ticket(
 ):
     """Un ticket de soporte puede referenciar un ticket de desarrollo existente."""
     support = Ticket(
+        client_id=await get_test_client_id(db_session),
         title="Bug en producción relacionado con ticket de dev",
         ticket_type=TicketType.SUPPORT,
         status=TicketStatus.REPORTED,
@@ -265,6 +277,7 @@ async def test_asociar_bug_existente_a_support_ticket(
 async def test_support_ticket_sin_linked_ticket(db_session: AsyncSession, developer: User):
     """Un ticket de soporte puede existir sin linked_ticket_id (campo opcional)."""
     ticket = Ticket(
+        client_id=await get_test_client_id(db_session),
         title="Bug independiente",
         ticket_type=TicketType.SUPPORT,
         status=TicketStatus.REPORTED,

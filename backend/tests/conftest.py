@@ -48,15 +48,8 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.middleware.auth import hash_password
-from app.models import (
-    Application,
-    Base,
-    Epic,
-    Role,
-    Ticket,
-    TicketStatus,
-    User,
-)
+from app.models import Application, Base, Client, Epic, Role, Ticket, TicketStatus, User
+from tests.factories import get_test_client
 
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 
@@ -85,13 +78,14 @@ async def sample_role(db_session: AsyncSession):
 
 
 @pytest.fixture
-async def sample_user(db_session: AsyncSession, sample_role: Role):
+async def sample_user(db_session: AsyncSession, sample_role: Role, sample_client:Client):
     """Usuario de prueba con rol ADMIN."""
     user = User(
         email="test@corestream.com",
         full_name="Test User",
         hashed_password=hash_password("testpass123"),
         role_id=sample_role.id,
+        client_id = sample_client.id,
         is_active=True,
     )
     db_session.add(user)
@@ -100,22 +94,23 @@ async def sample_user(db_session: AsyncSession, sample_role: Role):
 
 
 @pytest.fixture
-async def sample_app(db_session: AsyncSession):
+async def sample_app(db_session: AsyncSession,  sample_client:Client):
     """Aplicación de prueba."""
-    app = Application(name="Test Application", is_active=True)
+    app = Application(name="Test Application", is_active=True,client_id =sample_client.id)
     db_session.add(app)
     await db_session.flush()
     return app
 
 
 @pytest.fixture
-async def sample_epic(db_session: AsyncSession, sample_app: Application):
+async def sample_epic(db_session: AsyncSession, sample_app: Application,sample_client:Client):
     """Épica de prueba dentro de sample_app."""
     epic = Epic(
         title="Test Epic",
         order_index=0,
         application_id=sample_app.id,
         due_date=datetime.now(timezone.utc) + timedelta(days=14),
+        client_id = sample_client.id
     )
     db_session.add(epic)
     await db_session.flush()
@@ -123,7 +118,7 @@ async def sample_epic(db_session: AsyncSession, sample_app: Application):
 
 
 @pytest.fixture
-async def sample_ticket(db_session: AsyncSession, sample_epic: Epic, sample_user: User):
+async def sample_ticket(db_session: AsyncSession, sample_epic: Epic, sample_user: User,sample_client:Client):
     """Ticket de prueba en estado TODO asignado a sample_user."""
     ticket = Ticket(
         title="Test Ticket",
@@ -131,7 +126,13 @@ async def sample_ticket(db_session: AsyncSession, sample_epic: Epic, sample_user
         epic_id=sample_epic.id,
         assignee_id=sample_user.id,
         time_spent_seconds=3600,
+        client_id = sample_client.id
     )
     db_session.add(ticket)
     await db_session.flush()
     return ticket
+
+@pytest.fixture
+async def sample_client(db_session: AsyncSession):
+    """Tenant de prueba: todo dato de negocio de los tests unitarios cuelga de él."""
+    return await get_test_client(db_session)
