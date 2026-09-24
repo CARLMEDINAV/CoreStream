@@ -12,6 +12,7 @@ import secrets
 import string
 import traceback
 from typing import List
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -103,6 +104,9 @@ async def create_user(
 async def list_users(
     skip: int = Query(0, ge=0, description="Número de usuarios a saltar"),
     limit: int = Query(20, ge=1, le=100, description="Número máximo de usuarios a retornar"),
+    include_inactive: bool = Query(                                          
+        False, description="Incluir usuarios desactivados (solo ADMIN)"
+    ),
     current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.TEAM_LEADER])),
     db: AsyncSession = Depends(get_db)
 ) -> List[UserResponse]:
@@ -121,15 +125,19 @@ async def list_users(
     Raises:
         HTTPException: Si el usuario no tiene permiso (estado 403)
     """
+    if include_inactive and current_user.role.name != UserRole.ADMIN.value:  
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo ADMIN puede listar usuarios desactivados",
+        )
+
     try:
         # Consulta asíncrona con paginación - eager load role relationship
+        query = select(User).options(selectinload(User.role))               
+        if not include_inactive:
+            query = query.where(User.is_active)
         result = await db.execute(
-            select(User)
-            .options(selectinload(User.role))
-            .where(User.is_active)
-            .order_by(User.created_at.desc())
-            .offset(skip)
-            .limit(limit)
+            query.order_by(User.created_at.desc()).offset(skip).limit(limit)
         )
         users = result.unique().scalars().all()
         logger.info(f"DEBUG list_users: Fetched {len(users)} users")
@@ -153,7 +161,7 @@ async def list_users(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error listing users: {str(e)}"
-        )
+)
 
 
 @router.get(
@@ -334,6 +342,45 @@ async def delete_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Error al procesar la eliminación: {error_msg}"
         )
+
+
+
+@router.post(
+    "/{user_id}/activate",
+    response_model=UserResponse,
+    summary="Reactivar usuario",
+    description="Vuelve a activar un usuario desactivado (requiere ADMIN)",
+)
+async def activate_user(
+    user_id: UUID,
+    current_user: User = Depends(require_role([UserRole.ADMIN])),
+    db: AsyncSession = Depends(get_db),
+) -> UserResponse:
+    """
+    Contraparte de DELETE /users/{id} (soft delete) — WEB-03 exige que un
+    ADMIN pueda activar y desactivar. Endpoint propio, no un campo en PUT:
+    es una acción explícita, simétrica con la desactivación y fácil de
+    auditar (TRV-07).
+    """
+    result = await db.execute(
+        select(User).options(selectinload(User.role)).where(User.id == user_id)
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado",
+        )
+    if user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El usuario ya está activo",
+        )
+
+    user.is_active = True
+    await db.commit()
+    await db.refresh(user, attribute_names=["role"])
+    return UserResponse.model_validate(user)
 
 
 @router.post(
