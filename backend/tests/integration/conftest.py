@@ -17,6 +17,7 @@ Variables de entorno reconocidas:
 """
 
 import os
+import tempfile
 from urllib.parse import urlparse, urlunparse
 
 # ── La configuración debe fijarse ANTES de importar nada de la aplicación,
@@ -33,6 +34,15 @@ os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("ALLOWED_ORIGINS", "http://testserver")
 os.environ["SQL_ECHO"] = "False"
 os.environ["RUN_SEED"] = "false"
+
+# Raíz de almacenamiento de ficheros subidos. Por defecto la app usa
+# /app/storage (la ruta dentro del contenedor), que en el runner de GitHub
+# Actions —o en cualquier máquina sin esa carpeta— no existe ni se puede
+# crear: los tests de documentos y uploads fallaban con PermissionError.
+# Un directorio temporal propio además evita que los tests escriban en el
+# volumen de storage real del entorno de desarrollo. setdefault: si alguien
+# define UPLOAD_DIR explícitamente, se respeta.
+os.environ.setdefault("UPLOAD_DIR", tempfile.mkdtemp(prefix="corestream-test-storage-"))
 
 import psycopg2
 import pytest
