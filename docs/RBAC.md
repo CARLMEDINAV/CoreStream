@@ -80,7 +80,7 @@ siguen siendo exclusivos de ADMIN (ver más abajo).
 | Iniciar (`/start`) | ❌ (`require_non_admin`) | ✅ si no asignado o es él, ❌ si es de otro | ✅ (reclama si estaba libre) | ❌ |
 | Completar (`/complete`) | ❌ | ❌ salvo que sea el asignado | ✅ | ❌ |
 | Levantar pregunta bloqueante (`/question`) | ❌ | ❌ salvo que sea el asignado | ✅ | ❌ |
-| Resolver pregunta bloqueante (`/question/resolve`) | ✅ | ✅ | ❌ | ❌ |
+| Resolver pregunta bloqueante (`/resolve-question`) | ✅ | ✅ | ❌ | ❌ |
 | Redirigir a otro usuario (`/redirect`) | ✅ | ✅ | ✅ si es el asignado | ❌ |
 
 Notas:
@@ -127,9 +127,11 @@ distinción de rol.
 | Acción | ADMIN | TEAM_LEADER | DEVELOPER |
 |---|---|---|---|
 | Crear usuario directamente | ✅ | ❌ | ❌ |
-| Listar usuarios | ✅ | ✅ | ❌ |
+| Listar usuarios activos | ✅ | ✅ | ❌ |
+| Listar incluyendo desactivados (`?include_inactive=true`) | ✅ | ❌ | ❌ |
 | Ver perfil propio (`/me`) | ✅ | ✅ | ✅ |
 | Editar / borrar / cambiar rol / resetear contraseña de otro usuario | ✅ | ❌ | ❌ |
+| Desactivar (`DELETE /{id}`) / reactivar (`POST /{id}/activate`) | ✅ | ❌ | ❌ |
 | Crear invitación | ✅ | ❌ | ❌ |
 | Aceptar invitación / consultar token | público (sin autenticar) | | |
 
