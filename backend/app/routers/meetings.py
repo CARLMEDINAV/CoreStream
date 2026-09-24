@@ -32,7 +32,8 @@ async def create_meeting(
     """
     meeting = Meeting(
         **meeting_in.model_dump(exclude_unset=True),
-        created_by_id=current_user.id
+        created_by_id=current_user.id,
+        client_id=current_user.client_id,
     )
     db.add(meeting)
     await db.commit()
@@ -130,7 +131,8 @@ async def record_attendance(
     else:
         attendance = MeetingAttendance(
             meeting_id=meeting_id,
-            **attendance_in.model_dump(exclude_unset=True)
+            **attendance_in.model_dump(exclude_unset=True),
+            client_id=meeting.client_id,
         )
         db.add(attendance)
         

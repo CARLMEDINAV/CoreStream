@@ -103,7 +103,8 @@ async def create_subtask(
             title=subtask_data.title,
             ticket_id=ticket_id,
             order_index=next_order,
-            is_completed=False
+            is_completed=False,
+            client_id=current_user.client_id,
         )
         db.add(new_subtask)
         await db.commit()

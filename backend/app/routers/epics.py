@@ -150,7 +150,8 @@ async def create_epic(
         # Crear nueva épica
         new_epic = Epic(
             **epic_data.model_dump(),
-            order_index=next_order
+            order_index=next_order,
+            client_id=current_user.client_id,
         )
         db.add(new_epic)
         await db.commit()
@@ -507,65 +508,3 @@ async def reorder_epic(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Error al reordenar épica: {str(e)}"
         )
-
-'''
-@router.post(
-    "/{epic_id}/documents",
-    response_model=DocumentResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Cargar documento a épica",
-    description="Carga un archivo de documentación a una épica"
-)
-async def upload_epic_document(
-    epic_id: int,
-    file_data: dict,
-    current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-) -> DocumentResponse:
-    """
-    Carga un documento a una épica específica.
-
-    Args:
-        epic_id (int): ID de la épica
-        file_data (dict): Datos del archivo a cargar
-        current_user (User): Usuario autenticado
-        db (AsyncSession): Sesión asíncrona de base de datos
-
-    Returns:
-        DocumentResponse: Documento creado
-
-    Raises:
-        HTTPException: Si la épica no existe (404) o hay error en carga (400)
-    """
-    # Verificar que la épica existe
-    epic_check = await db.execute(
-        select(Epic).where(Epic.id == epic_id)
-    )
-    if not epic_check.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Épica con ID {epic_id} no encontrada"
-        )
-
-    try:
-        # Implementar lógica de carga de archivo
-        # Este es un placeholder que debería conectar con el servicio de documentos
-        from app.models import Document
-
-        new_document = Document(
-            epic_id=epic_id,
-            **file_data
-        )
-        db.add(new_document)
-        await db.commit()
-        await db.refresh(new_document)
-
-        return DocumentResponse.from_orm(new_document)
-
-    except Exception as e:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Error al cargar documento: {str(e)}"
-        )
-'''

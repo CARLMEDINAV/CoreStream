@@ -28,8 +28,10 @@ from uuid import UUID
 
 from fastapi import HTTPException
 from fastapi import status as http_status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.ticket import Ticket
 from app.models.ticket_event import TicketEvent, TicketEventType
 
 
@@ -76,6 +78,12 @@ class TransitionAuditService:
         Raises:
             HTTPException 500: Si falla la creación del evento de auditoría.
         """
+
+        client_id_result = await db.execute(
+            select(Ticket.client_id).where(Ticket.id == ticket_id)
+        )
+        ticket_client_id = client_id_result.scalar_one_or_none()
+
         try:
             transitioned_at = datetime.now(timezone.utc).isoformat()
 
@@ -93,6 +101,7 @@ class TransitionAuditService:
                 user_id=user_id,
                 event_type=event_type,
                 detail=detail,
+                client_id=ticket_client_id,
             )
             db.add(event)
             return event
@@ -110,6 +119,9 @@ class TransitionAuditService:
         user_id: UUID,
         event_type: TicketEventType,
         detail: dict,
+
+    
+
     ) -> TicketEvent:
         """
         Crea un TicketEvent genérico (no de transición) con timestamp UTC.
@@ -128,6 +140,13 @@ class TransitionAuditService:
         Returns:
             TicketEvent ya agregado a la sesión (sin commit).
         """
+        client_id_result = await db.execute(
+                select(Ticket.client_id).where(Ticket.id == ticket_id)
+            )
+        ticket_client_id = client_id_result.scalar_one_or_none()
+
+
+
         try:
             detail.setdefault("recorded_at", datetime.now(timezone.utc).isoformat())
 
@@ -136,6 +155,7 @@ class TransitionAuditService:
                 user_id=user_id,
                 event_type=event_type,
                 detail=detail,
+                client_id=ticket_client_id,
             )
             db.add(event)
             return event

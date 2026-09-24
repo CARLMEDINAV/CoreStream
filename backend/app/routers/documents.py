@@ -186,6 +186,7 @@ async def upload_document(
         mime_type=file.content_type or "application/octet-stream",
         doc_type=resolved_doc_type,
         uploaded_by_id=current_user.id,
+        client_id=current_user.client_id,
     )
     db.add(document)
     await db.commit()

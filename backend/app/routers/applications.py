@@ -144,7 +144,7 @@ async def create_application(
 
     try:
         # Crear nueva instancia de aplicación
-        new_app = Application(**app_data.dict(), owner_id=current_user.id)
+        new_app = Application(**app_data.dict(), owner_id=current_user.id, client_id=current_user.client_id,)
         db.add(new_app)
         await db.commit()
         await db.refresh(new_app)

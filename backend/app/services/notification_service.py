@@ -17,9 +17,10 @@ from typing import Optional
 from uuid import UUID
 
 from arq import ArqRedis
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Notification, NotificationType
+from app.models import Notification, NotificationType, User
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,11 @@ async def create_notification(
     except ValueError:
         ntype = NotificationType.SYSTEM
 
+    # client_id del USUARIO DESTINATARIO, no de quien dispara el evento —
+    # esta función solo recibe un user_id suelto (TRV-01, Fase 5).
+    recipient_result = await db.execute(select(User.client_id).where(User.id == uid))
+    recipient_client_id = recipient_result.scalar_one_or_none()
+
     notification = Notification(
         user_id=uid,
         ticket_id=tid,
@@ -69,6 +75,7 @@ async def create_notification(
         message=message[:1000],
         type=ntype,
         is_read=False,
+        client_id=recipient_client_id,
     )
     db.add(notification)
     return notification

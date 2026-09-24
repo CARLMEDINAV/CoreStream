@@ -156,6 +156,7 @@ class TokenPayload(BaseModel):
     exp: int
     type: str
     jti: str
+    client_id: str 
 
 
 class RefreshRequest(BaseModel):

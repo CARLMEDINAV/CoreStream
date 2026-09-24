@@ -137,6 +137,7 @@ class TicketRedirectionService:
                 event_type=TicketEventType.REDIRECTED,
                 from_user_id=from_user_id,
                 to_user_id=to_user_id,
+                client_id=ticket.client_id,
                 detail={
                     "justification": justification,
                     "previous_status": previous_status,
@@ -151,6 +152,7 @@ class TicketRedirectionService:
                     ticket_id=ticket_id,
                     user_id=from_user_id,
                     event_type=TicketEventType.STATUS_CHANGED,
+                    client_id=ticket.client_id,
                     detail={
                         "from_status": "IN_PROGRESS",
                         "to_status": "TODO",
@@ -165,6 +167,7 @@ class TicketRedirectionService:
                 event_type=TicketEventType.TICKET_ASSIGNED,
                 from_user_id=from_user_id,
                 to_user_id=to_user_id,
+                client_id=ticket.client_id,
                 detail={
                     "justification": justification,
                     "assigned_at": datetime.now(timezone.utc).isoformat(),

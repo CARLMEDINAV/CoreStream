@@ -48,7 +48,8 @@ async def create_invitation(
 ) -> InvitationResponse:
     email = data.email.lower().strip()
 
-    existing_user = await db.execute(select(User).where(User.email == email))
+    existing_user = await db.execute(select(User).where(User.email == email),execution_options={"skip_tenant_scope": True},)
+
     if existing_user.scalars().first() is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -60,7 +61,8 @@ async def create_invitation(
         select(Invitation).where(
             Invitation.email == email,
             Invitation.used_at.is_(None),
-        )
+        ),
+        execution_options={"skip_tenant_scope": True},
     )
     for inv in pending.scalars().all():
         if not inv.is_expired:
@@ -76,6 +78,7 @@ async def create_invitation(
         role=data.role,
         expires_at=datetime.now(timezone.utc) + timedelta(days=INVITATION_TTL_DAYS),
         created_by_id=current_user.id,
+        client_id=current_user.client_id, 
     )
     db.add(invitation)
     await db.commit()
@@ -146,6 +149,7 @@ async def accept_invitation(
         hashed_password=AuthService.hash_password(data.password),
         role_id=role.id,
         is_active=True,
+        client_id=invitation.client_id,
     )
     db.add(new_user)
 

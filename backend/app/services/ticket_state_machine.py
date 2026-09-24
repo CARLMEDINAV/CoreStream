@@ -20,9 +20,10 @@ from typing import Union
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import TicketEvent, TicketStatus
+from app.models import Ticket,TicketEvent, TicketStatus
 from app.models.ticket_event import TicketEventType
 from app.services.timer_service import TimerService
 from app.services.transition_audit import TransitionAuditService
@@ -127,11 +128,18 @@ class TicketStateMachine:
             # Extraemos el valor del Enum en formato string
             event_type_str = event_type.value if hasattr(event_type, "value") else str(event_type)
 
+            client_id_result = await db.execute(
+                select(Ticket.client_id).where(Ticket.id == ticket_id)
+            )
+
+            ticket_client_id = client_id_result.scalar_one_or_none()
+
             new_event = TicketEvent(
                 ticket_id=ticket_id,
                 user_id=user_id,
                 event_type=event_type_str,
                 detail=detail_payload,
+                client_id=ticket_client_id,
             )
             db.add(new_event)
 

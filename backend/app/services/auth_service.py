@@ -419,7 +419,7 @@ class AuthService:
         """
         token_role = role_name or UserRole.DEVELOPER.value
         return mw_create_access_token(
-            data={"sub": str(user.id), "role": token_role}
+            data={"sub": str(user.id), "role": token_role, "client_id": str(user.client_id)}
         )
 
     @staticmethod
@@ -436,7 +436,7 @@ class AuthService:
         role_str = role_name or (user.role.name if user.role else "DEVELOPER")
 
         return mw_create_refresh_token(
-            data={"sub": str(user.id), "role": role_str}
+            data={"sub": str(user.id), "role": role_str, "client_id": str(user.client_id)}
         )
 
     @staticmethod

@@ -48,7 +48,25 @@ LEADER = {"email": "leader@corestream-tests.com", "password": "TestLeader123!@#"
 DEV = {"email": "dev@corestream-tests.com", "password": "TestDev123!@#", "role": "DEVELOPER"}
 DEV2 = {"email": "dev2@corestream-tests.com", "password": "TestDev223!@#", "role": "DEVELOPER"}
 
+# Cliente "por defecto" (bootstrap): donde viven los usuarios que ya usan
+# test_rbac.py y test_tickets.py. Mismo id determinístico que los usuarios,
+# por la misma razón (JWT estable entre truncados de _clean_database).
+DEFAULT_CLIENT_SLUG = "corestream-test-default"
+DEFAULT_CLIENT_NAME = "Cliente de Test por Defecto"
+
+# Segundo tenant — solo lo usa test_tenancy.py, pero se siembra siempre
+# junto con el resto para no depender de fixtures function-scoped que
+# choquen con el truncado autouse de _clean_database.
+CLIENT_B_SLUG = "corestream-test-cliente-b"
+CLIENT_B_NAME = "Cliente B (aislamiento)"
+ADMIN_B = {"email": "admin-b@corestream-tests.com", "password": "TestAdminB123!@#", "role": "ADMIN"}
+
+LEADER_B = {"email": "leader-b@corestream-tests.com", "password": "TestLeaderB123!@#", "role": "TEAM_LEADER"}
+DEV_B = {"email": "dev-b@corestream-tests.com", "password": "TestDevB123!@#", "role": "DEVELOPER"}
+
 ALL_TEST_USERS = [ADMIN, LEADER, DEV, DEV2]
+CLIENT_B_USERS = [ADMIN_B,LEADER_B, DEV_B]
+
 
 
 def _sync_url(async_url: str) -> str:
@@ -120,7 +138,7 @@ def _prepared_database():
     conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
     try:
         cur = conn.cursor()
-        cur.execute("TRUNCATE TABLE users, roles RESTART IDENTITY CASCADE")
+        cur.execute("TRUNCATE TABLE users, roles, clients RESTART IDENTITY CASCADE")
         _seed_roles_and_users(cur)
     finally:
         conn.close()
@@ -184,15 +202,12 @@ async def _clean_database(client):
 
 def _seed_roles_and_users(cur) -> None:
     """
-    Crea los roles del sistema y un usuario por rol, con contraseñas conocidas.
+    Crea roles, dos clientes (tenants) y un usuario por rol en cada uno.
 
-    El id de cada usuario de prueba es determinístico (uuid5 sobre su email), no
-    aleatorio: admin_headers/leader_headers/dev_headers/dev2_headers son fixtures
-    de sesión (login una sola vez, para no chocar con el rate limiter de
-    /auth/login — fase 3.5), pero _clean_database trunca y re-siembra la tabla
-    users antes de CADA test. Con un id estable, el JWT obtenido en el primer
-    test sigue resolviendo al usuario correcto en el resto, aunque la fila se
-    haya recreado entre medias.
+    IDs determinísticos (uuid5), igual que antes: admin_headers/leader_headers/
+    etc. son fixtures de sesión, pero _clean_database trunca y re-siembra
+    antes de CADA test. Con ids estables, el JWT del primer test sigue
+    resolviendo al usuario/cliente correcto en el resto de la sesión.
     """
     import uuid
 
@@ -211,10 +226,25 @@ def _seed_roles_and_users(cur) -> None:
         )
         role_ids[name] = rid
 
-    for user in ALL_TEST_USERS:
+    def _client_id_for(slug: str) -> str:
+        return str(uuid.uuid5(uuid.NAMESPACE_DNS, f"corestream-test-client:{slug}"))
+
+    default_client_id = _client_id_for(DEFAULT_CLIENT_SLUG)
+    client_b_id = _client_id_for(CLIENT_B_SLUG)
+
+    for cid, name, slug in [
+        (default_client_id, DEFAULT_CLIENT_NAME, DEFAULT_CLIENT_SLUG),
+        (client_b_id, CLIENT_B_NAME, CLIENT_B_SLUG),
+    ]:
         cur.execute(
-            "INSERT INTO users (id, email, full_name, hashed_password, role_id, is_active) "
-            "VALUES (%s, %s, %s, %s, %s, %s)",
+            "INSERT INTO clients (id, name, slug, is_active) VALUES (%s, %s, %s, %s)",
+            (cid, name, slug, True),
+        )
+
+    def _seed_user(user: dict, client_id: str) -> None:
+        cur.execute(
+            "INSERT INTO users (id, email, full_name, hashed_password, role_id, is_active, client_id) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s)",
             (
                 str(uuid.uuid5(uuid.NAMESPACE_DNS, f"corestream-test-user:{user['email']}")),
                 user["email"],
@@ -222,8 +252,14 @@ def _seed_roles_and_users(cur) -> None:
                 AuthService.hash_password(user["password"]),
                 role_ids[user["role"]],
                 True,
+                client_id,
             ),
         )
+
+    for user in ALL_TEST_USERS:
+        _seed_user(user, default_client_id)
+    for user in CLIENT_B_USERS:
+        _seed_user(user, client_b_id)
 
 
 # ---------------------------------------------------------------------------
@@ -272,15 +308,27 @@ async def _login(client: AsyncClient, user: dict) -> dict:
 async def admin_headers(client: AsyncClient) -> dict:
     return await _login(client, ADMIN)
 
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def admin_b_headers(client: AsyncClient) -> dict:
+    return await _login(client, ADMIN_B)
+
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def leader_headers(client: AsyncClient) -> dict:
     return await _login(client, LEADER)
 
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def leader_b_headers(client: AsyncClient) -> dict:
+    return await _login(client, LEADER_B)
+
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def dev_headers(client: AsyncClient) -> dict:
     return await _login(client, DEV)
+
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def dev_b_headers(client: AsyncClient) -> dict:
+    return await _login(client, DEV_B)
 
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")

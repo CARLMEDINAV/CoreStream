@@ -84,6 +84,7 @@ async def create_user(
         # preexistente en este endpoint, detectado al escribir create_admin.py.
         hashed_password=AuthService.hash_password(user_data.password),
         role_id=dev_role.id,
+        client_id=current_user.client_id,
     )
 
     db.add(new_user)

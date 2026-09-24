@@ -17,6 +17,8 @@ from app.database import get_db
 from app.models import User
 from app.redis_client import is_jti_revoked
 from app.schemas import TokenPayload
+from app.context import current_client_id_ctx
+
 
 # Esquema de seguridad Bearer para extraer tokens JWT del header Authorization
 security = HTTPBearer()
@@ -154,9 +156,10 @@ async def verify_token(token: str, expected_type: str = "access") -> TokenPayloa
     role = payload.get("role")
     exp = payload.get("exp")
     jti = payload.get("jti")
+    client_id = payload.get("client_id")  
     token_type = payload.get("type")
 
-    if sub is None or role is None or exp is None or jti is None:
+    if sub is None or role is None or exp is None or jti is None or client_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token inválido: faltan campos requeridos",
@@ -176,7 +179,7 @@ async def verify_token(token: str, expected_type: str = "access") -> TokenPayloa
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    return TokenPayload(sub=sub, role=role, exp=exp, type=token_type, jti=jti)
+    return TokenPayload(sub=sub, role=role, exp=exp, type=token_type, jti=jti, client_id=client_id)
 
 
 async def get_access_token_payload(
@@ -227,6 +230,8 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+  
+    current_client_id_ctx.set(user.client_id)
     return user
 
 

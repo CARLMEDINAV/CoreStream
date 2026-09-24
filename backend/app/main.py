@@ -17,6 +17,7 @@ from app.database import dispose_engine, get_session_maker
 from app.logging_config import configure_logging
 from app.middleware.request_id import RequestIDMiddleware, get_request_id
 from app.redis_client import ARQ_QUEUE_NAME, close_redis, get_redis, init_redis
+from app.tenant_scope import register_tenant_scope
 
 # Importar routers (estos se crearían en carpetas routers/)
 # Mantenemos las importaciones individuales para asegurar que cada módulo cargue bien
@@ -102,6 +103,8 @@ async def lifespan(app: FastAPI):
     # usuarios en el arranque: el primer ADMIN se crea a mano, una vez, con
     # `python -m app.scripts.create_admin` (ver ese fichero). El resto de
     # usuarios se crean por invitación (POST /api/invitations).
+    register_tenant_scope()   # <-- nuevo, antes del log final de startup
+    logger.info("Filtro de multi-tenancy registrado")
 
     logger.info("Aplicación CoreStream iniciada")
 

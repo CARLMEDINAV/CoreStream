@@ -30,7 +30,8 @@ async def create_incident(
     """
     incident = Incident(
         **incident_in.model_dump(exclude_unset=True),
-        created_by_id=current_user.id
+        created_by_id=current_user.id,
+        client_id=current_user.client_id,
     )
     db.add(incident)
     await db.commit()

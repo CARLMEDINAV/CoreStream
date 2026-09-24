@@ -122,6 +122,7 @@ async def create_support_ticket(
         operating_system=ticket_data.operating_system,
         linked_ticket_id=ticket_data.linked_ticket_id,
         created_by_id=current_user.id,
+        client_id=current_user.client_id,
         # Los tickets de soporte no requieren épica; epic_id es None
     )
     db.add(new_ticket)

@@ -307,7 +307,8 @@ async def create_ticket(
         new_ticket = Ticket(
             **ticket_data.model_dump(),
             status=TicketStatus.TODO,
-            created_by_id=current_user.id
+            created_by_id=current_user.id,
+            client_id=current_user.client_id,
         )
         db.add(new_ticket)
 
