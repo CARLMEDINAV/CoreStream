@@ -23,7 +23,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Ticket,TicketEvent, TicketStatus
+from app.models import Ticket, TicketEvent, TicketStatus
 from app.models.ticket_event import TicketEventType
 from app.services.timer_service import TimerService
 from app.services.transition_audit import TransitionAuditService

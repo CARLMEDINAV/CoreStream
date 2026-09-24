@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from app.models.epic import Epic
     from app.models.user import User
 
-from .base import Base, BaseEntity, TenantMixin   
+from .base import Base, BaseEntity, TenantMixin
 
 
 class Application(Base, BaseEntity, TenantMixin):

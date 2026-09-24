@@ -13,12 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
+from app.context import current_client_id_ctx
 from app.database import get_db
 from app.models import User
 from app.redis_client import is_jti_revoked
 from app.schemas import TokenPayload
-from app.context import current_client_id_ctx
-
 
 # Esquema de seguridad Bearer para extraer tokens JWT del header Authorization
 security = HTTPBearer()

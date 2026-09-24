@@ -1,6 +1,6 @@
 from .application import Application
-from .client import Client
 from .base import Base, BaseEntity
+from .client import Client
 from .document import Document, DocumentType
 from .epic import Epic
 from .incident import AffectedEnvironment, Incident, IncidentSeverity, IncidentStatus

@@ -17,7 +17,6 @@ from app.database import dispose_engine, get_session_maker
 from app.logging_config import configure_logging
 from app.middleware.request_id import RequestIDMiddleware, get_request_id
 from app.redis_client import ARQ_QUEUE_NAME, close_redis, get_redis, init_redis
-from app.tenant_scope import register_tenant_scope
 
 # Importar routers (estos se crearían en carpetas routers/)
 # Mantenemos las importaciones individuales para asegurar que cada módulo cargue bien
@@ -40,6 +39,7 @@ from app.routers import (
     websocket,
 )
 from app.services.notification_service import set_arq_pool
+from app.tenant_scope import register_tenant_scope
 
 logger = logging.getLogger("corestream")
 
