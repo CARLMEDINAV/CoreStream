@@ -37,6 +37,32 @@ class ChangeRoleRequest(BaseModel):
     role: str
 
 
+async def _assert_not_last_admin(db: AsyncSession, user: User) -> None:
+    """
+    Impide que una operación deje a la organización sin ningún ADMIN activo
+    (quitarle el rol, desactivarlo o eliminarlo). Sin ADMIN nadie puede
+    invitar, cambiar roles ni reactivar usuarios, y solo se recupera
+    entrando a la base de datos. El conteo pasa por el filtro de
+    multi-tenancy, así que es "el último ADMIN de ESTE cliente".
+
+    Requiere que user.role venga precargado (selectinload).
+    """
+    if user.role is None or user.role.name != UserRole.ADMIN.value:
+        return
+
+    admin_count = await db.execute(
+        select(func.count(User.id))
+        .select_from(User)
+        .join(Role)
+        .where(Role.name == UserRole.ADMIN.value, User.is_active)
+    )
+    if int(admin_count.scalar() or 0) <= 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se puede dejar la organización sin ningún administrador",
+        )
+
+
 @router.post(
     "/",
     response_model=UserResponse,
@@ -301,20 +327,13 @@ async def delete_user(
             detail=f"Usuario con ID {user_id} no encontrado"
         )
 
-    # Proteger contra eliminación del último administrador
-    if user.role and user.role.name == UserRole.ADMIN.value:
-        admin_count = await db.execute(
-            select(func.count(User.id))
-            .select_from(User)
-            .join(Role)
-            .where(Role.name == UserRole.ADMIN.value, User.is_active)
+    if user.id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No puedes desactivar ni eliminar tu propia cuenta",
         )
-        admin_total = int(admin_count.scalar() or 0)
-        if admin_total <= 1:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No se puede eliminar el último administrador del sistema"
-            )
+
+    await _assert_not_last_admin(db, user)
 
     try:
         # Lógica bifurcada según lo que pida el frontend
@@ -577,6 +596,9 @@ async def change_user_role(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Rol inválido. Roles válidos: {', '.join(r.value for r in valid_roles)}"
         )
+
+    if role_data.role != UserRole.ADMIN.value:
+        await _assert_not_last_admin(db, user)
 
     try:
         # Get the role from database
