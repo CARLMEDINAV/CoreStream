@@ -11,13 +11,13 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.middleware.auth import get_current_user
 from app.models import User
 from app.schemas import TeamMemberResponse, TicketRedirectionRequest, TicketRedirectionResponse
+from app.services.ticket_permissions import assert_assignable_user
 from app.services.ticket_redirection import TicketRedirectionService
 
 router = APIRouter(prefix="/api/tickets", tags=["Ticket Redirection"])
@@ -55,19 +55,9 @@ async def redirect_ticket(
     """
     try:
         service = TicketRedirectionService(db)
-        
-        # Validar que el usuario actual es el asignado
-        result = await db.execute(
-            select(User).where(User.id == redirection_data.to_user_id)
-        )
-        new_assignee = result.scalar_one_or_none()
-        
-        if not new_assignee:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Usuario destino no encontrado"
-            )
-        
+
+        await assert_assignable_user(db, redirection_data.to_user_id)
+
         # Ejecutar la redirección
         redirected_ticket = await service.redirect_ticket(
             ticket_id=ticket_id,
@@ -85,6 +75,8 @@ async def redirect_ticket(
             redirected_at=redirected_ticket.updated_at
         )
         
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

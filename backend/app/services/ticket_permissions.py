@@ -14,7 +14,11 @@ Matriz de permisos completa en docs/RBAC.md.
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from fastapi import HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Ticket, User
 
@@ -112,3 +116,25 @@ def claim_or_assert_assignee(ticket: Ticket, current_user: User) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Este ticket ya está asignado a otro usuario",
         )
+
+
+async def assert_assignable_user(db: AsyncSession, user_id: UUID) -> User:
+    """
+    Valida que un usuario pueda recibir un ticket (WEB-03): debe existir en
+    el cliente actual y estar activo. Punto único para las cuatro rutas que
+    asignan tickets: crear, editar assignee_id, redirigir y asignar soporte.
+    """
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario asignado no encontrado",
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se puede asignar un ticket a un usuario desactivado",
+        )
+    return user

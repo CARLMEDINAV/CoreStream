@@ -56,6 +56,7 @@ from app.services.notification_service import (
     notify_ticket_completed,
 )
 from app.services.ticket_permissions import (
+    assert_assignable_user,
     assert_can_manage_ticket,
     assert_is_current_assignee,
     claim_or_assert_assignee,
@@ -302,6 +303,9 @@ async def create_ticket(
             detail=f"Épica con ID {ticket_data.epic_id} no encontrada"
         )
 
+    if ticket_data.assignee_id:
+        await assert_assignable_user(db, ticket_data.assignee_id)
+
     try:
         # Crear nuevo ticket con estado inicial TODO
         new_ticket = Ticket(
@@ -453,6 +457,9 @@ async def update_ticket(
         )
 
     old_assignee_id = ticket.assignee_id
+
+    if update_data.get('assignee_id'):
+        await assert_assignable_user(db, update_data['assignee_id'])
 
     try:
         if 'assignee_id' in update_data and ticket.status in (TicketStatus.IN_PROGRESS, TicketStatus.BLOCKED, TicketStatus.BLOCKED_QUESTION):

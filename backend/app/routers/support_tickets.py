@@ -30,6 +30,7 @@ from app.schemas.ticket import (
     TicketEventResponse,
     TicketResponse,
 )
+from app.services.ticket_permissions import assert_assignable_user
 from app.services.ticket_state_machine import TicketStateMachine
 
 router = APIRouter(tags=["Support Tickets"])
@@ -191,14 +192,8 @@ async def assign_support_ticket(
     """
     ticket = await _get_support_ticket_or_404(ticket_id, db)
 
-    # Validar que el assignee existe
-    result = await db.execute(select(User).where(User.id == assignment.assignee_id))
-    assignee = result.scalar_one_or_none()
-    if not assignee:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Developer asignado no encontrado",
-        )
+    # WEB-03: el asignado debe existir en este cliente y estar activo
+    await assert_assignable_user(db, assignment.assignee_id)
 
     old_assignee_id = ticket.assignee_id
     ticket.assignee_id = assignment.assignee_id
