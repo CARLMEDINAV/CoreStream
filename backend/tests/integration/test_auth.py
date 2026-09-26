@@ -14,6 +14,7 @@ primero para no heredar sesión de otro test.
 """
 
 import asyncio
+
 import pytest
 
 from .conftest import ADMIN, DEV
@@ -252,7 +253,6 @@ async def test_refresh_token_ya_usado_no_se_puede_reutilizar(client):
     assert reuso.status_code == 401
 
 
-
 async def test_refresh_simultaneos_con_el_mismo_token_solo_uno_gana(client):
     """5 /refresh a la vez con el mismo token: solo uno obtiene tokens nuevos."""
     client.cookies.clear()
@@ -267,6 +267,26 @@ async def test_refresh_simultaneos_con_el_mismo_token_solo_uno_gana(client):
     codigos = sorted(r.status_code for r in respuestas)
     assert codigos == [200, 401, 401, 401, 401]
 
+
+async def test_logout_con_access_token_vencido_igual_revoca_el_refresh(client):
+    """
+    El logout no debe depender de un access token válido: si venció, el
+    refresh token de la sesión se revoca igual.
+    """
+    client.cookies.clear()
+    await _tokens(client, DEV)
+    refresh_token = client.cookies.get("refresh_token")
+    client.cookies.clear()
+
+    res = await client.post(
+        "/api/auth/logout",
+        headers={"Authorization": "Bearer token.vencido.o-invalido"},
+        json={"refresh_token": refresh_token},
+    )
+    assert res.status_code == 200
+
+    res = await client.post("/api/auth/refresh", json={"refresh_token": refresh_token})
+    assert res.status_code == 401
 
 
 # ---------------------------------------------------------------------------

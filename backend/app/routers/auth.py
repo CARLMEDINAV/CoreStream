@@ -19,16 +19,17 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
 from app.database import get_db
-from app.middleware.auth import get_access_token_payload, get_current_user
+from app.middleware.auth import get_current_user, verify_token
 from app.middleware.rate_limit import rate_limit_login
 from app.models import Role, User
-from app.redis_client import create_ws_ticket, is_jti_revoked, revoke_jti,consume_jti
+from app.redis_client import consume_jti, create_ws_ticket, revoke_jti
 from app.schemas import (
     LogoutRequest,
     RefreshRequest,
@@ -296,6 +297,11 @@ async def refresh_token_endpoint(
     )
 
 
+# auto_error=False: si no viene el header Authorization, entrega None en vez
+# de responder 401, para que el logout no dependa de un access token válido.
+_optional_bearer = HTTPBearer(auto_error=False)
+
+
 @router.post(
     "/logout",
     status_code=status.HTTP_200_OK,
@@ -306,15 +312,25 @@ async def logout(
     request: Request,
     response: Response,
     body: Optional[LogoutRequest] = None,
-    token_data: TokenPayload = Depends(get_access_token_payload),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_optional_bearer),
 ) -> dict:
     """
     Antes este endpoint no existía (404) y el frontend lo llamaba igual,
     tragándose el error: "cerrar sesión" solo borraba localStorage, el
     access token seguía siendo válido hasta que expirase por su cuenta
     (plan 3.3). Ahora revoca explícitamente ambos jti.
+
+    El access token es opcional (WEB-04): si venció, el logout igual revoca
+    el refresh token, que es el que permitiría seguir renovando la sesión.
     """
-    await revoke_jti(token_data.jti, _remaining_seconds(token_data.exp))
+    # Si el access token está vencido o es inválido no hay nada que revocar,
+    # pero el refresh token de abajo se revoca igual.
+    if credentials:
+        try:
+            access = await verify_token(credentials.credentials, expected_type="access")
+            await revoke_jti(access.jti, _remaining_seconds(access.exp))
+        except HTTPException:
+            pass
 
     cookie_token = request.cookies.get(REFRESH_COOKIE_NAME)
     raw_refresh = cookie_token or (body.refresh_token if body else None)
