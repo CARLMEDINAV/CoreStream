@@ -214,6 +214,44 @@ async def test_tras_logout_el_token_deja_de_valer(client):
     assert (await client.get("/api/auth/me", headers=headers)).status_code == 401
 
 
+async def test_refresh_token_revocado_por_logout_no_renueva(client):
+    #Tras el logout, el refresh token de esa sesion ya no sirve para obtener un access token nuevo
+    client.cookies.clear()
+    tokens=await _tokens(client, DEV)
+    refresh_token = client.cookies.get("refresh_token")
+    csrf_token = client.cookies.get("csrf_token")
+    assert refresh_token
+
+    await client.post(
+        "/api/auth/logout",
+        headers={"Authorization": f"Bearer {tokens['access_token']}", "x-csrf-token": csrf_token},
+    )
+
+    # El logout borra la cookie; se reenvía el token guardado en el cuerpo para
+    # probar que quedó revocado en el servidor, no solo borrado del navegador.
+    client.cookies.clear()
+    res = await client.post("/api/auth/refresh", json={"refresh_token": refresh_token})
+
+    assert res.status_code == 401
+
+async def test_refresh_token_ya_usado_no_se_puede_reutilizar(client):
+    """
+    refresh consulta la lista de revocados. Cada uso
+    revoca el refresh token consumido (rotación), así que reutilizarlo falla.
+    """
+    client.cookies.clear()
+    await _tokens(client, DEV)
+    refresh_token = client.cookies.get("refresh_token")
+    client.cookies.clear()
+
+    primero = await client.post("/api/auth/refresh", json={"refresh_token": refresh_token})
+    assert primero.status_code == 200
+
+    reuso = await client.post("/api/auth/refresh", json={"refresh_token": refresh_token})
+    assert reuso.status_code == 401
+
+
+
 # ---------------------------------------------------------------------------
 # Registro público (plan 3.7)
 # ---------------------------------------------------------------------------
