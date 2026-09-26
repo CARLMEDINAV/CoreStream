@@ -316,6 +316,17 @@ async def revoke_jti(jti: str, ttl_seconds: int) -> None:
     await redis.set(f"{_REVOKED_PREFIX}{jti}", "1", ex=ttl_seconds)
 
 
+async def consume_jti(jti: str, ttl_seconds: int) -> bool:
+    """
+    Marca el jti como revocado solo si aún no lo estaba, en una sola
+    operación atómica (SET NX). Devuelve True si ESTA llamada lo consumió.
+    Evita que dos /refresh simultáneos con el mismo token pasen ambos.
+    """
+    redis = await get_redis()
+    return bool(await redis.set(f"{_REVOKED_PREFIX}{jti}", "1", ex=max(ttl_seconds, 1), nx=True))
+
+
+
 async def is_jti_revoked(jti: str) -> bool:
     """
     "Fail open": si Redis no está disponible, se trata como no revocado en

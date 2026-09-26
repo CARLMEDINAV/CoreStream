@@ -28,7 +28,7 @@ from app.database import get_db
 from app.middleware.auth import get_access_token_payload, get_current_user
 from app.middleware.rate_limit import rate_limit_login
 from app.models import Role, User
-from app.redis_client import create_ws_ticket, is_jti_revoked, revoke_jti
+from app.redis_client import create_ws_ticket, is_jti_revoked, revoke_jti,consume_jti
 from app.schemas import (
     LogoutRequest,
     RefreshRequest,
@@ -258,13 +258,9 @@ async def refresh_token_endpoint(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if await is_jti_revoked(token_data.jti):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token revocado",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
 
+
+    
     result = await db.execute(
         select(User, Role.name).join(Role, User.role_id == Role.id).where(User.id == token_data.sub)
     )
@@ -274,8 +270,15 @@ async def refresh_token_endpoint(
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no encontrado")
 
-    # Revocar el refresh token consumido antes de emitir el siguiente.
-    await revoke_jti(token_data.jti, _remaining_seconds(token_data.exp))
+    # Consumir (revocar) el refresh token de forma atómica antes de emitir el
+    # siguiente: si otra petición simultánea ya lo consumió, esta pierde.
+    if not await consume_jti(token_data.jti, _remaining_seconds(token_data.exp)):
+       raise HTTPException(
+           status_code=status.HTTP_401_UNAUTHORIZED,
+           detail="Token revocado",
+           headers={"WWW-Authenticate": "Bearer"},
+       )
+    
 
     new_access_token = AuthService.create_access_token(user, role_name=role_name)
 

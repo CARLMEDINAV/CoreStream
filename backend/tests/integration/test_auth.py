@@ -13,6 +13,7 @@ ahí. Los tests que dependen de cookies llaman `client.cookies.clear()`
 primero para no heredar sesión de otro test.
 """
 
+import asyncio
 import pytest
 
 from .conftest import ADMIN, DEV
@@ -249,6 +250,22 @@ async def test_refresh_token_ya_usado_no_se_puede_reutilizar(client):
 
     reuso = await client.post("/api/auth/refresh", json={"refresh_token": refresh_token})
     assert reuso.status_code == 401
+
+
+
+async def test_refresh_simultaneos_con_el_mismo_token_solo_uno_gana(client):
+    """5 /refresh a la vez con el mismo token: solo uno obtiene tokens nuevos."""
+    client.cookies.clear()
+    await _tokens(client, DEV)
+    refresh_token = client.cookies.get("refresh_token")
+    client.cookies.clear()
+
+    respuestas = await asyncio.gather(
+        *[client.post("/api/auth/refresh", json={"refresh_token": refresh_token}) for _ in range(5)]
+    )
+
+    codigos = sorted(r.status_code for r in respuestas)
+    assert codigos == [200, 401, 401, 401, 401]
 
 
 
