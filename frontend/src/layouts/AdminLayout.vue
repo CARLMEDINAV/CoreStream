@@ -37,6 +37,7 @@
              plataforma en sí (usuarios/roles, config del sistema). -->
         <template v-if="isAdminOrLeader">
           <router-link
+            v-if="authStore.hasFeature('analytics')"
             to="/admin/analytics"
             class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
             active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm"
@@ -87,6 +88,10 @@
           </router-link>
         </template>
 
+        <div v-if="isAdmin && authStore.commercialProfile" class="px-4 py-3 text-sm text-[var(--text-secondary)] border-t border-[var(--border-subtle)]">
+          <p>{{ t('commercial.plan') }}: {{ authStore.commercialProfile.plan }}</p>
+          <p>{{ t(authStore.commercialProfile.is_active ? 'commercial.active' : 'commercial.inactive') }}</p>
+        </div>
       </nav>
     </aside>
 

@@ -1318,3 +1318,10 @@ export interface PaginatedResponse<T> {
    */
   totalPages: number
 }
+
+export interface CommercialProfile {
+  client_id: string
+  plan: string
+  is_active: boolean
+  feature_flags: Record<string, boolean>
+}

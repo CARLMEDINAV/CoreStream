@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 
 from arq import create_pool
 from arq.connections import RedisSettings
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -15,6 +15,7 @@ from sqlalchemy import text
 from app.config import get_settings
 from app.database import dispose_engine, get_session_maker
 from app.logging_config import configure_logging
+from app.middleware.commercial import require_feature
 from app.middleware.request_id import RequestIDMiddleware, get_request_id
 from app.redis_client import ARQ_QUEUE_NAME, close_redis, get_redis, init_redis
 
@@ -179,21 +180,61 @@ Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_sch
 # Estos routers se crearían en carpeta app/routers/
 
 app.include_router(auth.router, prefix="/api/auth")
-app.include_router(users.router, prefix="/api/users")
+app.include_router(
+    users.router, prefix="/api/users",
+    dependencies=[Depends(require_feature("team"))],
+)
 app.include_router(invitations.router)  # prefijo embebido en el router: /api/invitations
-app.include_router(applications.router, prefix="/api/applications")
-app.include_router(epics.router, prefix="/api/epics") # Resulta en /api/epics/...
-app.include_router(ticket_redirection.router)  # Ticket redirection endpoints: /api/tickets/... — MUST come before tickets.router
-app.include_router(tickets.router, prefix="/api/tickets")
-app.include_router(subtasks.router, prefix="/api/tickets/{ticket_id}/subtasks")
-app.include_router(analytics.router, prefix="/api/analytics")
-app.include_router(documents.router, prefix="/api/documents")
-app.include_router(notifications.router, prefix="/api/notifications")
+app.include_router(
+    applications.router, prefix="/api/applications",
+    dependencies=[Depends(require_feature("projects"))],
+)
+app.include_router(
+    epics.router, prefix="/api/epics",
+    dependencies=[Depends(require_feature("projects"))],
+)
+# debe ir antes del router de tickets
+app.include_router(
+    ticket_redirection.router,
+    dependencies=[Depends(require_feature("tickets"))],
+)
+app.include_router(
+    tickets.router, prefix="/api/tickets",
+    dependencies=[Depends(require_feature("tickets"))],
+)
+app.include_router(
+    subtasks.router, prefix="/api/tickets/{ticket_id}/subtasks",
+    dependencies=[Depends(require_feature("tickets"))],
+)
+app.include_router(
+    analytics.router, prefix="/api/analytics",
+    dependencies=[Depends(require_feature("analytics"))],
+)
+app.include_router(
+    documents.router, prefix="/api/documents",
+    dependencies=[Depends(require_feature("documents"))],
+)
+app.include_router(
+    notifications.router, prefix="/api/notifications",
+    dependencies=[Depends(require_feature("notifications"))],
+)
 app.include_router(websocket.router, prefix="/api")  # WebSocket endpoints: /api/ws/...
-app.include_router(uploads.router)  # prefijo embebido en el router: /api/uploads
-app.include_router(support_tickets.router, prefix="/api/support-tickets")
-app.include_router(incidents.router, prefix="/api")
-app.include_router(meetings.router, prefix="/api")
+app.include_router(
+    uploads.router,
+    dependencies=[Depends(require_feature("documents"))],
+)
+app.include_router(
+    support_tickets.router, prefix="/api/support-tickets",
+    dependencies=[Depends(require_feature("support"))],
+)
+app.include_router(
+    incidents.router, prefix="/api",
+    dependencies=[Depends(require_feature("incidents"))],
+)
+app.include_router(
+    meetings.router, prefix="/api",
+    dependencies=[Depends(require_feature("meetings"))],
+)
 
 
 # Endpoint raíz de salud — Railway lo usa como healthcheck en /health

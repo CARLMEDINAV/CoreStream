@@ -11,6 +11,7 @@
 
 import axios, { AxiosInstance, AxiosError } from 'axios'
 import type {
+  CommercialProfile,
   User,
   UserRole,
   Application,
@@ -353,6 +354,11 @@ const realApi = {
     getWsTicket: async (): Promise<string> => {
       const response = await apiClient.post<{ ticket: string }>('/auth/ws-ticket')
       return response.data.ticket
+    },
+
+    getCommercialProfile: async (): Promise<CommercialProfile> => {
+      const response = await apiClient.get<CommercialProfile>('/auth/commercial-profile')
+      return response.data
     },
 
     getMe: async (): Promise<User> => {

@@ -5,6 +5,7 @@
  */
 
 export default {
+  commercial: { plan: 'Plan comercial', active: 'Activo', inactive: 'Inactivo' },
   // ==========================================
   // SECCIÓN: Acciones y términos comunes
   // Palabras clave reutilizables en toda la interfaz

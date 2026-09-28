@@ -247,7 +247,7 @@ def _seed_roles_and_users(cur) -> None:
         (client_b_id, CLIENT_B_NAME, CLIENT_B_SLUG),
     ]:
         cur.execute(
-            "INSERT INTO clients (id, name, slug, is_active) VALUES (%s, %s, %s, %s)",
+            "INSERT INTO clients (id, name, slug, is_active, commercial_plan) VALUES (%s, %s, %s, %s, 'Pro')",
             (cid, name, slug, True),
         )
 

@@ -129,6 +129,7 @@
                 ⬇ {{ t('codeDocs.download') }}
               </button>
               <button
+                v-if="authStore.hasFeature('document_translation')"
                 @click.stop="documentToTranslate = doc; translateModalOpen = true"
                 class="px-3 py-1.5 text-xs bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg border border-teal-200 transition-colors whitespace-nowrap"
               >
@@ -217,6 +218,7 @@
                       ⬇ {{ t('codeDocs.download') }}
                     </button>
                     <button
+                      v-if="authStore.hasFeature('document_translation')"
                       @click="documentToTranslate = doc; translateModalOpen = true"
                       class="px-3 py-1.5 text-xs bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg border border-teal-200 transition-colors flex items-center gap-1 whitespace-nowrap"
                     >
@@ -258,6 +260,7 @@
                       ⬇ {{ t('codeDocs.download') }}
                     </button>
                     <button
+                      v-if="authStore.hasFeature('document_translation')"
                       @click="documentToTranslate = doc; translateModalOpen = true"
                       class="px-3 py-1.5 text-xs bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg border border-teal-200 transition-colors flex items-center gap-1 whitespace-nowrap"
                     >
@@ -315,6 +318,7 @@
                           ⬇ {{ t('codeDocs.download') }}
                         </button>
                         <button
+                          v-if="authStore.hasFeature('document_translation')"
                           @click="documentToTranslate = doc; translateModalOpen = true"
                           class="px-3 py-1.5 text-xs bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg border border-teal-200 transition-colors flex items-center gap-1 whitespace-nowrap"
                         >
@@ -371,6 +375,7 @@
 
   <!-- Modal fuera del contenedor overflow-auto para evitar stacking context que bloquea position:fixed -->
   <TranslateModal
+    v-if="authStore.hasFeature('document_translation')"
     :is-open="translateModalOpen"
     :document="documentToTranslate"
     @close="translateModalOpen = false"
@@ -381,6 +386,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, computed, defineAsyncComponent } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
 import type { Document } from '@/types'
 import AppHeader from '@/components/layout/AppHeader.vue'
@@ -392,6 +398,7 @@ const TranslateModal = defineAsyncComponent(() =>
 
 const { t } = useI18n()
 const documentsStore = useDocumentsStore()
+const authStore = useAuthStore()
 const detailView = ref<'codeFiles' | 'documentation' | 'contributors' | 'byContext' | null>(null)
 const translateModalOpen = ref(false)
 const documentToTranslate = ref<Document | null>(null)

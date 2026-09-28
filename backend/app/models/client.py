@@ -24,5 +24,8 @@ class Client(Base, BaseEntity):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    commercial_plan: Mapped[str] = mapped_column(
+        String(20), default="Basico", server_default="Basico", nullable=False
+    )
 
     users: Mapped[list["User"]] = relationship(lazy="raise_on_sql", back_populates="client")

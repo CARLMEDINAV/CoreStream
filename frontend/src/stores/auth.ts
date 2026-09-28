@@ -14,7 +14,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { UserRole, type User, type AuthTokens } from '@/types'
+import { UserRole, type User, type AuthTokens, type CommercialProfile } from '@/types'
 import { api, setAuthTokens, clearAuthTokens } from '@/services/api'
 import { useThemeStore } from '@/stores/theme'
 import { useWebSocket } from '@/composables/useWebSocket'
@@ -23,6 +23,9 @@ export const useAuthStore = defineStore('auth', () => {
   // ========== ESTADO REACTIVO ==========
 
   const user = ref<User | null>(null)
+  const commercialProfile = ref<CommercialProfile | null>(null)
+  const hasFeature = (flag: string): boolean =>
+    commercialProfile.value?.is_active === true && commercialProfile.value.feature_flags[flag] === true
 
   /**
    * Access token JWT. Vive solo en memoria — nunca en localStorage — para
@@ -164,6 +167,7 @@ export const useAuthStore = defineStore('auth', () => {
   const fetchMe = async (): Promise<User> => {
     try {
       const userData = await api.auth.getMe()
+      commercialProfile.value = await api.auth.getCommercialProfile()
       user.value = userData
 
       const savedTheme = userData.preferences?.theme
@@ -256,6 +260,7 @@ export const useAuthStore = defineStore('auth', () => {
    */
   const clearSession = (): void => {
     disconnectRealtime()
+    commercialProfile.value = null
     user.value = null
     accessToken.value = null
     isAuthenticated.value = false
@@ -293,6 +298,8 @@ export const useAuthStore = defineStore('auth', () => {
 
   return {
     // Estado
+    commercialProfile,
+    hasFeature,
     user,
     accessToken,
     isAuthenticated,

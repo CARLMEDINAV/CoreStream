@@ -34,6 +34,7 @@ from sqlalchemy.orm import selectinload
 from app.config import get_settings
 from app.database import get_db
 from app.middleware.auth import get_current_user
+from app.middleware.commercial import require_feature
 from app.models import Document, Epic, User
 from app.schemas.document import DocumentResponse, TranslateRequest, TranslateResponse
 from app.services.ticket_permissions import is_admin_or_leader
@@ -255,6 +256,7 @@ TRANSLATABLE_EXTENSIONS = {".pdf", ".docx", ".doc", ".csv", ".md", ".txt", ".rst
 
 @router.post(
     "/{doc_id}/translate",
+    dependencies=[Depends(require_feature("document_translation"))],
     response_model=TranslateResponse,
     summary="Traducir documento",
     description="Traduce el contenido de un documento de texto usando Azure Translator"
@@ -306,6 +308,7 @@ async def translate_document(
 
 @router.post(
     "/{doc_id}/translate/download",
+    dependencies=[Depends(require_feature("document_translation"))],
     summary="Descargar traducción",
     description="Traduce el archivo preservando su formato y lo devuelve como descarga"
 )

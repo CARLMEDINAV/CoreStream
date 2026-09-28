@@ -165,6 +165,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           requiresAuth: true,
           requiredRoles: ['ADMIN', 'TEAM_LEADER'],
+          featureFlag: 'analytics',
           title: 'Analítica - CoreStream Admin'
         }
       },
@@ -522,6 +523,12 @@ router.beforeEach(
      * CASO 4: Actualiza el título de la página
      * Se toma del meta.title definido en cada ruta
      */
+    const featureFlag = to.meta.featureFlag as string | undefined
+    if (featureFlag && !authStore.hasFeature(featureFlag)) {
+      next({ path: dashboardPath })
+      return
+    }
+
     const title = to.meta.title as string | undefined
     if (title) {
       document.title = title

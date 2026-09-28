@@ -27,6 +27,7 @@ from sqlalchemy.orm import selectinload
 from app.config import get_settings
 from app.database import get_db
 from app.middleware.auth import get_current_user, verify_token
+from app.middleware.commercial import get_commercial_profile
 from app.middleware.rate_limit import rate_limit_login
 from app.models import Role, User
 from app.redis_client import consume_jti, create_ws_ticket, revoke_jti
@@ -39,10 +40,20 @@ from app.schemas import (
     UserResponse,
     UserUpdate,
 )
+from app.schemas.commercial import CommercialProfile
 from app.schemas.user import PasswordChange
 from app.services.auth_service import AuthService
 
 router = APIRouter(tags=["Autenticación"])
+
+
+@router.get("/commercial-profile", response_model=CommercialProfile)
+async def commercial_profile(
+    profile: CommercialProfile = Depends(get_commercial_profile),
+) -> CommercialProfile:
+    """devuelve el plan y las funciones disponibles del cliente."""
+    return profile
+
 
 REFRESH_COOKIE_NAME = "refresh_token"
 CSRF_COOKIE_NAME = "csrf_token"

@@ -5,6 +5,7 @@
  */
 
 export default {
+  commercial: { plan: 'Tarif', active: 'Aktiv', inactive: 'Inaktiv' },
   // ==========================================
   // SECTION: Häufige Aktionen und Begriffe
   // Wiederverwendbare Schlüsselwörter in der gesamten Oberfläche

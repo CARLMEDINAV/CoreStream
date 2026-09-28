@@ -168,3 +168,20 @@ concretos detectados en la auditoría original quedan verificados:
 - `POST /api/tickets/{id}/start` sobre un ticket ajeno ya asignado → **403**
   (antes: 200, reasignaba el ticket a quien llamaba).
 - `POST /api/epics/` como DEVELOPER → **403** (antes: 201).
+
+
+## Control comercial (TRV-02)
+
+Los permisos anteriores también requieren que el plan del cliente incluya la
+función solicitada. ADMIN no tiene una excepción comercial. El backend consulta
+`clients.commercial_plan` usando el `client_id` del usuario autenticado en cada
+solicitud protegida y devuelve 403 con `detail.code = FEATURE_NOT_INCLUDED`
+cuando la función no está disponible.
+
+Basico incluye proyectos, tickets, documentos, equipo, incidencias, reuniones,
+soporte y notificaciones. Pro añade Analítica y traducción de documentos.
+`GET /api/auth/commercial-profile` devuelve el plan, estado del cliente y banderas
+para la interfaz. Es de solo lectura; ningún rol de cliente puede cambiar su plan
+por esta API. El plan no concede permisos adicionales de rol ni de pertenencia.
+
+Ver [TRV-02](./TRV-02.md) para la matriz de banderas, migración y pruebas.

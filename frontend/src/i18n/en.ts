@@ -5,6 +5,7 @@
  */
 
 export default {
+  commercial: { plan: 'Commercial plan', active: 'Active', inactive: 'Inactive' },
   // ==========================================
   // SECTION: Common actions and terms
   // Reusable keywords throughout the interface

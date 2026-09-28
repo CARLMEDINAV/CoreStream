@@ -9,6 +9,9 @@ vi.mock('@/services/api', () => ({
       login: vi.fn(),
       logout: vi.fn(),
       getMe: vi.fn(),
+      getCommercialProfile: vi.fn().mockResolvedValue({
+        client_id: 'test-client', plan: 'Basico', is_active: true, feature_flags: {},
+      }),
       register: vi.fn(),
       refresh: vi.fn(),
       updateProfile: vi.fn(),
