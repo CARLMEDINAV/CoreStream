@@ -17,14 +17,14 @@ from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, select, update
 from sqlalchemy import delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.middleware.auth import get_current_user
 from app.models import Notification, User
-from app.schemas import NotificationResponse
+from app.schemas import NotificationMarkRead, NotificationResponse
 
 # Router para notificaciones
 router = APIRouter(tags=["Notificaciones"])
@@ -113,64 +113,47 @@ async def get_unread_count(
         "unread_count": unread_count,
         "user_id": current_user.id
     }
-
-
 @router.post(
     "/mark-read",
     summary="Marcar notificaciones como leídas",
     description="Marca un conjunto de notificaciones específicas como leídas"
 )
 async def mark_notifications_as_read(
-    notification_ids: dict,
+    notification_ids: NotificationMarkRead,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ) -> dict:
     """
     Marca notificaciones específicas como leídas.
 
-    Args:
-        notification_ids (dict): Contiene 'notification_ids' lista de IDs
-        current_user (User): Usuario autenticado
-        db (AsyncSession): Sesión asíncrona de base de datos
-
-    Returns:
-        dict: Diccionario con cantidad de notificaciones marcadas
-
-    Raises:
-        HTTPException: Si hay error en la operación (400)
+    Solo se modifican notificaciones pertenecientes al usuario autenticado.
     """
-    ids = notification_ids.get("notification_ids", [])
-
-    if not ids:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Lista de IDs de notificaciones vacía"
-        )
 
     try:
-        # Obtener notificaciones del usuario actual
+        ids = notification_ids.notification_ids
+        now = datetime.utcnow()
+
         result = await db.execute(
-            select(Notification).where(
+            update(Notification)
+            .where(
                 and_(
                     Notification.id.in_(ids),
-                    Notification.user_id == current_user.id
+                    Notification.user_id == current_user.id,
+                    ~Notification.is_read
                 )
             )
+            .values(
+                is_read=True,
+                read_at=now
+            )
         )
-        notifications = result.scalars().all()
-
-        # Marcar como leídas
-        count = 0
-        for notification in notifications:
-            notification.is_read = True
-            notification.read_at = datetime.utcnow()
-            count += 1
 
         await db.commit()
 
         return {
-            "marked_as_read": count,
-            "total_requested": len(ids)
+            "marked_as_read": result.rowcount or 0,
+            "total_requested": len(ids),
+            "timestamp": now.isoformat()
         }
 
     except Exception as e:
@@ -180,53 +163,44 @@ async def mark_notifications_as_read(
             detail=f"Error al marcar notificaciones: {str(e)}"
         )
 
-
 @router.post(
     "/mark-all-read",
     summary="Marcar todas las notificaciones como leídas",
-    description="Marca todas las notificaciones no leídas del usuario como leídas"
+    description="Marca todas las notificaciones no leídas del usuario como leídas de forma atómica"
 )
 async def mark_all_notifications_as_read(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ) -> dict:
     """
-    Marca todas las notificaciones no leídas como leídas.
+    Marca todas las notificaciones no leídas del usuario como leídas.
 
-    Args:
-        current_user (User): Usuario autenticado
-        db (AsyncSession): Sesión asíncrona de base de datos
-
-    Returns:
-        dict: Diccionario con cantidad de notificaciones marcadas
-
-    Raises:
-        HTTPException: Si hay error en la operación (400)
+    La operación se ejecuta mediante un único UPDATE SQL dentro de
+    una transacción, evitando cargar las notificaciones en memoria.
     """
+
     try:
-        # Obtener todas las notificaciones no leídas del usuario
+        now = datetime.utcnow()
+
         result = await db.execute(
-            select(Notification).where(
+            update(Notification)
+            .where(
                 and_(
                     Notification.user_id == current_user.id,
                     ~Notification.is_read
                 )
             )
+            .values(
+                is_read=True,
+                read_at=now
+            )
         )
-        notifications = result.scalars().all()
-
-        # Marcar todas como leídas
-        count = 0
-        for notification in notifications:
-            notification.is_read = True
-            notification.read_at = datetime.utcnow()
-            count += 1
 
         await db.commit()
 
         return {
-            "marked_as_read": count,
-            "timestamp": datetime.utcnow().isoformat()
+            "marked_as_read": result.rowcount or 0,
+            "timestamp": now.isoformat()
         }
 
     except Exception as e:
@@ -235,7 +209,6 @@ async def mark_all_notifications_as_read(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Error al marcar todas las notificaciones: {str(e)}"
         )
-
 
 @router.delete(
     "/read",

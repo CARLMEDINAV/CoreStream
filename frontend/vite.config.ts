@@ -8,7 +8,7 @@
  * - Proxy de WebSocket para comunicación en tiempo real
  * 
  * VARIABLES DE ENTORNO:
- * - VITE_API_TARGET: URL del backend (ej: http://backend:8000 en Docker, http://localhost:8000 en local)
+ * - VITE_API_TARGET: URL del backend (ej: http://backend:8000 en Docker, http://backend:8000 en local)
  */
 
 import { defineConfig } from 'vite'
@@ -74,7 +74,7 @@ export default defineConfig({
     // Proxy de API y WebSockets hacia el backend FastAPI
     proxy: {
       '/api': {
-        target: process.env.VITE_API_TARGET ?? 'http://localhost:8000',
+        target: process.env.VITE_API_TARGET ?? 'http://backend:8000',
         changeOrigin: true,
         ws: true,
         rewrite: (path) => path
