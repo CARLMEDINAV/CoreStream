@@ -1,12 +1,22 @@
-import { describe, it, expect, vi } from 'vitest'
-import { useDragDrop } from '@/composables/useDragDrop'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { nextTick } from 'vue'
+import { useDragDrop } from '../../../src/composables/useDragDrop'
 
 describe('useDragDrop Composable', () => {
-  it('debe establecer el estado correctamente al iniciar el arrastre', () => {
+  beforeEach(() => {
+    // Limpiar estado global del singleton antes de cada test
+    const { dragEnd } = useDragDrop()
+    dragEnd()
+  })
+
+  it('debe establecer el estado correctamente al iniciar el arrastre', async () => {
     const { dragStart, dragItem, dragType, isDragging } = useDragDrop()
     const mockEpic = { id: 'epic-123', title: 'Test Epic' }
     
     dragStart(mockEpic, 'epic')
+    // requestAnimationFrame doble: esperar ticks
+    await new Promise(r => setTimeout(r, 0))
+    await nextTick()
     
     expect(isDragging.value).toBe(true)
     expect(dragItem.value?.id).toBe('epic-123')
