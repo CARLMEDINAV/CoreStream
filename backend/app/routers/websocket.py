@@ -2,8 +2,7 @@
 Router de WebSocket para Notificaciones en Tiempo Real.
 
 Endpoints disponibles:
-- /api/ws/notifications?ticket=TICKET (Requerimiento WEB-20: Seguro, sin user_id en la URL)
-- /api/ws/{user_id}?ticket=TICKET (Deprecado: Mantenido por retrocompatibilidad)
+- /api/ws/mobile/notifications?ticket=TICKET (WEB-20: Seguro, autenticado por JWT vía ticket de un solo uso)
 
 DISEÑO DE LA ESPERA:
 Por cada conexión se lanzan dos tareas de larga vida que compiten en
@@ -195,23 +194,25 @@ async def _handle_connection(websocket: WebSocket, user_id: str) -> None:
         logger.info("Usuario %s desconectado de notificaciones", user_id)
 
 
-@router.websocket("/ws/notifications")
+@router.websocket("/ws/mobile/notifications")
 async def websocket_notifications_secure(
     websocket: WebSocket, ticket: Optional[str] = Query(None)
 ) -> None:
     """
     Endpoint WebSocket seguro (Requerimiento WEB-20).
-    Resuelve la identidad del usuario desde el ticket en Redis sin exponer user_id en la URL.
+    Autenticación mediante JWT → ticket de un solo uso.
+    El ticket se crea con POST /api/auth/ws-ticket con Bearer JWT.
+    No se expone user_id en la URL.
     """
     if not ticket:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Ticket no proporcionado")
-        logger.warning("Intento de conexión sin ticket en endpoint seguro")
+        logger.warning("Intento de conexión sin ticket en endpoint seguro /ws/mobile/notifications")
         return
 
     ticket_user_id = await consume_ws_ticket(ticket)
     if ticket_user_id is None:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Ticket inválido o expirado")
-        logger.warning("Ticket inválido o ya usado en endpoint seguro")
+        logger.warning("Ticket inválido o ya usado en endpoint seguro /ws/mobile/notifications")
         return
 
     async with get_session_maker()() as db:
@@ -223,35 +224,3 @@ async def websocket_notifications_secure(
 
     await _handle_connection(websocket, ticket_user_id)
 
-
-@router.websocket("/ws/{user_id}")
-async def websocket_notifications(
-    websocket: WebSocket, user_id: str, ticket: Optional[str] = Query(None)
-) -> None:
-    """
-    [DEPRECADO] Usar /api/ws/notifications. Mantenido por retrocompatibilidad.
-    """
-    if not ticket:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Ticket no proporcionado")
-        logger.warning("Intento de conexión sin ticket para usuario %s", user_id)
-        return
-
-    ticket_user_id = await consume_ws_ticket(ticket)
-    if ticket_user_id is None:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Ticket inválido o expirado")
-        logger.warning("Ticket inválido o ya usado en conexión WebSocket para usuario %s", user_id)
-        return
-
-    if ticket_user_id != user_id:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Ticket user mismatch")
-        logger.warning("Ticket user mismatch: ticket=%s, solicitado=%s", ticket_user_id, user_id)
-        return
-
-    async with get_session_maker()() as db:
-        result = await db.execute(select(User).where(User.id == user_id))
-        if result.scalar_one_or_none() is None:
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Usuario no encontrado")
-            logger.warning("Intento de conexión con usuario inexistente: %s", user_id)
-            return
-
-    await _handle_connection(websocket, user_id)
