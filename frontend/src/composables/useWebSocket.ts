@@ -240,17 +240,15 @@ async function connect(userId: string): Promise<void> {
   try {
     const ticket = await api.auth.getWsTicket()
 
-    // Mismo origen que la página, no una URL de backend aparte: /api ya se
-    // llama por ruta relativa (ver services/api.ts) porque nginx en
-    // producción enruta /api al backend dentro del MISMO dominio — no hay
-    // subdominio de API separado. VITE_BACKEND_URL nunca se pasaba como
-    // build-arg del Docker de producción, así que esto siempre caía al
-    // default "localhost:8000" ahí — jamás conectaba fuera de un dev local
-    // sin Docker. En dev con Docker, el proxy de Vite ya reenvía /api
-    // (incluido el upgrade de WebSocket, ver vite.config.ts) desde el mismo
-    // origen, así que esto funciona igual en ambos casos.
+    // Resolver host para WebSocket según VITE_API_BASE_URL.
+    // En dev el proxy de Vite reenvía /api desde el mismo origen.
+    // En prod puede haber subdominio de API; usamos VITE_API_BASE_URL si es absoluta.
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//${window.location.host}/api/ws/mobile/notifications?ticket=${encodeURIComponent(ticket)}`
+    const rawBase = import.meta.env.VITE_API_BASE_URL ?? '/api'
+    const host = rawBase.startsWith('/')
+      ? window.location.host
+      : (() => { try { return new URL(rawBase).host } catch { return window.location.host } })()
+    const wsUrl = `${protocol}//${host}/api/ws/mobile/notifications?ticket=${encodeURIComponent(ticket)}`
 
     socket.value = new WebSocket(wsUrl)
 

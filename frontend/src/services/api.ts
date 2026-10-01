@@ -1039,6 +1039,14 @@ const realApi = {
       return response.data
     },
 
+    markReadBatch: async (notificationIds: string[]): Promise<ApiResponse<Notification[]>> => {
+      const response = await apiClient.post<ApiResponse<Notification[]>>(
+        '/notifications/mark-read',
+        { notification_ids: notificationIds }
+      )
+      return response.data
+    },
+
     markAllRead: async (): Promise<ApiResponse<{ markedCount: number }>> => {
       const response = await apiClient.post<ApiResponse<{ markedCount: number }>>(
         '/notifications/mark-all-read'

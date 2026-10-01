@@ -225,11 +225,18 @@ export const useNotificationsStore = defineStore('notifications', () => {
     error.value = null
 
     try {
-      await Promise.all(ids.map(id => api.notifications.markRead(id)))
+      const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v)
+      const allIds = Array.from(new Set(ids.filter(Boolean)))
+      const uuidIds = allIds.filter(isUuid)
 
-      // Actualizar estado local
+      // Si hay IDs UUID válidos, enviar al backend
+      if (uuidIds.length) {
+        await api.notifications.markReadBatch(uuidIds)
+      }
+
+      // Actualizar estado local para todos los IDs recibidos, incluso los no-UUID
       notifications.value = notifications.value.map(notif => {
-        if (ids.includes(notif.id)) {
+        if (allIds.includes(notif.id)) {
           return { ...notif, isRead: true }
         }
         return notif
@@ -285,6 +292,14 @@ export const useNotificationsStore = defineStore('notifications', () => {
    * @param notification - Notificación a agregar
    */
   const addNotification = (notification: Notification): void => {
+    // Evitar insertar notificaciones con IDs no-UUID que luego rompen markAsRead
+    const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v)
+    if (!isUuid(notification.id)) {
+      // Genera un ID temporal UUID-like para mantener estabilidad local sin enviarlo al backend
+      try {
+        crypto.randomUUID && (notification.id = crypto.randomUUID())
+      } catch {}
+    }
     notifications.value.unshift(notification)
     
     // Si la notificación no es leída, incrementar contador

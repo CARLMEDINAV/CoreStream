@@ -3,8 +3,8 @@ import { setActivePinia, createPinia } from 'pinia'
 
 // ── Mocks antes de cualquier import del store ──────────────────────────────
 
-vi.mock('@/services/api', () => ({
-  api: {
+vi.mock('@/services/api', () => {
+  const apiObj = {
     auth: {
       login: vi.fn(),
       logout: vi.fn(),
@@ -19,10 +19,14 @@ vi.mock('@/services/api', () => ({
       requestPasswordReset: vi.fn(),
       confirmPasswordReset: vi.fn(),
     },
-  },
-  setAuthTokens: vi.fn(),
-  clearAuthTokens: vi.fn(),
-}))
+  }
+  return {
+    default: apiObj,
+    api: apiObj,
+    setAuthTokens: vi.fn(),
+    clearAuthTokens: vi.fn(),
+  }
+})
 
 vi.mock('@/stores/theme', () => ({
   useThemeStore: () => ({ applyTheme: vi.fn() }),
@@ -71,9 +75,9 @@ describe('useAuthStore', () => {
       expect(store.user).toBeNull()
     })
 
-    it('inicia sin tokens', () => {
+    it('inicia sin accessToken', () => {
       const store = useAuthStore()
-      expect(store.tokens).toBeNull()
+      expect(store.accessToken).toBeNull()
     })
 
     it('inicia sin autenticar', () => {
@@ -182,11 +186,11 @@ describe('useAuthStore', () => {
       expect(store.user).toBeNull()
     })
 
-    it('limpia los tokens', () => {
+    it('limpia el accessToken', () => {
       const store = useAuthStore()
-      store.tokens = makeTokens()
+      store.accessToken = 'token'
       store.clearSession()
-      expect(store.tokens).toBeNull()
+      expect(store.accessToken).toBeNull()
     })
 
     it('pone isAuthenticated en false', () => {
@@ -209,11 +213,12 @@ describe('useAuthStore', () => {
       expect(clearAuthTokens).toHaveBeenCalled()
     })
 
-    it('elimina authTokens del localStorage', () => {
+    it('no persiste tokens en localStorage', () => {
       localStorage.setItem('authTokens', JSON.stringify(makeTokens()))
       const store = useAuthStore()
       store.clearSession()
-      expect(localStorage.getItem('authTokens')).toBeNull()
+      // Los tokens ahora viven en memoria, no en localStorage
+      expect(localStorage.getItem('authTokens')).not.toBeNull()
     })
   })
 
@@ -233,14 +238,14 @@ describe('useAuthStore', () => {
       expect(store.isAuthenticated).toBe(true)
     })
 
-    it('guarda los tokens tras login exitoso', async () => {
+    it('guarda el accessToken tras login exitoso', async () => {
       const tokens = makeTokens()
       vi.mocked(api.auth.login).mockResolvedValue({ tokens, user: makeUser() } as any)
       vi.mocked(api.auth.getMe).mockResolvedValue(makeUser())
 
       const store = useAuthStore()
       await store.login('dev@corestream.com', 'Test1234!')
-      expect(store.tokens).toEqual(tokens)
+      expect(store.accessToken).toBe(tokens.accessToken)
     })
 
     it('llama a setAuthTokens con los tokens recibidos', async () => {
@@ -281,14 +286,14 @@ describe('useAuthStore', () => {
       expect(store.isLoading).toBe(false)
     })
 
-    it('persiste accessToken en localStorage', async () => {
+    it('no persiste accessToken en localStorage', async () => {
       const tokens = makeTokens()
       vi.mocked(api.auth.login).mockResolvedValue({ tokens, user: makeUser() } as any)
       vi.mocked(api.auth.getMe).mockResolvedValue(makeUser())
 
       const store = useAuthStore()
       await store.login('dev@corestream.com', 'Test1234!')
-      expect(localStorage.getItem('accessToken')).toBe(tokens.accessToken)
+      expect(localStorage.getItem('accessToken')).toBeNull()
     })
   })
 
@@ -319,23 +324,23 @@ describe('useAuthStore', () => {
   })
 
   // ── refreshToken ────────────────────────────────────────────────────────
-
   describe('refreshToken', () => {
-    it('lanza error si no hay refresh token', async () => {
+    it('lanza error si no hay sesión', async () => {
       const store = useAuthStore()
-      store.tokens = null
-      await expect(store.refreshToken()).rejects.toThrow('No hay refresh token disponible')
+      // sin accessToken, refresh limpia sesión y lanza
+      await expect(store.refreshToken()).rejects.toThrow()
     })
 
-    it('actualiza tokens tras refresh exitoso', async () => {
+    it('actualiza accessToken tras refresh exitoso', async () => {
       const newTokens = makeTokens()
       newTokens.accessToken = 'new.header.payload'
       vi.mocked(api.auth.refresh).mockResolvedValue(newTokens as any)
 
       const store = useAuthStore()
-      store.tokens = makeTokens()
+      store.accessToken = 'old.token'
       await store.refreshToken()
-      expect(store.tokens?.accessToken).toBe('new.header.payload')
+      expect(store.accessToken).toBe('new.header.payload')
     })
+  })
   })
 })
