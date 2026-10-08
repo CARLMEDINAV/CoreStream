@@ -591,8 +591,8 @@ async def change_user_role(
             detail=f"Usuario con ID {user_id} no encontrado"
         )
 
-    # Derivado de UserRole, no enumerado a mano: la lista literal que había
-    # aquí se quedó sin AUDITOR al añadirlo.
+    # Derivado de UserRole, no enumerado a mano: una lista literal se
+    # desincroniza del enum sin que nada lo detecte.
     valid_roles = {r.value for r in UserRole}
     if role_data.role not in valid_roles:
         raise HTTPException(

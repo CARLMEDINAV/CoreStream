@@ -31,10 +31,14 @@ from app.services.audit_export import get_format
 
 router = APIRouter(prefix="/api/audit-logs", tags=["Auditoría"])
 
-# Los dos roles que TRV-07 nombra como consultores: "ADMIN / Auditor".
-# TEAM_LEADER queda fuera a propósito — gestiona el trabajo de su equipo, no
+# "ADMIN / Auditor (consulta)" se interpreta como un único rol del sistema: el
+# resto del documento de requerimientos enumera siempre tres roles
+# (ADMIN, TEAM_LEADER, DEVELOPER) y "Auditor" aparece solo aquí, así que se lee
+# como la función de auditar y no como un rol aparte.
+#
+# TEAM_LEADER queda fuera a propósito: gestiona el trabajo de su equipo, no
 # audita a sus miembros.
-AUDIT_READERS = [UserRole.ADMIN.value, UserRole.AUDITOR.value]
+AUDIT_READERS = [UserRole.ADMIN.value]
 
 # FastAPI necesita el tipo del parámetro estático, así que la lista de formatos
 # se repite aquí como Literal. test_audit.py comprueba que coincide con las

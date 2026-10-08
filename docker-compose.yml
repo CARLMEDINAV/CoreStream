@@ -55,8 +55,14 @@ services:
       # Destinos del registro de auditoría (TRV-07). "database" es obligatorio;
       # añadir "elastic" deriva además a Elasticsearch. Ver docs/RBAC.md.
       AUDIT_SINKS: ${AUDIT_SINKS:-database,logstream}
+      AUDIT_READS: ${AUDIT_READS:-true}
+      AUDIT_RETENTION_DAYS_BASICO: ${AUDIT_RETENTION_DAYS_BASICO:-}
+      AUDIT_RETENTION_DAYS_PRO: ${AUDIT_RETENTION_DAYS_PRO:-}
+      AUDIT_RETENTION_DAYS_ENTERPRISE: ${AUDIT_RETENTION_DAYS_ENTERPRISE:-}
       ELASTIC_URL: ${ELASTIC_URL:-}
       ELASTIC_API_KEY: ${ELASTIC_API_KEY:-}
+      ELASTIC_USERNAME: ${ELASTIC_USERNAME:-}
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
       ELASTIC_INDEX: ${ELASTIC_INDEX:-corestream-audit}
     ports:
       # 0.0.0.0, igual que el resto de proyectos en esta VM (no hay Nginx
@@ -161,8 +167,14 @@ services:
       # aquí faltaran, el único evento que borra auditoría no se derivaría al
       # motor. No lleva FORWARDED_ALLOW_IPS a propósito — no sirve HTTP.
       AUDIT_SINKS: ${AUDIT_SINKS:-database,logstream}
+      AUDIT_READS: ${AUDIT_READS:-true}
+      AUDIT_RETENTION_DAYS_BASICO: ${AUDIT_RETENTION_DAYS_BASICO:-}
+      AUDIT_RETENTION_DAYS_PRO: ${AUDIT_RETENTION_DAYS_PRO:-}
+      AUDIT_RETENTION_DAYS_ENTERPRISE: ${AUDIT_RETENTION_DAYS_ENTERPRISE:-}
       ELASTIC_URL: ${ELASTIC_URL:-}
       ELASTIC_API_KEY: ${ELASTIC_API_KEY:-}
+      ELASTIC_USERNAME: ${ELASTIC_USERNAME:-}
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
       ELASTIC_INDEX: ${ELASTIC_INDEX:-corestream-audit}
     command: python -m arq app.worker.settings.WorkerSettings
     restart: unless-stopped

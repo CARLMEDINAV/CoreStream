@@ -22,25 +22,16 @@ Definidos en `app/models/role.py` (`UserRole`) y reflejados en la tabla
   roles ni resetear contraseñas — eso queda exclusivo de ADMIN.
 - **DEVELOPER** — ejecuta el trabajo: solo puede actuar sobre tickets/
   subtareas/documentos que le pertenecen (asignado o autor de la carga).
-- **AUDITOR** — solo lectura del registro de auditoría (TRV-07/TRV-08
-  nombran «ADMIN / Auditor» y «equipo de cumplimiento/Auditor» entre los
-  roles involucrados). Existe para no tener que conceder ADMIN a quien solo
-  debe leer: un ADMIN puede invitar usuarios, cambiar roles y resetear
-  contraseñas, así que usarlo como acceso de lectura daría al auditor poder
-  sobre el sistema que audita. No aparece en ningún otro `require_role`, así
-  que todo lo demás le queda denegado por omisión, y tampoco puede recibir
-  tickets asignados (`assert_assignable_user` lo rechaza).
-
-Las listas de roles válidos derivan de `UserRole` en los tres sitios que las
-usan (invitaciones, cambio de rol y el sembrado de los tests). Estaban
-escritas a mano y se quedaron sin AUDITOR al añadirlo — una lista
-desincronizada rechaza un rol válido sin que nada lo detecte.
+Las listas de roles válidos derivan de `UserRole` en los sitios que las usan
+(invitaciones, cambio de rol, el sembrado de los tests y el enum histórico de
+`rbac.py`). Estaban escritas a mano, y una lista desincronizada rechaza un rol
+válido sin que nada lo detecte.
 
 `middleware/rbac.py` (`RBACRole`) sirve al decorador histórico
 `require_permissions` (hoy sin llamadas activas) y es **un alias de
 `UserRole`**, no un enum paralelo: cuando re-declaraba los roles a mano se
-desincronizó dos veces (primero `GROUP_LEADER` en vez de `TEAM_LEADER`, luego
-al añadir `AUDITOR`). El mecanismo realmente en uso en los routers es
+desincronizó (definía `GROUP_LEADER` mientras la base usaba `TEAM_LEADER`, así
+que el decorador denegaba a todos en silencio). El mecanismo realmente en uso en los routers es
 `require_role(...)` de `middleware/auth.py`, que compara contra este mismo
 conjunto de roles.
 `_normalize_role` en ambos módulos lanza `ValueError`/`RuntimeError` ante un
@@ -175,14 +166,17 @@ distinción de rol.
 
 ### Registro de auditoría (`/api/audit-logs`)
 
-| Acción | ADMIN | AUDITOR | TEAM_LEADER | DEVELOPER |
-|---|---|---|---|---|
-| Consultar (`GET /`) | ✅ | ✅ | ❌ | ❌ |
-| Exportar (`GET /export`) | ✅ con plan Enterprise | ✅ con plan Enterprise | ❌ | ❌ |
+| Acción | ADMIN | TEAM_LEADER | DEVELOPER |
+|---|---|---|---|
+| Consultar (`GET /`) | ✅ | ❌ | ❌ |
+| Exportar (`GET /export`) | ✅ con plan Enterprise | ❌ | ❌ |
 
 El registro contiene la actividad de todos los usuarios del cliente, así que su
-consulta queda en ADMIN y AUDITOR: un TEAM_LEADER gestiona el trabajo de su
-equipo, no audita a sus miembros. Ambos endpoints están además acotados al
+consulta queda en ADMIN: un TEAM_LEADER gestiona el trabajo de su equipo, no
+audita a sus miembros. TRV-07 y TRV-08 nombran «ADMIN / Auditor» y «equipo de
+cumplimiento/Auditor» entre los roles involucrados; se interpreta como la
+función de auditar y no como un rol aparte, porque el resto del documento de
+requerimientos enumera siempre los mismos tres roles del sistema. Ambos endpoints están además acotados al
 `client_id` del usuario y a la profundidad que concede su plan — ver la sección
 de auditoría más abajo.
 

@@ -43,6 +43,11 @@ La retención del registro de auditoría también depende del plan:
 | Enterprise | 730 días                  |
 
 Un plan desconocido o ausente recibe la retención más corta, no la más larga.
+Los días se declaran en el entorno (`AUDIT_RETENTION_DAYS_BASICO` y sus
+hermanas): cuánto se conserva la auditoría de un cliente es parte de lo que se
+le vende y puede estar condicionado por obligaciones legales, así que lo fija
+quien define los planes y se cambia sin desplegar. Un valor no numérico o menor
+que 1 impide arrancar.
 Ver [TRV-08 en RBAC.md](./RBAC.md#auditoría-de-logs-trv-07--trv-08).
 
 La autenticación, la aceptación pública de invitaciones y el transporte WebSocket

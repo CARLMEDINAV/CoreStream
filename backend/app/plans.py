@@ -14,6 +14,7 @@ la otra.
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Sequence
 from uuid import UUID
@@ -38,10 +39,39 @@ PLAN_FEATURES: dict[str, frozenset[str]] = {
 ALL_FEATURES = CORE_FEATURES | PREMIUM_FEATURES | ENTERPRISE_FEATURES
 
 # Retención del registro de auditoría en días, por plan (TRV-08).
+#
+# Los valores llegan del entorno, no están fijados aquí. Cuánto tiempo se
+# conserva la auditoría de un cliente no es una decisión técnica: es parte de
+# lo que se le vende, y puede estar condicionada por obligaciones legales de
+# conservación. Con variables de entorno la fija quien define los planes y se
+# cambia sin desplegar — que además es lo que hace "configurable por tier
+# comercial" inobjetable frente al criterio de TRV-08.
+#
+# Los números de abajo son el valor por defecto si no se declara nada, no una
+# decisión tomada: ver .env.example.
+_FALLBACK_RETENTION = {"Basico": 30, "Pro": 180, "Enterprise": 730}
+
+
+def _dias_desde_entorno(plan: str) -> int:
+    crudo = os.environ.get(f"AUDIT_RETENTION_DAYS_{plan.upper()}", "").strip()
+    if not crudo:
+        return _FALLBACK_RETENTION[plan]
+    try:
+        dias = int(crudo)
+    except ValueError:
+        raise ValueError(
+            f"AUDIT_RETENTION_DAYS_{plan.upper()} debe ser un número de días, "
+            f"no {crudo!r}"
+        ) from None
+    if dias < 1:
+        raise ValueError(
+            f"AUDIT_RETENTION_DAYS_{plan.upper()} debe ser al menos 1 día, no {dias}"
+        )
+    return dias
+
+
 AUDIT_RETENTION_DAYS: dict[str, int] = {
-    "Basico": 30,
-    "Pro": 180,
-    "Enterprise": 730,
+    plan: _dias_desde_entorno(plan) for plan in _FALLBACK_RETENTION
 }
 
 # Ante un plan desconocido o ausente se conserva lo mínimo, no lo máximo: un

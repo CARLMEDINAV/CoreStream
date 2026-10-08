@@ -313,6 +313,46 @@ def test_el_formatter_adjunta_el_actor_a_cualquier_linea():
 # Retención por plan (TRV-08)
 # ---------------------------------------------------------------------------
 
+def test_la_retencion_se_puede_fijar_desde_el_entorno(monkeypatch):
+    """
+    Cuánto se conserva la auditoría de un cliente no es una decisión técnica:
+    es parte de lo que se le vende y puede estar condicionada por obligaciones
+    legales. Que venga del entorno la pone en manos de quien define los planes
+    y la hace cambiable sin desplegar — que es además lo que vuelve
+    inobjetable el «configurable por tier comercial» del criterio.
+    """
+    import importlib
+
+    monkeypatch.setenv("AUDIT_RETENTION_DAYS_BASICO", "15")
+    monkeypatch.setenv("AUDIT_RETENTION_DAYS_ENTERPRISE", "1095")
+
+    import app.plans as plans
+    recargado = importlib.reload(plans)
+    try:
+        assert recargado.AUDIT_RETENTION_DAYS["Basico"] == 15
+        assert recargado.AUDIT_RETENTION_DAYS["Enterprise"] == 1095
+        assert recargado.AUDIT_RETENTION_DAYS["Pro"] == 180, "sin declarar, el valor base"
+        assert recargado.DEFAULT_RETENTION_DAYS == 15
+    finally:
+        monkeypatch.undo()
+        importlib.reload(plans)
+
+
+@pytest.mark.parametrize("valor,motivo", [("abc", "número"), ("0", "al menos 1"), ("-5", "al menos 1")])
+def test_una_retencion_invalida_falla_al_arrancar(monkeypatch, valor, motivo):
+    """Un valor mal escrito no puede degradar en silencio a la retención base."""
+    import importlib
+
+    monkeypatch.setenv("AUDIT_RETENTION_DAYS_PRO", valor)
+    import app.plans as plans
+    try:
+        with pytest.raises(ValueError, match=motivo):
+            importlib.reload(plans)
+    finally:
+        monkeypatch.undo()
+        importlib.reload(plans)
+
+
 def test_todo_plan_tiene_retencion_declarada():
     assert set(AUDIT_RETENTION_DAYS) == set(PLAN_FEATURES)
 
@@ -570,53 +610,12 @@ def test_el_corte_de_retencion_es_el_mismo_calculo_en_un_solo_sitio():
     )
 
 
-# ---------------------------------------------------------------------------
-# Rol Auditor (TRV-07/TRV-08, "Roles involucrados")
-# ---------------------------------------------------------------------------
-
-def test_el_rol_auditor_existe():
-    """
-    Los dos requerimientos nombran un "Auditor" entre los roles involucrados.
-    Sin él, dar acceso al registro obligaba a conceder ADMIN — y un ADMIN
-    puede invitar usuarios, cambiar roles y resetear contraseñas.
-    """
-    from app.models.role import UserRole
-
-    assert UserRole.AUDITOR.value == "AUDITOR"
-
-
-def test_auditor_puede_leer_la_auditoria():
-    from app.routers.audit_logs import AUDIT_READERS
-
-    assert set(AUDIT_READERS) == {"ADMIN", "AUDITOR"}
-
-
-def test_team_leader_no_lee_la_auditoria():
-    """Gestiona el trabajo de su equipo, no audita a sus miembros."""
-    from app.routers.audit_logs import AUDIT_READERS
-
-    assert "TEAM_LEADER" not in AUDIT_READERS
-
-
-def test_auditor_no_es_un_rol_de_gestion():
-    """
-    No debe heredar nada de ADMIN/TEAM_LEADER: no gestiona tickets, ni épicas,
-    ni aplicaciones. Todo lo demás le queda denegado por omisión porque no
-    aparece en ningún otro require_role.
-    """
-    from types import SimpleNamespace
-
-    from app.services.ticket_permissions import is_admin_or_leader
-
-    auditor = SimpleNamespace(role=SimpleNamespace(name="AUDITOR"))
-    assert is_admin_or_leader(auditor) is False
-
-
 def test_las_listas_de_roles_validos_derivan_del_enum():
     """
-    Había dos listas literales de roles (invitaciones y cambio de rol) que se
-    quedaron sin AUDITOR al añadirlo. Una lista desincronizada rechaza un rol
-    válido sin que nada lo detecte.
+    Había listas literales de roles (invitaciones, cambio de rol, sembrado de
+    los tests y el enum histórico de rbac.py) escritas a mano. Una lista
+    desincronizada rechaza un rol válido sin que nada lo detecte: ya pasó una
+    vez con GROUP_LEADER frente a TEAM_LEADER.
     """
     from app.models.role import UserRole
     from app.schemas.user import InvitationCreate

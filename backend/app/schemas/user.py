@@ -212,9 +212,9 @@ class InvitationCreate(BaseModel):
     @field_validator("role")
     @classmethod
     def validate_role(cls, v: str) -> str:
-        # Derivado de UserRole, no escrito a mano: la lista literal que había
-        # aquí se quedó sin AUDITOR al añadirlo, y una lista desincronizada
-        # rechaza un rol válido sin que nada lo detecte.
+        # Derivado de UserRole, no escrito a mano: una lista literal se
+        # desincroniza del enum y acaba rechazando un rol válido sin que
+        # nada lo detecte.
         valid = {r.value for r in UserRole}
         if v not in valid:
             raise ValueError(f"Rol inválido. Roles válidos: {', '.join(sorted(valid))}")

@@ -236,8 +236,8 @@ def _seed_roles_and_users(cur) -> None:
 
     # Derivado de UserRole: _clean_database trunca la tabla roles antes de cada
     # test, así que lo que no se siembre aquí desaparece aunque una migración
-    # lo haya creado. Con la lista escrita a mano, añadir un rol nuevo lo
-    # borraba en silencio y los tests fallaban con "el rol no existe".
+    # lo haya creado. Con la lista escrita a mano, un rol nuevo se borraría en
+    # silencio y los tests fallarían con "el rol no existe".
     role_ids = {}
     for name, desc in [(r.value, r.value.title()) for r in UserRole]:
         rid = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"corestream-test-role:{name}"))

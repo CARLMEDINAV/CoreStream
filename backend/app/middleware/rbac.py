@@ -21,8 +21,7 @@ FuncT = TypeVar("FuncT", bound=Callable[..., Any])
 # duplicación ya costó un bug: definía GROUP_LEADER mientras la base usaba
 # TEAM_LEADER, así que el decorador denegaba a todos en silencio porque ningún
 # usuario tenía jamás ese rol. Había un test de integración vigilando que las
-# dos listas coincidieran; al añadir AUDITOR volvió a desincronizarse y el test
-# lo detectó. Con el alias, desincronizarse es imposible.
+# dos listas coincidieran. Con el alias, desincronizarse es imposible.
 RBACRole = UserRole
 
 _ALLOWED_ROLES = {role.value for role in RBACRole}
