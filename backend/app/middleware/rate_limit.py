@@ -44,10 +44,11 @@ async def _hit(key: str, *, max_attempts: int, window_seconds: int) -> None:
 
 
 def _client_ip(request: Request) -> str:
-    # Sin proxy delante todavía (fase 6): request.client.host es la IP real.
-    # Cuando haya Nginx, esto deberá leer X-Forwarded-For — lo señala el plan
-    # en la entrega a sistemas (fase 10): uvicorn necesita --forwarded-allow-ips
-    # para que X-Forwarded-For sea de fiar y no lo pueda falsear el cliente.
+    # uvicorn ya resuelve X-Forwarded-For por su cuenta (--forwarded-allow-ips
+    # en backend/Dockerfile), así que request.client.host es la IP del cliente
+    # y no hay que leer la cabecera a mano. Es de fiar solo si esa variable
+    # apunta al proxy concreto: con "*" el cliente puede elegir qué IP se
+    # cuenta aquí y el límite por IP deja de frenar nada.
     return request.client.host if request.client else "desconocido"
 
 

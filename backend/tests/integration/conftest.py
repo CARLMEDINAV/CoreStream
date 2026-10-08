@@ -190,16 +190,26 @@ async def _clean_database(client):
     """
     from app.models import Base
 
-    tables = [t.name for t in Base.metadata.sorted_tables if t.name != "alembic_version"]
+    # Cualificado por esquema: audit.audit_logs no está en public (TRV-07), y un
+    # TRUNCATE sin cualificar no la encontraría.
+    def _qualified(table) -> str:
+        if table.schema:
+            return f'"{table.schema}"."{table.name}"'
+        return f'"{table.name}"'
+
+    tables = [
+        _qualified(t) for t in Base.metadata.sorted_tables
+        if t.name != "alembic_version"
+    ]
 
     conn = psycopg2.connect(_sync_url(TEST_DATABASE_URL))
     conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
     try:
         cur = conn.cursor()
+        # El trigger guard_delete solo mira DELETE, no TRUNCATE, así que limpiar
+        # entre tests no necesita autorización — pero sí la necesita la purga.
         cur.execute(
-            "TRUNCATE TABLE {} RESTART IDENTITY CASCADE".format(
-                ", ".join(f'"{t}"' for t in tables)
-            )
+            "TRUNCATE TABLE {} RESTART IDENTITY CASCADE".format(", ".join(tables))
         )
         _seed_roles_and_users(cur)
     finally:
@@ -221,14 +231,15 @@ def _seed_roles_and_users(cur) -> None:
     """
     import uuid
 
+    from app.models.role import UserRole
     from app.services.auth_service import AuthService
 
+    # Derivado de UserRole: _clean_database trunca la tabla roles antes de cada
+    # test, así que lo que no se siembre aquí desaparece aunque una migración
+    # lo haya creado. Con la lista escrita a mano, añadir un rol nuevo lo
+    # borraba en silencio y los tests fallaban con "el rol no existe".
     role_ids = {}
-    for name, desc in [
-        ("DEVELOPER", "Desarrollador"),
-        ("TEAM_LEADER", "Líder de equipo"),
-        ("ADMIN", "Administrador"),
-    ]:
+    for name, desc in [(r.value, r.value.title()) for r in UserRole]:
         rid = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"corestream-test-role:{name}"))
         cur.execute(
             "INSERT INTO roles (id, name, description) VALUES (%s, %s, %s)",

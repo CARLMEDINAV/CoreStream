@@ -1,4 +1,5 @@
 from .application import Application
+from .audit_log import AuditLog, AuditOutcome
 from .base import Base, BaseEntity
 from .client import Client
 from .document import Document, DocumentType
@@ -43,4 +44,6 @@ __all__ = [
     "MeetingType",
     "MeetingAttendance",
     "AttendanceStatus",
+    "AuditLog",
+    "AuditOutcome",
 ]

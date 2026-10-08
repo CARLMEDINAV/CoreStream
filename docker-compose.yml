@@ -52,6 +52,12 @@ services:
       AZURE_TRANSLATOR_REGION: ${AZURE_TRANSLATOR_REGION:-eastus}
       UVICORN_WORKERS: ${UVICORN_WORKERS:-4}
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-*}
+      # Destinos del registro de auditoría (TRV-07). "database" es obligatorio;
+      # añadir "elastic" deriva además a Elasticsearch. Ver docs/RBAC.md.
+      AUDIT_SINKS: ${AUDIT_SINKS:-database,logstream}
+      ELASTIC_URL: ${ELASTIC_URL:-}
+      ELASTIC_API_KEY: ${ELASTIC_API_KEY:-}
+      ELASTIC_INDEX: ${ELASTIC_INDEX:-corestream-audit}
     ports:
       # 0.0.0.0, igual que el resto de proyectos en esta VM (no hay Nginx
       # local — el enrutamiento público es externo a esta máquina). Puerto
@@ -65,6 +71,31 @@ services:
         limits:
           cpus: "2.0"
           memory: 1g
+    # Destino de la línea JSON que emite LogStreamSink (auditoría, TRV-07).
+    #
+    # Con json-file los logs rotan y se descartan a los ~30 MB: el registro
+    # duradero es la tabla audit.audit_logs, y esto es solo diagnóstico.
+    #
+    # Para derivar a CloudWatch —uno de los dos motores que nombra TRV-07— no
+    # hace falta código ni contenedores: el driver awslogs viene integrado en
+    # Docker. Sustituir el bloque de abajo por este y dejar AUDIT_SINKS en
+    # "database,logstream":
+    #
+    #   logging:
+    #     driver: awslogs
+    #     options:
+    #       awslogs-region: ${AWS_REGION}
+    #       awslogs-group: /corestream/backend
+    #       awslogs-create-group: "true"
+    #       tag: "{{.Name}}"
+    #
+    # Requiere que la VM esté en AWS (o credenciales alcanzables) y un rol IAM
+    # con logs:CreateLogGroup, logs:CreateLogStream y logs:PutLogEvents. Ojo:
+    # el driver impide arrancar el contenedor si la región o las credenciales
+    # faltan, así que no se activa a ciegas. En GCP el equivalente es gcplogs.
+    #
+    # La otra ruta para ELK sin tocar la aplicación es driver fluentd o gelf
+    # apuntando a un Logstash. Ver docs/RBAC.md.
     logging:
       driver: json-file
       options:
@@ -125,6 +156,14 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-production}
       DEBUG: ${DEBUG:-false}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # La purga de retención se audita a sí misma, así que el worker también
+      # escribe en el registro y necesita los mismos destinos que la API: si
+      # aquí faltaran, el único evento que borra auditoría no se derivaría al
+      # motor. No lleva FORWARDED_ALLOW_IPS a propósito — no sirve HTTP.
+      AUDIT_SINKS: ${AUDIT_SINKS:-database,logstream}
+      ELASTIC_URL: ${ELASTIC_URL:-}
+      ELASTIC_API_KEY: ${ELASTIC_API_KEY:-}
+      ELASTIC_INDEX: ${ELASTIC_INDEX:-corestream-audit}
     command: python -m arq app.worker.settings.WorkerSettings
     restart: unless-stopped
     deploy:
@@ -152,6 +191,96 @@ services:
       retries: 3
       start_period: 30s
 
+  # ---------------------------------------------------------------------
+  # Elasticsearch — motor de auditoría (TRV-07, criterio 2). OPCIONAL.
+  #
+  #   docker compose up -d                  → sin Elasticsearch, como siempre
+  #   docker compose --profile elk up -d    → con Elasticsearch
+  #
+  # Para que el backend derive aquí hay que añadir "elastic" a AUDIT_SINKS y
+  # fijar ELASTIC_URL=http://elasticsearch:9200 en el .env. Sin eso este
+  # contenedor no recibe nada, y el registro sigue yendo solo a la tabla.
+  #
+  # El almacén oficial continúa siendo audit.audit_logs: esto es la
+  # derivación. Si se cae o se para, se pierde capacidad de búsqueda, no la
+  # prueba — por eso puede vivir sin réplicas y con un heap modesto.
+  # ---------------------------------------------------------------------
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    container_name: corestream-elasticsearch
+    profiles: ["elk"]
+    environment:
+      # Un solo nodo: no hay clúster al que unirse ni réplicas que repartir.
+      discovery.type: single-node
+      cluster.name: corestream-audit
+
+      # Seguridad ACTIVADA. Aunque el puerto no se publica (ver más abajo) y
+      # solo es alcanzable desde la red interna de este compose, el registro
+      # de auditoría es justo lo que no debe quedar legible para cualquier
+      # contenedor vecino de la VM.
+      xpack.security.enabled: "true"
+      # Default vacío, no ${VAR:?...}: Compose interpola TODO el fichero antes
+      # de filtrar por perfil, así que exigir la variable aquí rompería
+      # `docker compose up -d` sin el perfil elk. Con la contraseña vacía es
+      # este contenedor el que no arranca, y solo si se activa el perfil.
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
+      # TLS deshabilitado a propósito: el tráfico no sale de la red interna
+      # del compose, y habilitarlo obligaría a gestionar certificados
+      # autofirmados en el cliente sin ganar nada frente a ese alcance.
+      xpack.security.http.ssl.enabled: "false"
+      xpack.security.transport.ssl.enabled: "false"
+
+      # Lo que no se usa, apagado: ahorra memoria y superficie.
+      xpack.ml.enabled: "false"
+      xpack.watcher.enabled: "false"
+
+      # Heap fijo (Xms=Xmx, recomendación de Elastic) y modesto: el volumen
+      # de una auditoría que no registra lecturas con éxito es pequeño.
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+      bootstrap.memory_lock: "true"
+    # Sin memlock el heap puede acabar en swap y la latencia se dispara.
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    # SIN ports: no se publica al host. Solo lo alcanzan los contenedores de
+    # este compose por nombre de servicio (http://elasticsearch:9200). Es el
+    # control de seguridad principal: el resto de proyectos de la VM no
+    # pueden llegar aquí.
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          # Medido, no estimado: con heap de 512m el contenedor usa ~1,15 GiB
+          # en total (Lucene, pilas de hilos, metaespacio y buffers directos
+          # viven FUERA del heap). Con un límite de 1g el kernel lo mataba por
+          # OOM. 1,5g deja margen sin pasarse en una VM compartida.
+          memory: 1536m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      # curl -u: con seguridad activada, / responde 401 sin credenciales, así
+      # que un healthcheck sin autenticar marcaría el nodo como enfermo.
+      test:
+        - CMD-SHELL
+        - >-
+          curl -fsS -u "elastic:$${ELASTIC_PASSWORD}"
+          'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s'
+          || exit 1
+      interval: 20s
+      timeout: 10s
+      retries: 6
+      start_period: 60s
+
+
 volumes:
   storage-data:
+    driver: local
+  elasticsearch-data:
     driver: local

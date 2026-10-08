@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.context import set_audit_resource
 from app.database import get_db
 from app.middleware.auth import get_current_user, require_role
 from app.models.incident import Incident
@@ -36,7 +37,8 @@ async def create_incident(
     db.add(incident)
     await db.commit()
     await db.refresh(incident)
-    
+    set_audit_resource("incident", incident.id)
+
     return incident
 
 @router.get("/", response_model=List[IncidentResponse])

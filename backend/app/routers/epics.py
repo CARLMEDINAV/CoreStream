@@ -18,6 +18,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.context import set_audit_resource
 from app.database import get_db
 
 # Aún no creado
@@ -166,6 +167,7 @@ async def create_epic(
             .execution_options(populate_existing=True)
         )
         epic_final = result_final.scalar_one()
+        set_audit_resource("epic", epic_final.id)
 
         return EpicResponse.model_validate(epic_final)
 

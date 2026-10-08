@@ -1,22 +1,49 @@
 # TRV-02: acceso por perfil comercial
 
 Cada cliente tiene un `commercial_plan` en la tabla `clients`. Los nombres son
-`Basico` y `Pro`. La migración asigna `Basico` a los clientes existentes y a los
-nuevos que no indiquen un plan. Los documentos no establecían una matriz de
-planes para CoreStream; esta es la distribución inicial acordada para el cambio.
+`Basico`, `Pro` y `Enterprise`. La migración asigna `Basico` a los clientes
+existentes y a los nuevos que no indiquen un plan. Los documentos no establecían
+una matriz de planes para CoreStream; esta es la distribución inicial acordada
+para el cambio.
 
-| Item                 | Recursos                | Basico | Pro|
-|----------------------|-------------------------|--------|----|
-| projects             | Aplicaciones y épicas   | Sí     | Sí |
-| tickets              | Tickets/redir/subtareas | Sí     | Sí |
-| documents            | Docs y archivos subidos | Sí     | Sí |
-| team                 | Usuarios                | Sí     | Sí |
-| incidents            | Incidencias             | Sí     | Sí |
-| meetings             | Reuniones               | Sí     | Sí |
-| support              | Tickets de soporte      | Sí     | Sí |
-| notifications        | Consulta/gest de notif  | Sí     | Sí |
-| analytics            | Analitica               | No     | Sí |
-| document_translation | Traducción y descarga   | No     | Sí |
+| Item                 | Recursos                | Basico | Pro| Enterprise |
+|----------------------|-------------------------|--------|----|------------|
+| projects             | Aplicaciones y épicas   | Sí     | Sí | Sí         |
+| tickets              | Tickets/redir/subtareas | Sí     | Sí | Sí         |
+| documents            | Docs y archivos subidos | Sí     | Sí | Sí         |
+| team                 | Usuarios                | Sí     | Sí | Sí         |
+| incidents            | Incidencias             | Sí     | Sí | Sí         |
+| meetings             | Reuniones               | Sí     | Sí | Sí         |
+| support              | Tickets de soporte      | Sí     | Sí | Sí         |
+| notifications        | Consulta/gest de notif  | Sí     | Sí | Sí         |
+| audit_log            | Consulta de auditoría   | Sí     | Sí | Sí         |
+| analytics            | Analitica               | No     | Sí | Sí         |
+| document_translation | Traducción y descarga   | No     | Sí | Sí         |
+| audit_export         | Exportación de auditoría| No     | No | Sí         |
+
+Los planes son acumulativos: `Enterprise` incluye todo lo de `Pro`, y `Pro` todo
+lo de `Basico`. `ALL_FEATURES` es la unión de los tres conjuntos y es lo que
+`require_feature` valida y lo que el perfil publica como banderas.
+
+`Enterprise` se añadió con TRV-08 y no necesitó migración: `commercial_plan` es
+un `String(20)` sin restricción `CHECK` ni tipo enumerado, así que basta la clave
+nueva en `PLAN_FEATURES`.
+
+`audit_log` es una función del plan base a propósito. TRV-08 hace que el plan
+gobierne la **profundidad** del historial, no el acceso: un cliente `Basico`
+consulta su propia auditoría acotada a su retención. Lo que se reserva a
+`Enterprise` es la exportación para auditorías externas.
+
+La retención del registro de auditoría también depende del plan:
+
+| Plan       | Retención de `audit_logs` |
+|------------|---------------------------|
+| Basico     | 30 días                   |
+| Pro        | 180 días                  |
+| Enterprise | 730 días                  |
+
+Un plan desconocido o ausente recibe la retención más corta, no la más larga.
+Ver [TRV-08 en RBAC.md](./RBAC.md#auditoría-de-logs-trv-07--trv-08).
 
 La autenticación, la aceptación pública de invitaciones y el transporte WebSocket
 conservan sus controles existentes. No son funciones premium en esta matriz.
@@ -48,8 +75,9 @@ Si no existe su perfil, se rechaza con 403. Un error de base de datos no concede
 acceso. Los permisos RBAC y el aislamiento de TRV-01 siguen aplicándose.
 
 `GET /api/auth/commercial-profile` requiere autenticación y devuelve `client_id`,
-`plan`, `is_active` y `feature_flags`. No existe una operación de escritura para
-usuarios cliente; ADMIN puede consultar el plan, no elevarlo.
+`plan`, `is_active`, `feature_flags` y `audit_retention_days`. No existe una
+operación de escritura para usuarios cliente; ADMIN puede consultar el plan, no
+elevarlo.
 
 ## Frontend
 
@@ -74,8 +102,14 @@ TRV-01 es la dependencia necesaria y ya existe en esta copia: aporta `Client`,
 No hace falta desarrollar otro requerimiento antes de TRV-02.
 
 NEW-11 es el futuro panel interno de administración de planes; depende de TRV-02,
-no al revés. TRV-07 y TRV-08 quedan fuera de este cambio. No se añadió facturación,
-gestión de suscripciones ni edición individual de banderas por cliente.
+no al revés. No se añadió facturación, gestión de suscripciones ni edición
+individual de banderas por cliente.
+
+TRV-07 y TRV-08 quedaron fuera del cambio original de TRV-02 y se desarrollaron
+después, reutilizando este mismo mecanismo: TRV-08 depende de TRV-02 para leer el
+plan del cliente y añadió el plan `Enterprise` y las banderas `audit_log` y
+`audit_export`. El frontend todavía no consume `audit_retention_days` ni el
+visor de auditoría (NEW-14) — el campo ya viaja en el perfil.
 
 ## Aplicar y probar en local
 
@@ -122,6 +156,12 @@ con Basico deben responder 403, incluso cuando quien llama es ADMIN.
   usuario PostgreSQL `corestream` no tiene permiso para crear la base de pruebas.
   La migración completa en PostgreSQL y el recorrido manual con servidor real
   quedan pendientes; no se alteraron los permisos del usuario de base de datos.
+
+Lo anterior es el registro de la entrega original de TRV-02. Esas pruebas de
+integración sí se ejecutan hoy: con PostgreSQL y Redis levantados en contenedores
+desechables, `pytest tests/integration` pasa completo. El plan `Enterprise` y las
+banderas de auditoría que se añadieron con TRV-08 están cubiertos en
+`backend/tests/test_audit.py` y `backend/tests/integration/test_audit.py`.
 
 Los fixtures de integración usan Pro para mantener el acceso que necesitaban las
 pruebas anteriores. Las nuevas pruebas cambian a Basico explícitamente.

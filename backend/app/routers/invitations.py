@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.context import set_audit_resource
 from app.database import get_db
 from app.middleware.auth import require_role
 from app.models import Invitation, Role, User, UserRole
@@ -83,6 +84,7 @@ async def create_invitation(
     db.add(invitation)
     await db.commit()
     await db.refresh(invitation)
+    set_audit_resource("invitation", invitation.id)
 
     return InvitationResponse(
         id=invitation.id,
@@ -156,6 +158,10 @@ async def accept_invitation(
     invitation.used_at = datetime.now(timezone.utc)
 
     await db.commit()
+
+    # El alta por invitación es el único camino por el que nace una cuenta sin
+    # que un ADMIN la cree: el usuario resultante es el recurso afectado.
+    set_audit_resource("user", new_user.id)
 
     return {"message": "Cuenta creada correctamente. Ya puedes iniciar sesión."}
 

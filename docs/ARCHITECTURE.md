@@ -63,6 +63,12 @@ Entidades clave:
 - `notifications`
 - `incidents`, `meetings` (soporte operativo y ceremonias de equipo)
 
+Y, en un esquema aparte de `public`:
+
+- `audit.audit_logs` (trazabilidad de no repudio; append-only, `UPDATE` siempre
+  bloqueado y `DELETE` reservado a la purga de retención, ambos por trigger —
+  ver [`RBAC.md`](./RBAC.md))
+
 ## 4. Pub/Sub en tiempo real (Redis)
 
 Redis sirve como columna vertebral para las funciones en tiempo real. Todos los canales y claves llevan el prefijo `corestream:` — el pub/sub de Redis **no** está aislado por índice de base de datos (`db N`), así que si la VM llega a compartir Redis con otro proyecto, el prefijo es la única barrera real.
@@ -85,6 +91,7 @@ El WebSocket usa dos tareas de larga vida coordinadas (una escuchando Redis, otr
 - **Contraseñas**: bcrypt con un pre-hash SHA-256 (evita el límite de 72 bytes de bcrypt sin truncar la contraseña real).
 - **Rate limiting**: contador en Redis por IP y por cuenta sobre `/auth/login`.
 - **Alta de usuarios**: sin registro público — el primer ADMIN se crea con un script de un solo uso (`app/scripts/create_admin.py`); el resto, por invitación.
+- **Auditoría**: `app/middleware/audit.py` escribe una entrada en `audit.audit_logs` por cada mutación, cada 401/403/429 y cada llamada a `/api/auth/*`, y emite el mismo evento como línea JSON por el logger `corestream.audit.event`. No depende de ningún servicio externo: el almacén especializado es el esquema `audit` de PostgreSQL. La IP solo es prueba si `FORWARDED_ALLOW_IPS` apunta al proxy real; con `*` la dicta el cliente y el arranque lo advierte.
 
 ## 6. Empaquetado y despliegue
 

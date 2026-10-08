@@ -19,6 +19,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models import Ticket, User
 
@@ -124,8 +125,13 @@ async def assert_assignable_user(db: AsyncSession, user_id: UUID) -> User:
     el cliente actual y estar activo. Punto único para las cuatro rutas que
     asignan tickets: crear, editar assignee_id, redirigir y asignar soporte.
     """
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
+    # selectinload(User.role): el chequeo de AUDITOR de abajo lee user.role, y
+    # todas las relaciones son lazy="raise_on_sql" — sin precargarla, esto
+    # revienta con InvalidRequestError en vez de resolver el rol.
+    result = await db.execute(
+        select(User).options(selectinload(User.role)).where(User.id == user_id)
+    )
+    user = result.unique().scalar_one_or_none()
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -136,5 +142,16 @@ async def assert_assignable_user(db: AsyncSession, user_id: UUID) -> User:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No se puede asignar un ticket a un usuario desactivado",
+        )
+
+    # AUDITOR es un rol de solo lectura del registro de auditoría: no ejecuta
+    # trabajo, así que tampoco puede ser destinatario de un ticket. Aquí es el
+    # único sitio donde hay que decirlo — las cuatro rutas que asignan tickets
+    # (crear, editar assignee_id, redirigir y asignar soporte) pasan por esta
+    # función.
+    if get_role_name(user) == "AUDITOR":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se puede asignar un ticket a un usuario con rol AUDITOR",
         )
     return user

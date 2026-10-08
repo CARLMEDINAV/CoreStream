@@ -16,6 +16,7 @@ from sqlalchemy import and_, case, func, select
 from sqlalchemy import delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.context import set_audit_resource
 from app.database import get_db
 from app.middleware import get_current_user, require_role
 from app.models import Application, Epic, Ticket, TicketStatus, User, UserRole
@@ -148,6 +149,7 @@ async def create_application(
         db.add(new_app)
         await db.commit()
         await db.refresh(new_app)
+        set_audit_resource("application", new_app.id)
 
         # Obtener conteos para la nueva aplicación (serán 0 inicialmente)
         epic_count = 0

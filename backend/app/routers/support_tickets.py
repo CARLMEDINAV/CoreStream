@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.context import set_audit_resource
 from app.database import get_db
 from app.middleware.auth import get_current_user, require_role
 from app.models import Ticket, TicketEvent, TicketEventType, TicketStatus, TicketType, User
@@ -129,6 +130,7 @@ async def create_support_ticket(
     db.add(new_ticket)
     # Necesario para generar new_ticket.id antes de registrar evento de auditoría.
     await db.flush()
+    set_audit_resource("support_ticket", new_ticket.id)
 
     await TicketStateMachine.log_ticket_event(
         db=db,

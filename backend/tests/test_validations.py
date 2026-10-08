@@ -14,10 +14,11 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.models import Application, Base, Epic, Ticket, TicketStatus
+from app.models import Application, Epic, Ticket, TicketStatus
 from app.routers.applications import list_applications
 from app.routers.epics import reorder_epic
 from app.routers.tickets import move_ticket_to_epic
+from tests.conftest import create_all_sqlite
 from tests.factories import get_test_client_id
 
 # ═════════════════════════════════════════════════════════════════════
@@ -30,9 +31,9 @@ TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 async def test_db():
     """Fixture que proporciona una BD en memoria para tests"""
     engine = create_async_engine(TEST_DATABASE_URL, echo=False)
-    
+
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        await create_all_sqlite(conn)
     
     async_session = sessionmaker(
         engine, class_=AsyncSession, expire_on_commit=False

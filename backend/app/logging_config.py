@@ -20,6 +20,7 @@ import logging
 import sys
 from datetime import datetime, timezone
 
+from app.context import get_audit_bucket
 from app.middleware.request_id import get_request_id
 
 
@@ -35,6 +36,25 @@ class JSONFormatter(logging.Formatter):
         request_id = get_request_id()
         if request_id:
             payload["request_id"] = request_id
+
+        # Cualquier línea emitida dentro de una petición lleva quién la provocó,
+        # no solo su request_id: un error sin actor obliga a cruzar a mano con
+        # la tabla de auditoría para saber de quién era la petición.
+        bucket = get_audit_bucket()
+        if bucket:
+            if bucket.get("client_id"):
+                payload["client_id"] = str(bucket["client_id"])
+            if bucket.get("actor_email"):
+                payload["actor"] = bucket["actor_email"]
+            if bucket.get("actor_role"):
+                payload["actor_role"] = bucket["actor_role"]
+
+        # Mismo evento, dos destinos (TRV-07): la entrada va a audit_logs para
+        # ser consultable y exportable, y el evento completo sale aquí para que
+        # un colector externo lo recoja sin tocar código.
+        audit_event = getattr(record, "audit", None)
+        if audit_event is not None:
+            payload["audit"] = audit_event
 
         if record.exc_info:
             payload["exc_info"] = self.formatException(record.exc_info)
@@ -59,3 +79,10 @@ def configure_logging(level: str = "info") -> None:
         uv_logger = logging.getLogger(name)
         uv_logger.handlers.clear()
         uv_logger.propagate = True
+
+    # httpx emite una línea INFO por petición saliente. Con el destino de
+    # Elasticsearch activo eso es una línea extra POR CADA evento auditado,
+    # justo al lado de la del propio evento: duplica el volumen de logs sin
+    # añadir nada. Sus errores siguen apareciendo.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)

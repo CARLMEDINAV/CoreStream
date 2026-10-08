@@ -32,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
+from app.context import set_audit_resource
 from app.database import get_db
 from app.middleware.auth import get_current_user
 from app.middleware.commercial import require_feature
@@ -192,6 +193,7 @@ async def upload_document(
     db.add(document)
     await db.commit()
     await db.refresh(document)
+    set_audit_resource("document", document.id)
     return document
 
 

@@ -22,7 +22,10 @@ import logging
 import redis.asyncio as aioredis
 
 from app.config import get_settings
+from app.database import get_session_maker
+from app.models import AuditOutcome
 from app.redis_client import user_notifications_channel
+from app.services import audit_service
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -70,3 +73,48 @@ async def deliver_notification(
         "Notificación entregada | canal=%s | tipo=%s | suscriptores=%d",
         channel, notification_type, subscribers,
     )
+
+
+async def purge_audit_logs(ctx: dict) -> dict[str, int]:
+    """
+    Cron de retención escalonada por plan comercial (TRV-08).
+
+    La purga se audita a sí misma: sin este registro, la única operación que
+    borra entradas del log de auditoría sería la única que no deja rastro.
+    """
+    async with get_session_maker()() as db:
+        # La política se resuelve UNA vez y la comparten los dos almacenes: si
+        # cada uno calculara la suya, el mismo evento podría caducar en la
+        # tabla y sobrevivir en el motor de búsqueda (o al revés).
+        groups, now = await audit_service.retention_plan(db)
+        deleted = await audit_service.purge_expired(db, groups, now)
+
+    # Los índices de Elasticsearch son por día y mezclan tenants, así que el
+    # motor necesita su propio borrado por grupo para no conservar eventos de
+    # un plan corto durante la retención de un plan largo.
+    purged = await audit_service.purge_sinks(groups, now)
+
+    total = sum(deleted.values())
+    logger.info(
+        "Purga de auditoría | tabla: %s (%d filas) | destinos: %s",
+        ", ".join(f"{k}={v}" for k, v in sorted(deleted.items())) or "nada",
+        total,
+        ", ".join(f"{k}={v}" for k, v in sorted(purged.items())) or "nada",
+    )
+
+    # El desglose por grupo de retención va en la ruta del evento: es lo que
+    # permite comprobar después qué política se aplicó y a cuántas filas.
+    await audit_service.record({
+        "client_id": None,
+        "actor_email": "system:worker",
+        "actor_role": "SYSTEM",
+        "method": "DELETE",
+        "path": f"/worker/purge_audit_logs?filas={total}",
+        "route_template": "/worker/purge_audit_logs",
+        "resource_type": "audit_retention",
+        "status_code": 200,
+        "outcome": AuditOutcome.SUCCESS,
+        "duration_ms": None,
+    })
+
+    return deleted

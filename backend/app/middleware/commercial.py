@@ -7,17 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.middleware.auth import get_current_user
 from app.models import Client, User
+from app.plans import (
+    ALL_FEATURES,
+    audit_retention_days,
+    features_for,
+    is_known_feature,
+)
 from app.schemas.commercial import CommercialProfile
-
-CORE_FEATURES = {
-    "projects", "tickets", "documents", "team", "incidents", "meetings",
-    "support", "notifications",
-}
-PREMIUM_FEATURES = {"analytics", "document_translation"}
-PLAN_FEATURES = {
-    "Basico": CORE_FEATURES,
-    "Pro": CORE_FEATURES | PREMIUM_FEATURES,
-}
 
 
 async def get_commercial_profile(
@@ -28,15 +24,17 @@ async def get_commercial_profile(
     client = await db.scalar(select(Client).where(Client.id == current_user.client_id))
     if client is None:
         raise HTTPException(403, detail="Perfil comercial no disponible")
-    enabled = PLAN_FEATURES.get(client.commercial_plan, set()) if client.is_active else set()
+
+    enabled = features_for(client.commercial_plan, is_active=client.is_active)
     return CommercialProfile(
         client_id=client.id, plan=client.commercial_plan, is_active=client.is_active,
-        feature_flags={key: key in enabled for key in sorted(CORE_FEATURES | PREMIUM_FEATURES)},
+        feature_flags={key: key in enabled for key in sorted(ALL_FEATURES)},
+        audit_retention_days=audit_retention_days(client.commercial_plan),
     )
 
 
 def require_feature(feature_flag: str):
-    if feature_flag not in CORE_FEATURES | PREMIUM_FEATURES:
+    if not is_known_feature(feature_flag):
         raise ValueError(f"Feature flag desconocida: {feature_flag}")
 
     async def check(profile: CommercialProfile = Depends(get_commercial_profile)) -> None:

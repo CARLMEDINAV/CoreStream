@@ -12,9 +12,10 @@ from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy import text
 
-from app.config import get_settings
+from app.config import get_settings, validate_http_runtime
 from app.database import dispose_engine, get_session_maker
 from app.logging_config import configure_logging
+from app.middleware.audit import AuditMiddleware
 from app.middleware.commercial import require_feature
 from app.middleware.request_id import RequestIDMiddleware, get_request_id
 from app.redis_client import ARQ_QUEUE_NAME, close_redis, get_redis, init_redis
@@ -24,6 +25,7 @@ from app.redis_client import ARQ_QUEUE_NAME, close_redis, get_redis, init_redis
 from app.routers import (
     analytics,
     applications,
+    audit_logs,
     auth,
     documents,
     epics,
@@ -107,6 +109,20 @@ async def lifespan(app: FastAPI):
     register_tenant_scope()   # <-- nuevo, antes del log final de startup
     logger.info("Filtro de multi-tenancy registrado")
 
+    # Solo para el proceso que sirve HTTP: en producción esto lanza y uvicorn
+    # no llega a atender ninguna petición. El worker no pasa por aquí porque
+    # la variable no significa nada para él.
+    validate_http_runtime(settings)
+
+    if settings.FORWARDED_ALLOW_IPS.strip() in ("*", ""):
+        logger.warning(
+            "FORWARDED_ALLOW_IPS='%s': X-Forwarded-For se acepta de cualquier "
+            "origen, así que la IP de audit.audit_logs y el límite por IP de "
+            "/auth/login los puede dictar el cliente. Aceptable en desarrollo; "
+            "en producción el arranque falla.",
+            settings.FORWARDED_ALLOW_IPS,
+        )
+
     logger.info("Aplicación CoreStream iniciada")
 
     # Ceder control a FastAPI
@@ -152,6 +168,12 @@ app = FastAPI(
     openapi_url="/api/openapi.json" if _docs_enabled else None,
     lifespan=lifespan,
 )
+
+# add_middleware antepone a la pila: lo registrado PRIMERO queda más adentro.
+# AuditMiddleware va antes que RequestIDMiddleware para quedar por dentro de
+# él y poder leer el request_id ya asignado; y al ser el más interno, ve el
+# status del handler y el scope["route"] que resuelve el router.
+app.add_middleware(AuditMiddleware)
 
 # request_id primero: los middlewares se ejecutan en orden inverso al de
 # registro para la fase de request, así que registrarlo antes que CORS
@@ -235,6 +257,9 @@ app.include_router(
     meetings.router, prefix="/api",
     dependencies=[Depends(require_feature("meetings"))],
 )
+# prefijo embebido en el router: /api/audit-logs. El feature gating lo aplica
+# cada endpoint por separado — la consulta es CORE, la exportación Enterprise.
+app.include_router(audit_logs.router)
 
 
 # Endpoint raíz de salud — Railway lo usa como healthcheck en /health

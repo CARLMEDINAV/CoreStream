@@ -49,9 +49,23 @@ from sqlalchemy.ext.asyncio import (
 
 from app.middleware.auth import hash_password
 from app.models import Application, Base, Client, Epic, Role, Ticket, TicketStatus, User
+from app.models.audit_log import AUDIT_SCHEMA
 from tests.factories import get_test_client
 
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
+
+
+async def create_all_sqlite(conn) -> None:
+    """
+    Crea el esquema completo sobre una conexión SQLite.
+
+    audit.audit_logs vive en un esquema propio en PostgreSQL (TRV-07). SQLite
+    llama "schema" a una base adjunta, así que hay que adjuntar una con ese
+    nombre o create_all falla al cualificar la tabla. Lo usan todos los
+    fixtures que montan una base en memoria, no solo el de este módulo.
+    """
+    await conn.exec_driver_sql(f"ATTACH DATABASE ':memory:' AS {AUDIT_SCHEMA}")
+    await conn.run_sync(Base.metadata.create_all)
 
 
 @pytest.fixture
@@ -59,7 +73,7 @@ async def db_session():
     """Sesión SQLite en memoria con todas las tablas. Se destruye tras cada test."""
     engine = create_async_engine(TEST_DB_URL, echo=False)
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        await create_all_sqlite(conn)
 
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with factory() as session:

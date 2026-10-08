@@ -24,6 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.context import set_audit_resource
 from app.database import get_db
 from app.middleware.auth import get_current_user, require_role
 from app.models import (
@@ -327,6 +328,7 @@ async def create_ticket(
 
         await db.commit()
         await db.refresh(new_ticket)
+        set_audit_resource("ticket", new_ticket.id)
         await flush_pending_notifications(db)
     except Exception as e:
         await db.rollback()

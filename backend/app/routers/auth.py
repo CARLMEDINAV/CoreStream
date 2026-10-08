@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
+from app.context import set_audit_actor, set_audit_subject
 from app.database import get_db
 from app.middleware.auth import get_current_user, verify_token
 from app.middleware.commercial import get_commercial_profile
@@ -189,6 +190,11 @@ async def login(
 
     email_search = login_data.email.lower()
 
+    # El login fallido es el evento de auditoría más relevante del módulo y no
+    # tiene actor autenticado del que derivar la identidad: se registra el
+    # email intentado antes de saber si existe.
+    set_audit_subject(email_search)
+
     result = await db.execute(
         select(User).options(selectinload(User.role)).where(User.email == email_search)
     )
@@ -208,6 +214,9 @@ async def login(
         )
 
     role_name = user.role.name if user.role else "DEVELOPER"
+    set_audit_actor(
+        user_id=user.id, email=user.email, role=role_name, client_id=user.client_id
+    )
     access_token = AuthService.create_access_token(user, role_name=role_name)
     refresh_token = AuthService.create_refresh_token(user)
     csrf_token = secrets.token_urlsafe(32)

@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.context import set_audit_resource
 from app.database import get_db
 from app.middleware.auth import get_current_user
 from app.models import Subtask, Ticket, TicketEventType, User
@@ -109,6 +110,7 @@ async def create_subtask(
         db.add(new_subtask)
         await db.commit()
         await db.refresh(new_subtask)
+        set_audit_resource("subtask", new_subtask.id)
 
         # Registrar evento en el ticket
         await ticket_state_machine.log_ticket_event(

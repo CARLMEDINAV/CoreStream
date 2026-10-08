@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.context import set_audit_resource
 from app.database import get_db
 from app.middleware.auth import get_current_user, require_role
 from app.models.meeting import Meeting, MeetingAttendance
@@ -38,6 +39,7 @@ async def create_meeting(
     db.add(meeting)
     await db.commit()
     await db.refresh(meeting, ["attendances"])
+    set_audit_resource("meeting", meeting.id)
     return meeting
 
 @router.get("/", response_model=List[MeetingResponse])
@@ -138,4 +140,5 @@ async def record_attendance(
         
     await db.commit()
     await db.refresh(attendance)
+    set_audit_resource("meeting_attendance", attendance.id)
     return attendance

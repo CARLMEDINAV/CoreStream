@@ -20,6 +20,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.context import set_audit_resource
 from app.database import get_db
 from app.middleware.auth import TokenPayload, get_current_user, require_role
 from app.models import Role, Ticket, TicketEvent, TicketStatus, User, UserRole
@@ -117,6 +118,7 @@ async def create_user(
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user, attribute_names=['role'])
+    set_audit_resource("user", new_user.id)
 
     return UserResponse.model_validate(new_user)
 
@@ -589,12 +591,13 @@ async def change_user_role(
             detail=f"Usuario con ID {user_id} no encontrado"
         )
 
-    # Validar que el nuevo rol sea válido
-    valid_roles = {UserRole.ADMIN, UserRole.TEAM_LEADER, UserRole.DEVELOPER}
-    if role_data.role not in [r.value for r in valid_roles]:
+    # Derivado de UserRole, no enumerado a mano: la lista literal que había
+    # aquí se quedó sin AUDITOR al añadirlo.
+    valid_roles = {r.value for r in UserRole}
+    if role_data.role not in valid_roles:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Rol inválido. Roles válidos: {', '.join(r.value for r in valid_roles)}"
+            detail=f"Rol inválido. Roles válidos: {', '.join(sorted(valid_roles))}"
         )
 
     if role_data.role != UserRole.ADMIN.value:

@@ -7,6 +7,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from app.models.role import UserRole
+
 
 class UserBase(BaseModel):
     """
@@ -210,7 +212,10 @@ class InvitationCreate(BaseModel):
     @field_validator("role")
     @classmethod
     def validate_role(cls, v: str) -> str:
-        valid = {"ADMIN", "TEAM_LEADER", "DEVELOPER"}
+        # Derivado de UserRole, no escrito a mano: la lista literal que había
+        # aquí se quedó sin AUDITOR al añadirlo, y una lista desincronizada
+        # rechaza un rol válido sin que nada lo detecte.
+        valid = {r.value for r in UserRole}
         if v not in valid:
             raise ValueError(f"Rol inválido. Roles válidos: {', '.join(sorted(valid))}")
         return v

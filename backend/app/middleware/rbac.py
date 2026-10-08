@@ -2,8 +2,8 @@
 Utilidades RBAC para autorización por roles.
 
 Este módulo define:
-- Roles soportados por el sistema (ADMIN, TEAM_LEADER, DEVELOPER).
 - Decorador de permisos para proteger endpoints FastAPI.
+- RBACRole, que es un alias de UserRole (ver abajo).
 """
 
 from enum import Enum
@@ -13,16 +13,17 @@ from typing import Any, Callable, TypeVar
 
 from fastapi import HTTPException, status
 
+from app.models.role import UserRole
+
 FuncT = TypeVar("FuncT", bound=Callable[..., Any])
 
-
-class RBACRole(str, Enum):
-    """Roles de acceso soportados por CoreStream."""
-
-    ADMIN = "ADMIN"
-    TEAM_LEADER = "TEAM_LEADER"
-    DEVELOPER = "DEVELOPER"
-
+# Alias, no un enum paralelo. Antes esto re-declaraba los roles a mano y la
+# duplicación ya costó un bug: definía GROUP_LEADER mientras la base usaba
+# TEAM_LEADER, así que el decorador denegaba a todos en silencio porque ningún
+# usuario tenía jamás ese rol. Había un test de integración vigilando que las
+# dos listas coincidieran; al añadir AUDITOR volvió a desincronizarse y el test
+# lo detectó. Con el alias, desincronizarse es imposible.
+RBACRole = UserRole
 
 _ALLOWED_ROLES = {role.value for role in RBACRole}
 
