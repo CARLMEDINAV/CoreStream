@@ -252,25 +252,17 @@ queda del acto, y al revés.
 
 | Destino | Qué aporta |
 |---|---|
-| `DatabaseSink` | La fila en `audit.audit_logs`: el almacén consultable, exportable y purgable. **Obligatorio** — el arranque falla sin él |
-| `LogStreamSink` | Una línea JSON por el logger `corestream.audit.event` (clave `audit` del payload, ver `logging_config.py`). Es lo que recoge el driver de logs de Docker |
-| `ElasticSink` | Envío directo a Elasticsearch, índice con sufijo de fecha (`corestream-audit-2026.10.03`) para que el ILM de Elastic aplique su propio archivado |
-
-Un nombre desconocido en `AUDIT_SINKS` aborta el arranque: creer que los eventos
-van a un motor que nadie construyó es peor que no tenerlo.
+| `DatabaseSink` | La fila en `audit.audit_logs`: el almacén consultable, exportable y purgable |
+| `ElasticSink` | Envío a Elasticsearch, índice con sufijo de fecha (`corestream-audit-2026.10.03`) para que el ILM de Elastic aplique su propio archivado |
 
 ### Cómo cumplir «se derivan a un motor especializado (ELK/CloudWatch)»
 
-El criterio nombra dos motores y hay un camino para cada uno. Ninguno requiere
-cambiar código de la aplicación:
+El criterio nombra dos motores y basta con uno. Se usa ELK, por dos caminos:
 
 | Motor | Cómo | Coste |
 |---|---|---|
-| **ELK**, en la VM | `docker compose --profile elk up -d` + `AUDIT_SINKS=…,elastic` | 1 contenedor, ~1,2 GB de RAM |
+| **ELK**, en la VM | `docker compose --profile elk up -d` + `AUDIT_SINKS=database,elastic` | 1 contenedor, ~1,2 GB de RAM |
 | **ELK**, gestionado | `ELASTIC_URL` + `ELASTIC_API_KEY` de Elastic Cloud | Nada que operar; cuota |
-| **ELK**, por el driver | Dejar `logstream` y apuntar el driver de Docker a un Logstash/Fluent Bit | Sin latencia en la petición |
-| **CloudWatch** | `logging.driver: awslogs` en el servicio `backend` de `docker-compose.yml` | Cero contenedores; requiere AWS e IAM |
-| **Cloud Logging** | `logging.driver: gcplogs` | Cero contenedores; requiere GCP |
 
 El perfil `elk` del repositorio levanta Elasticsearch **opcional** (`profiles:
 ["elk"]`), así que `docker compose up -d` sigue levantando solo backend,
@@ -304,8 +296,7 @@ búsqueda, **no la prueba**: el registro oficial sigue siendo
 
 `ElasticSink` envía dentro de la petición, así que su timeout es corto
 (`ELASTIC_TIMEOUT_SECONDS`, 2 s) y un Elasticsearch caído queda aislado por
-`CompositeSink`. Para tráfico alto, la ruta sin latencia en petición es el
-driver de Docker sobre la salida de `LogStreamSink`.
+`CompositeSink`.
 
 Añadir un motor nuevo es escribir una clase con `emit` y registrar su fábrica en
 `SINK_FACTORIES`. Ningún otro módulo cambia: ni el middleware, ni el servicio,
@@ -317,9 +308,7 @@ porque el registro no está disponible no es un comportamiento que TRV-07 exija.
 
 **El worker también escribe.** La purga de retención se audita a sí misma, así
 que `corestream-worker` recibe las mismas variables de `AUDIT_SINKS`. No recibe
-`FORWARDED_ALLOW_IPS`: no sirve HTTP, y validarla allí hacía abortar su
-contenedor por una variable que para él no significa nada (`validate_http_runtime`
-en `config.py` es la que solo ejecuta la API).
+`FORWARDED_ALLOW_IPS`: no sirve HTTP y la variable no significa nada para él.
 
 **Qué se registra y qué no.** Con `AUDIT_READS=true` (el valor por defecto) se
 registra **toda** petición que llegue a un handler: es la lectura estricta de
@@ -373,16 +362,18 @@ borrado por rango de fechas global, o un particionado por fecha, no podrían
 expresarlo: solo se podría soltar una partición cuando hubiera caducado el
 cliente de mayor retención.
 
-**Requisito de despliegue (obligatorio).** La columna `ip` solo sirve como
-prueba si `FORWARDED_ALLOW_IPS` apunta al proxy concreto. Con el comodín `*`,
-uvicorn acepta `X-Forwarded-For` de cualquier origen y es el propio cliente
-quien decide qué IP queda registrada — y por el mismo motivo el límite por IP
-de `/auth/login` se podría saltar rotando la cabecera.
+**Recomendación de despliegue.** La columna `ip` solo sirve como prueba si
+`FORWARDED_ALLOW_IPS` apunta al proxy concreto. Con el comodín `*`, uvicorn
+acepta `X-Forwarded-For` de cualquier origen y es el propio cliente quien
+decide qué IP queda registrada — y por el mismo motivo el límite por IP de
+`/auth/login` se podría saltar rotando la cabecera.
 
-Por eso **`config.py` aborta el arranque** con `ENVIRONMENT=production` si el
-valor es `*` o está vacío, igual que ya hacía con `SECRET_KEY` y con
-`ALLOWED_ORIGINS=*`. En desarrollo el comodín sigue permitido (no hay proxy
-delante) y el arranque solo avisa. Ver [`DEPLOYMENT.md`](./DEPLOYMENT.md).
+El arranque **avisa** por el log cuando el valor es `*` o está vacío, pero no
+aborta: que haya un proxy conocido delante depende del entorno de despliegue y
+no del código, y TRV-07 pide registrar la IP, no dejar la API fuera de servicio
+si la configuración no es la ideal. En plataformas tipo PaaS, donde no se
+conoce la IP del proxy, sirve acotar a los rangos privados
+(`10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`).
 
 ## Dónde vive cada cosa
 
@@ -394,5 +385,5 @@ delante) y el arranque solo avisa. Ver [`DEPLOYMENT.md`](./DEPLOYMENT.md).
 | `app/services/audit_records.py` | Forma de la entrada: resultado y conversión a primitivos |
 | `app/services/audit_sinks.py` | Destinos de la derivación |
 | `app/services/audit_service.py` | Lo que habla con la base de datos: registrar, purgar, consultar |
-| `app/services/audit_export.py` | Formatos de exportación, uno por `ExportFormat` |
+| `app/services/audit_export.py` | Exportación en CSV |
 | `app/routers/audit_logs.py` | HTTP: consulta y exportación |

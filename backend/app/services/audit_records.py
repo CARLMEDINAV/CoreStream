@@ -71,14 +71,12 @@ def to_primitive(value: Any) -> Any:
 
 def as_log_payload(entry: Mapping[str, Any]) -> dict[str, Any]:
     """
-    Entrada lista para la línea JSON. Omite los nulos: en un log no aportan
-    nada y alargan cada línea.
+    Convierte la entrada a JSON para enviarla al motor de registros, omitiendo
+    los nulos.
 
-    Recorre las claves de la propia entrada, no ENTRY_FIELDS: el log lleva
-    todo lo que haya, incluido `client_id`, que la exportación omite porque un
-    cliente que exporta lo suyo ya sabe cuál es, pero que un colector externo
-    necesita para distinguir tenants. Así, además, un campo nuevo en la
-    entrada aparece en el log sin tener que acordarse de añadirlo a una lista.
+    Recorre las claves de la propia entrada y no ENTRY_FIELDS, para que incluya
+    `client_id` —que la exportación omite pero el motor necesita para distinguir
+    tenants— y para que un campo nuevo aparezca sin tocar ninguna lista.
     """
     return {
         key: converted

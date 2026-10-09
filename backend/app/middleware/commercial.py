@@ -7,12 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.middleware.auth import get_current_user
 from app.models import Client, User
-from app.plans import (
-    ALL_FEATURES,
-    audit_retention_days,
-    features_for,
-    is_known_feature,
-)
+from app.plans import ALL_FEATURES, features_for, is_known_feature
 from app.schemas.commercial import CommercialProfile
 
 
@@ -29,7 +24,6 @@ async def get_commercial_profile(
     return CommercialProfile(
         client_id=client.id, plan=client.commercial_plan, is_active=client.is_active,
         feature_flags={key: key in enabled for key in sorted(ALL_FEATURES)},
-        audit_retention_days=audit_retention_days(client.commercial_plan),
     )
 
 

@@ -27,7 +27,7 @@ from app.plans import audit_retention_days
 from app.schemas.audit import AuditLogPage, AuditLogResponse
 from app.schemas.commercial import CommercialProfile
 from app.services import audit_service
-from app.services.audit_export import get_format
+from app.services.audit_export import EXTENSION, MEDIA_TYPE, render_csv
 
 router = APIRouter(prefix="/api/audit-logs", tags=["Auditoría"])
 
@@ -39,11 +39,6 @@ router = APIRouter(prefix="/api/audit-logs", tags=["Auditoría"])
 # TEAM_LEADER queda fuera a propósito: gestiona el trabajo de su equipo, no
 # audita a sus miembros.
 AUDIT_READERS = [UserRole.ADMIN.value]
-
-# FastAPI necesita el tipo del parámetro estático, así que la lista de formatos
-# se repite aquí como Literal. test_audit.py comprueba que coincide con las
-# claves de FORMATS, para que no puedan desincronizarse en silencio.
-ExportFormatName = Literal["csv", "jsonl"]
 
 _EXPORT_LIMIT = 50_000
 
@@ -92,10 +87,9 @@ async def list_audit_logs(
     "/export",
     response_class=PlainTextResponse,
     summary="Exportar el registro de auditoría",
-    description="Exporta en CSV o JSONL para auditorías externas. Requiere plan Enterprise.",
+    description="Exporta en CSV para auditorías externas. Requiere plan Enterprise.",
 )
 async def export_audit_logs(
-    export_format: ExportFormatName = Query("csv", alias="format"),
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
     _: None = Depends(require_feature("audit_export")),
@@ -117,14 +111,13 @@ async def export_audit_logs(
         limit=_EXPORT_LIMIT,
     )
 
-    fmt = get_format(export_format)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
     return PlainTextResponse(
-        content=fmt.render(entries),
-        media_type=fmt.media_type,
+        content=render_csv(entries),
+        media_type=MEDIA_TYPE,
         headers={
             "Content-Disposition":
-                f'attachment; filename="auditoria-{stamp}.{fmt.extension}"'
+                f'attachment; filename="auditoria-{stamp}.{EXTENSION}"'
         },
     )

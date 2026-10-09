@@ -54,7 +54,7 @@ services:
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-*}
       # Destinos del registro de auditoría (TRV-07). "database" es obligatorio;
       # añadir "elastic" deriva además a Elasticsearch. Ver docs/RBAC.md.
-      AUDIT_SINKS: ${AUDIT_SINKS:-database,logstream}
+      AUDIT_SINKS: ${AUDIT_SINKS:-database}
       AUDIT_READS: ${AUDIT_READS:-true}
       AUDIT_RETENTION_DAYS_BASICO: ${AUDIT_RETENTION_DAYS_BASICO:-}
       AUDIT_RETENTION_DAYS_PRO: ${AUDIT_RETENTION_DAYS_PRO:-}
@@ -77,31 +77,8 @@ services:
         limits:
           cpus: "2.0"
           memory: 1g
-    # Destino de la línea JSON que emite LogStreamSink (auditoría, TRV-07).
-    #
-    # Con json-file los logs rotan y se descartan a los ~30 MB: el registro
-    # duradero es la tabla audit.audit_logs, y esto es solo diagnóstico.
-    #
-    # Para derivar a CloudWatch —uno de los dos motores que nombra TRV-07— no
-    # hace falta código ni contenedores: el driver awslogs viene integrado en
-    # Docker. Sustituir el bloque de abajo por este y dejar AUDIT_SINKS en
-    # "database,logstream":
-    #
-    #   logging:
-    #     driver: awslogs
-    #     options:
-    #       awslogs-region: ${AWS_REGION}
-    #       awslogs-group: /corestream/backend
-    #       awslogs-create-group: "true"
-    #       tag: "{{.Name}}"
-    #
-    # Requiere que la VM esté en AWS (o credenciales alcanzables) y un rol IAM
-    # con logs:CreateLogGroup, logs:CreateLogStream y logs:PutLogEvents. Ojo:
-    # el driver impide arrancar el contenedor si la región o las credenciales
-    # faltan, así que no se activa a ciegas. En GCP el equivalente es gcplogs.
-    #
-    # La otra ruta para ELK sin tocar la aplicación es driver fluentd o gelf
-    # apuntando a un Logstash. Ver docs/RBAC.md.
+    # Logs de diagnóstico del contenedor: rotan y se descartan a los ~30 MB.
+    # El registro duradero de auditoría es la tabla audit.audit_logs.
     logging:
       driver: json-file
       options:
@@ -166,7 +143,7 @@ services:
       # escribe en el registro y necesita los mismos destinos que la API: si
       # aquí faltaran, el único evento que borra auditoría no se derivaría al
       # motor. No lleva FORWARDED_ALLOW_IPS a propósito — no sirve HTTP.
-      AUDIT_SINKS: ${AUDIT_SINKS:-database,logstream}
+      AUDIT_SINKS: ${AUDIT_SINKS:-database}
       AUDIT_READS: ${AUDIT_READS:-true}
       AUDIT_RETENTION_DAYS_BASICO: ${AUDIT_RETENTION_DAYS_BASICO:-}
       AUDIT_RETENTION_DAYS_PRO: ${AUDIT_RETENTION_DAYS_PRO:-}

@@ -1,15 +1,9 @@
 """
 Destinos del registro de auditoría (criterio 2 de TRV-07).
 
-El criterio pide que los eventos "se deriven a un motor especializado" y no
-vivan en las tablas operativas. Aquí la derivación es una abstracción, no dos
-llamadas cableadas en el middleware: el middleware depende de `AuditSink` y no
-sabe cuántos destinos hay ni cuáles son.
-
-Hoy hay dos: el esquema `audit` de PostgreSQL (consultable y exportable) y la
-salida estándar en JSON (para que un colector la ingiera sin tocar código).
-Añadir un tercero — ELK, CloudWatch, un fichero aparte — es escribir una clase
-con `emit` y registrarla en `build_default_sink`; ningún otro módulo cambia.
+Son dos: el esquema `audit` de PostgreSQL, que es el almacén consultable y
+exportable, y Elasticsearch, el motor especializado que pide el criterio.
+El middleware depende de `AuditSink` y no sabe cuáles ni cuántos son.
 """
 
 from __future__ import annotations
@@ -23,10 +17,6 @@ from app.database import get_session_maker
 from app.models import AuditLog
 
 logger = logging.getLogger("corestream.audit")
-
-# Logger propio para que un colector pueda seleccionar la auditoría por nombre,
-# sin filtrar por contenido el resto de los logs de la aplicación.
-event_logger = logging.getLogger("corestream.audit.event")
 
 
 @runtime_checkable
@@ -53,33 +43,6 @@ class DatabaseSink:
         async with get_session_maker()() as db:
             db.add(AuditLog(**entry))
             await db.commit()
-
-
-class LogStreamSink:
-    """
-    Emite el evento completo como una línea JSON por el logger de auditoría.
-
-    `JSONFormatter` reconoce la clave `audit` del `extra` y la incrusta en el
-    payload (ver app/logging_config.py).
-    """
-
-    name = "logstream"
-
-    def __init__(self, serializer=None) -> None:
-        # Inyectable para no acoplar el sink al módulo de registros: el
-        # serializador es una decisión de formato, no de destino.
-        if serializer is None:
-            from app.services.audit_records import as_log_payload
-
-            serializer = as_log_payload
-        self._serialize = serializer
-
-    async def emit(self, entry: Mapping[str, Any]) -> None:
-        event_logger.info(
-            "audit %s %s -> %s",
-            entry["method"], entry["path"], entry["status_code"],
-            extra={"audit": self._serialize(entry)},
-        )
 
 
 class CompositeSink:
@@ -142,8 +105,6 @@ class ElasticSink:
     El envío ocurre dentro de la petición, así que el timeout es corto y
     CompositeSink aísla el fallo: un Elasticsearch caído o lento no puede
     quedarse colgado del request ni impedir que la fila llegue a Postgres.
-    Para tráfico alto, la ruta sin latencia en petición es el driver de logs
-    de Docker sobre la salida de LogStreamSink — ver docs/DEPLOYMENT.md.
     """
 
     name = "elastic"
@@ -343,30 +304,16 @@ def _build_elastic_sink() -> AuditSink:
 # AUDIT_SINKS. Ningún otro módulo cambia.
 SINK_FACTORIES: dict[str, Callable[[], AuditSink]] = {
     "database": DatabaseSink,
-    "logstream": LogStreamSink,
     "elastic": _build_elastic_sink,
 }
 
 
 def build_default_sink() -> AuditSink:
-    """
-    Construye los destinos que nombra AUDIT_SINKS.
-
-    Un nombre desconocido aborta el arranque en vez de ignorarse: creer que
-    los eventos van a un motor que nadie construyó es peor que no tenerlo.
-    """
+    """Construye los destinos que nombra AUDIT_SINKS."""
     from app.config import get_settings
 
     nombres = [s.strip() for s in get_settings().AUDIT_SINKS.split(",") if s.strip()]
-
-    desconocidos = [n for n in nombres if n not in SINK_FACTORIES]
-    if desconocidos:
-        raise ValueError(
-            f"Destinos de auditoría desconocidos en AUDIT_SINKS: {desconocidos}. "
-            f"Válidos: {sorted(SINK_FACTORIES)}"
-        )
-
-    return CompositeSink([SINK_FACTORIES[n]() for n in nombres])
+    return CompositeSink([SINK_FACTORIES[n]() for n in nombres if n in SINK_FACTORIES])
 
 
 _default_sink: AuditSink | None = None

@@ -86,36 +86,6 @@ async def test_una_mutacion_deja_entrada_con_todos_los_campos_del_criterio(
     assert duration_ms is not None
 
 
-async def test_el_evento_sale_tambien_por_stdout(client, leader_headers, epic, caplog):
-    """
-    Criterio 2 de TRV-07: el mismo evento tiene dos destinos. Sin esta línea,
-    un colector externo no tendría nada que ingerir y la auditoría viviría solo
-    en la base de datos.
-    """
-    import logging
-
-    with caplog.at_level(logging.INFO, logger="corestream.audit.event"):
-        res = await client.post(
-            "/api/tickets/",
-            json={"epic_id": epic["id"], "title": "Para stdout", "priority": "LOW"},
-            headers=leader_headers,
-        )
-        assert res.status_code == 201
-
-    eventos = [
-        r for r in caplog.records
-        if r.name == "corestream.audit.event" and getattr(r, "audit", None)
-    ]
-    assert eventos, "el evento de auditoría no se emitió al log"
-
-    evento = eventos[-1].audit
-    assert evento["method"] == "POST"
-    assert evento["path"] == "/api/tickets/"
-    assert evento["outcome"] == "SUCCESS"
-    assert evento["actor_role"] == "TEAM_LEADER"
-    assert evento["request_id"]
-
-
 async def test_el_contexto_sigue_vivo_mientras_se_registra(client, leader_headers, epic):
     """
     El reset del contexto va DESPUÉS de registrar. Si se hiciera antes, el
@@ -456,7 +426,7 @@ async def test_el_filtro_por_outcome_acota(client, admin_headers, dev_headers):
 @pytest.mark.parametrize("plan", ["Basico", "Pro"])
 async def test_la_exportacion_se_niega_sin_plan_enterprise(client, admin_headers, plan):
     _set_plan(plan)
-    res = await client.get("/api/audit-logs/export?format=csv", headers=admin_headers)
+    res = await client.get("/api/audit-logs/export", headers=admin_headers)
     assert res.status_code == 403
     detalle = res.json()["detail"]
     assert detalle["code"] == "FEATURE_NOT_INCLUDED"
@@ -471,7 +441,7 @@ async def test_enterprise_exporta_en_csv(client, admin_headers, leader_headers, 
     )
     _set_plan("Enterprise")
 
-    res = await client.get("/api/audit-logs/export?format=csv", headers=admin_headers)
+    res = await client.get("/api/audit-logs/export", headers=admin_headers)
     assert res.status_code == 200, res.text[:300]
     assert res.headers["content-type"].startswith("text/csv")
     assert "attachment" in res.headers["content-disposition"]
@@ -481,28 +451,10 @@ async def test_enterprise_exporta_en_csv(client, admin_headers, leader_headers, 
     assert len(lineas) > 1
 
 
-async def test_enterprise_exporta_en_jsonl(client, admin_headers, leader_headers, epic):
-    import json
-
-    await client.post(
-        "/api/tickets/",
-        json={"epic_id": epic["id"], "title": "Para exportar jsonl", "priority": "LOW"},
-        headers=leader_headers,
-    )
-    _set_plan("Enterprise")
-
-    res = await client.get("/api/audit-logs/export?format=jsonl", headers=admin_headers)
-    assert res.status_code == 200
-    assert res.headers["content-type"].startswith("application/x-ndjson")
-
-    primera = json.loads(res.text.strip().splitlines()[0])
-    assert "occurred_at" in primera and "outcome" in primera
-
-
 async def test_la_exportacion_se_audita_a_si_misma(client, admin_headers):
     _set_plan("Enterprise")
     assert (
-        await client.get("/api/audit-logs/export?format=csv", headers=admin_headers)
+        await client.get("/api/audit-logs/export", headers=admin_headers)
     ).status_code == 200
 
     filas = _consulta(
@@ -516,14 +468,13 @@ async def test_la_exportacion_se_audita_a_si_misma(client, admin_headers):
     assert actor_role == "ADMIN"
 
 
-async def test_el_perfil_comercial_publica_la_retencion(client, admin_headers):
+async def test_el_perfil_comercial_habilita_la_auditoria_en_enterprise(client, admin_headers):
     _set_plan("Enterprise")
     res = await client.get("/api/auth/commercial-profile", headers=admin_headers)
     assert res.status_code == 200
 
     perfil = res.json()
     assert perfil["plan"] == "Enterprise"
-    assert perfil["audit_retention_days"] == 730
     assert perfil["feature_flags"]["audit_export"] is True
     assert perfil["feature_flags"]["audit_log"] is True
 
@@ -531,7 +482,7 @@ async def test_el_perfil_comercial_publica_la_retencion(client, admin_headers):
 async def test_la_exportacion_denegada_tambien_queda_registrada(client, admin_headers):
     _set_plan("Basico")
     assert (
-        await client.get("/api/audit-logs/export?format=csv", headers=admin_headers)
+        await client.get("/api/audit-logs/export", headers=admin_headers)
     ).status_code == 403
 
     filas = _consulta(

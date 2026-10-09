@@ -27,28 +27,6 @@ if [ ! -f "$DUMP_FILE" ]; then
 fi
 
 echo "Restaurando $DUMP_FILE — esto sobrescribe la base de datos actual."
-
-# backup_db.sh genera dos dumps: el operativo lleva -N audit y el de auditoría
-# -n audit. Restaurar el operativo NO toca el rastro, porque el esquema audit
-# no está en el fichero y --clean solo dropea lo que el dump contiene.
-case "$(basename "$DUMP_FILE")" in
-    corestream_audit_*)
-        echo
-        echo "ATENCIÓN: este es el dump de AUDITORÍA (esquema audit)."
-        echo "Restaurarlo retrocede el registro de no repudio al estado de ese"
-        echo "backup: todo evento posterior se pierde. Solo tiene sentido en una"
-        echo "recuperación ante desastre, nunca para arreglar datos operativos."
-        ;;
-    *)
-        echo
-        echo "Dump operativo: el esquema audit NO se toca."
-        echo "Si este backup se generó antes de que la auditoría se separara, sí"
-        echo "lo incluye y lo retrocedería — compruébalo con:"
-        echo "  gunzip -c \"$DUMP_FILE\" | pg_restore -l | grep -i ' audit'"
-        ;;
-esac
-
-echo
 printf "Escribe RESTAURAR para confirmar: "
 read -r CONFIRMACION
 if [ "$CONFIRMACION" != "RESTAURAR" ]; then

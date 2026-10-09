@@ -45,14 +45,7 @@ _MAX_USER_AGENT = 512
 
 
 def _client_ip(request: Request) -> str | None:
-    """
-    request.client.host ya es la IP real del cliente: uvicorn corre con
-    --forwarded-allow-ips (ver backend/Dockerfile) y resuelve X-Forwarded-For
-    por su cuenta. Esa variable DEBE apuntar al proxy concreto — con el
-    comodín, el propio cliente puede dictar esta cabecera y el campo deja de
-    servir para no repudio. config.py aborta el arranque en producción si se
-    queda en "*".
-    """
+    """Devuelve la IP del cliente, que uvicorn ya resuelve desde X-Forwarded-For."""
     return request.client.host if request.client else None
 
 

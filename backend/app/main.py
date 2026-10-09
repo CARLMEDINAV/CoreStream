@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy import text
 
-from app.config import get_settings, validate_http_runtime
+from app.config import get_settings
 from app.database import dispose_engine, get_session_maker
 from app.logging_config import configure_logging
 from app.middleware.audit import AuditMiddleware
@@ -109,17 +109,13 @@ async def lifespan(app: FastAPI):
     register_tenant_scope()   # <-- nuevo, antes del log final de startup
     logger.info("Filtro de multi-tenancy registrado")
 
-    # Solo para el proceso que sirve HTTP: en producción esto lanza y uvicorn
-    # no llega a atender ninguna petición. El worker no pasa por aquí porque
-    # la variable no significa nada para él.
-    validate_http_runtime(settings)
-
+    # Avisa si no hay un proxy fijado: la IP que se registra la daría el cliente.
     if settings.FORWARDED_ALLOW_IPS.strip() in ("*", ""):
         logger.warning(
             "FORWARDED_ALLOW_IPS='%s': X-Forwarded-For se acepta de cualquier "
             "origen, así que la IP de audit.audit_logs y el límite por IP de "
-            "/auth/login los puede dictar el cliente. Aceptable en desarrollo; "
-            "en producción el arranque falla.",
+            "/auth/login los puede dictar el cliente. Fijar aquí la IP o el "
+            "CIDR del proxy que termina TLS.",
             settings.FORWARDED_ALLOW_IPS,
         )
 

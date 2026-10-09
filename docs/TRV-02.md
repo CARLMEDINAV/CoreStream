@@ -80,9 +80,8 @@ Si no existe su perfil, se rechaza con 403. Un error de base de datos no concede
 acceso. Los permisos RBAC y el aislamiento de TRV-01 siguen aplicándose.
 
 `GET /api/auth/commercial-profile` requiere autenticación y devuelve `client_id`,
-`plan`, `is_active`, `feature_flags` y `audit_retention_days`. No existe una
-operación de escritura para usuarios cliente; ADMIN puede consultar el plan, no
-elevarlo.
+`plan`, `is_active` y `feature_flags`. No existe una operación de escritura para
+usuarios cliente; ADMIN puede consultar el plan, no elevarlo.
 
 ## Frontend
 
@@ -113,8 +112,7 @@ individual de banderas por cliente.
 TRV-07 y TRV-08 quedaron fuera del cambio original de TRV-02 y se desarrollaron
 después, reutilizando este mismo mecanismo: TRV-08 depende de TRV-02 para leer el
 plan del cliente y añadió el plan `Enterprise` y las banderas `audit_log` y
-`audit_export`. El frontend todavía no consume `audit_retention_days` ni el
-visor de auditoría (NEW-14) — el campo ya viaja en el perfil.
+`audit_export`. El frontend todavía no consume el visor de auditoría (NEW-14).
 
 ## Aplicar y probar en local
 

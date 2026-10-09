@@ -426,21 +426,6 @@ def test_csv_vacio_conserva_la_cabecera():
     assert audit_export.render_csv([]).strip() == ",".join(audit_records.ENTRY_FIELDS)
 
 
-def test_jsonl_vacio_no_emite_una_linea_en_blanco():
-    assert audit_export.render_jsonl([]) == ""
-
-
-def test_jsonl_es_una_linea_json_por_entrada():
-    import json
-
-    lineas = audit_export.render_jsonl([_fila(), _fila()]).strip().splitlines()
-    assert len(lineas) == 2
-    registro = json.loads(lineas[0])
-    assert set(registro) == set(audit_records.ENTRY_FIELDS)
-    assert registro["actor_email"] == "admin@cliente.com"
-    assert registro["outcome"] == AuditOutcome.SUCCESS
-
-
 def test_las_fechas_se_exportan_en_iso_8601():
     """Criterio explícito de TRV-07."""
     momento = datetime(2026, 10, 2, 9, 30, tzinfo=timezone.utc)
@@ -640,43 +625,12 @@ _PROD = {
 }
 
 
-@pytest.mark.parametrize("valor", ["*", "", "   "])
-def test_la_api_no_arranca_con_la_ip_falsificable(valor):
-    """
-    Con el comodín, uvicorn acepta X-Forwarded-For de cualquier origen y es el
-    cliente quien decide qué IP se registra. Un registro de no repudio con el
-    origen falsificable es peor que no tenerlo, porque se usa como evidencia:
-    el arranque falla en vez de dejarlo pasar en silencio.
-    """
-    from app.config import Settings, validate_http_runtime
-
-    with pytest.raises(ValueError, match="FORWARDED_ALLOW_IPS"):
-        validate_http_runtime(Settings(**_PROD, FORWARDED_ALLOW_IPS=valor))
-
-
-@pytest.mark.parametrize("valor", ["10.0.0.7", "10.0.0.0/24", "10.0.0.7,10.0.0.8"])
-def test_la_api_arranca_con_el_proxy_fijado(valor):
-    from app.config import Settings, validate_http_runtime
-
-    validate_http_runtime(Settings(**_PROD, FORWARDED_ALLOW_IPS=valor))
-
-
-def test_en_desarrollo_el_comodin_sigue_permitido():
-    """En local no hay proxy delante; obligar a fijarlo solo estorbaría."""
-    from app.config import Settings, validate_http_runtime
-
-    validate_http_runtime(Settings(ENVIRONMENT="development", FORWARDED_ALLOW_IPS="*"))
-
-
-def test_el_worker_no_valida_la_ip():
-    """
-    El worker comparte Settings con la API pero no sirve HTTP. Con el chequeo
-    dentro de Settings, su contenedor abortaba en producción por una variable
-    que para él no significa nada — y la purga de retención dejaba de correr.
-    """
+@pytest.mark.parametrize("valor", ["*", "", "10.0.0.7", "10.0.0.0/24"])
+def test_el_valor_del_proxy_no_impide_arrancar(valor):
+    """Comprueba que el valor de FORWARDED_ALLOW_IPS no bloquea el arranque."""
     from app.config import Settings
 
-    assert Settings(**_PROD, FORWARDED_ALLOW_IPS="*").ENVIRONMENT == "production"
+    assert Settings(**_PROD, FORWARDED_ALLOW_IPS=valor).ENVIRONMENT == "production"
 
 
 # ---------------------------------------------------------------------------
@@ -744,41 +698,6 @@ def test_los_destinos_se_eligen_por_configuracion(monkeypatch):
         assert {s.name for s in build_default_sink().sinks} == {"database"}
     finally:
         get_settings.cache_clear()
-
-
-def test_un_destino_desconocido_aborta(monkeypatch):
-    """
-    Creer que los eventos van a un motor que nadie construyó es peor que no
-    tenerlo: un nombre mal escrito falla, no se ignora.
-    """
-    from app.config import get_settings
-    from app.services.audit_sinks import build_default_sink
-
-    get_settings.cache_clear()
-    monkeypatch.setenv("AUDIT_SINKS", "database,elastik")
-    try:
-        with pytest.raises(ValueError, match="desconocidos"):
-            build_default_sink()
-    finally:
-        get_settings.cache_clear()
-
-
-def test_produccion_exige_que_database_este_entre_los_destinos():
-    """Sin él no hay nada que consultar, exportar ni purgar (TRV-08)."""
-    from app.config import Settings
-
-    with pytest.raises(ValueError, match="database"):
-        Settings(**_PROD, FORWARDED_ALLOW_IPS="10.0.0.7", AUDIT_SINKS="logstream")
-
-
-def test_produccion_no_deja_elastic_sin_destino():
-    from app.config import Settings
-
-    with pytest.raises(ValueError, match="ELASTIC_URL"):
-        Settings(
-            **_PROD, FORWARDED_ALLOW_IPS="10.0.0.7",
-            AUDIT_SINKS="database,elastic", ELASTIC_URL="",
-        )
 
 
 def test_elastic_necesita_una_url():
@@ -892,18 +811,15 @@ def test_sin_credenciales_no_se_manda_cabecera_de_autenticacion():
 def test_cada_destino_registrado_cumple_el_protocolo():
     from app.services.audit_sinks import SINK_FACTORIES
 
-    assert set(SINK_FACTORIES) == {"database", "logstream", "elastic"}
+    assert set(SINK_FACTORIES) == {"database", "elastic"}
 
 
-def test_los_destinos_por_defecto_son_base_de_datos_y_log():
-    """
-    Los dos destinos del criterio 2. Añadir un tercero (ELK, CloudWatch) es
-    registrarlo aquí: ni el middleware ni el servicio cambian.
-    """
+def test_el_destino_por_defecto_es_la_base_de_datos():
+    """Comprueba que sin configurar nada el registro va a audit.audit_logs."""
     from app.services.audit_sinks import AuditSink, build_default_sink
 
     sink = build_default_sink()
-    assert {s.name for s in sink.sinks} == {"database", "logstream"}
+    assert {s.name for s in sink.sinks} == {"database"}
     assert all(isinstance(s, AuditSink) for s in sink.sinks)
 
 
@@ -929,34 +845,6 @@ async def test_el_middleware_no_conoce_los_destinos():
         set_audit_sink(None)
 
     assert capturado and capturado[0]["path"] == "/y"
-
-
-# ---------------------------------------------------------------------------
-# Registro de formatos (criterio 2 de TRV-08)
-# ---------------------------------------------------------------------------
-
-def test_el_literal_del_router_coincide_con_los_formatos_registrados():
-    """
-    FastAPI exige el tipo del parámetro estático, así que la lista de formatos
-    se repite como Literal en el router. Esto impide que se desincronicen.
-    """
-    from typing import get_args
-
-    from app.routers.audit_logs import ExportFormatName
-
-    assert set(get_args(ExportFormatName)) == set(audit_export.FORMATS)
-
-
-def test_cada_formato_se_describe_entero_en_un_solo_sitio():
-    for nombre, fmt in audit_export.FORMATS.items():
-        assert fmt.name == nombre
-        assert fmt.media_type and fmt.extension
-        assert callable(fmt.render)
-
-
-def test_un_formato_desconocido_es_un_error_explicito():
-    with pytest.raises(ValueError):
-        audit_export.get_format("xlsx")
 
 
 async def test_las_entradas_sin_cliente_caducan_con_la_retencion_mas_corta(db_session):

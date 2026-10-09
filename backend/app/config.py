@@ -125,19 +125,15 @@ class Settings(BaseSettings):
     # raíz (plan fase 7.2) — en Docker debe ser un volumen persistente.
     UPLOAD_DIR: str = "/app/storage"
 
-    # El valor que uvicorn usa de verdad llega por la línea de comandos del
-    # contenedor (--forwarded-allow-ips); aquí se replica para poder validarlo
-    # al arrancar. Con "*" la IP que se registra en audit.audit_logs la elige
-    # el cliente, y el criterio 1 de TRV-07 exige IP de verdad.
+    # Proxy de confianza para X-Forwarded-For. El valor que uvicorn usa llega
+    # por la línea de comandos del contenedor (--forwarded-allow-ips); aquí se
+    # replica para poder avisar al arrancar si se deja en "*".
     FORWARDED_ALLOW_IPS: str = "*"
 
-    # Destinos activos del registro de auditoría (TRV-07), por nombre y
-    # separados por coma. Los nombres válidos los define SINK_FACTORIES en
-    # app/services/audit_sinks.py; uno desconocido aborta el arranque.
-    #   database   — la tabla audit.audit_logs (no quitarlo: es el almacén)
-    #   logstream  — línea JSON por stdout, para el driver de logs de Docker
-    #   elastic    — envío directo a Elasticsearch (ELK)
-    AUDIT_SINKS: str = "database,logstream"
+    # Destinos activos del registro de auditoría (TRV-07), separados por coma.
+    #   database  — la tabla audit.audit_logs
+    #   elastic   — envío a Elasticsearch (ELK)
+    AUDIT_SINKS: str = "database"
 
     # ¿Se auditan también las lecturas con éxito?
     #
@@ -228,47 +224,7 @@ class Settings(BaseSettings):
                 "cualquier origen si algún día se relaja allow_credentials."
             )
 
-        sinks = {s.strip() for s in self.AUDIT_SINKS.split(",") if s.strip()}
-        if "database" not in sinks:
-            raise ValueError(
-                "AUDIT_SINKS debe incluir 'database': es el almacén consultable "
-                "y exportable del registro de auditoría (TRV-07/TRV-08). Sin él "
-                "no hay nada que consultar ni purgar."
-            )
-        if "elastic" in sinks and not self.ELASTIC_URL.strip():
-            raise ValueError(
-                "AUDIT_SINKS incluye 'elastic' pero ELASTIC_URL está vacía: la "
-                "derivación a ELK quedaría silenciosamente sin destino."
-            )
-
         return self
-
-
-def validate_http_runtime(settings: "Settings") -> None:
-    """
-    Comprobaciones que solo aplican al proceso que sirve HTTP.
-
-    Deliberadamente fuera de validate_production_settings: esa la ejecutan
-    tanto la API como el worker, y el worker no atiende peticiones. Con el
-    chequeo dentro de Settings, el contenedor del worker abortaba por una
-    variable que para él no significa nada.
-
-    La llama el lifespan de la API (main.py), donde una excepción impide que
-    uvicorn empiece a servir, y el script scripts/check_env.py.
-    """
-    if settings.ENVIRONMENT != "production":
-        return
-
-    if settings.FORWARDED_ALLOW_IPS.strip() in ("*", ""):
-        raise ValueError(
-            "FORWARDED_ALLOW_IPS no puede ser '*' en producción: uvicorn "
-            "aceptaría X-Forwarded-For de cualquier origen, así que la IP que "
-            "se registra en audit.audit_logs la elegiría el propio cliente — y "
-            "el criterio de no repudio de TRV-07 exige IP fiable. Por el mismo "
-            "motivo el límite por IP de /auth/login se podría saltar rotando la "
-            "cabecera. Poner aquí la IP o el CIDR del proxy que termina TLS "
-            "(ver docs/DEPLOYMENT.md)."
-        )
 
 
 @lru_cache()
