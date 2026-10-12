@@ -738,4 +738,92 @@ export default {
     eventBlocked: 'Bloqueado',
     eventBlockedQuestion: 'Pregunta Bloqueante',
   },
+
+  "incidencias": {
+    "titulo": "Incidencias",
+    "reportar": "Reportar incidencia",
+    "actualizar": "Actualizar",
+    "atencion": "Atención: incidencias críticas y altas abiertas",
+    "sinUrgentes": "No hay incidencias urgentes abiertas",
+    "activas": "Activas",
+    "cerradas": "Resueltas y cerradas",
+    "vacio": "No hay incidencias",
+    "detalle": "Ver detalle",
+    "errorCarga": "No se pudieron cargar los datos. Vuelve a intentar.",
+    "errorAbrir": "No se pudo abrir la incidencia. Puede haber sido eliminada o no tener acceso.",
+    "errorGuardar": "No se pudo guardar. Actualiza el detalle y revisa tus permisos.",
+    "nombre": "Título",
+    "descripcion": "Descripción",
+    "categoria": "Categoría",
+    "severidad": "Severidad",
+    "entorno": "Entorno",
+    "tiempo": "Tiempo estimado (segundos)",
+    "cancelar": "Cancelar",
+    "cerrar": "Cerrar",
+    "responsable": "Responsable",
+    "sinAsignar": "Sin asignar",
+    "notas": "Notas de mitigación",
+    "guardar": "Guardar cambios",
+    "historial": "Historial",
+    "sinHistorial": "Sin eventos registrados",
+    "comentario": "Comentario",
+    "enviar": "Enviar comentario",
+    "estados": {
+      "REPORTED": "Reportada",
+      "ASSIGNED": "Asignada",
+      "INVESTIGATING": "En investigación",
+      "IN_REVIEW": "En revisión",
+      "MITIGATED": "Mitigada",
+      "RESOLVED": "Resuelta",
+      "CLOSED": "Cerrada",
+      "REOPENED": "Reabierta"
+    },
+    "acciones": {
+      "REPORTED": "Reportar",
+      "ASSIGNED": "Asignar",
+      "INVESTIGATING": "Tomar / retomar",
+      "IN_REVIEW": "Enviar a revisión",
+      "MITIGATED": "Mitigar",
+      "RESOLVED": "Resolver",
+      "CLOSED": "Cerrar incidencia",
+      "REOPENED": "Reabrir"
+    },
+    "severidades": {
+      "P1": "P1 · Crítica",
+      "P2": "P2 · Alta",
+      "P3": "P3 · Media"
+    },
+    "entornos": {
+      "PRODUCTION": "Producción",
+      "STAGING": "Pruebas",
+      "DEV": "Desarrollo"
+    },
+    "eventos": {
+      "reporte": "Reporte",
+      "asignacion": "Asignación",
+      "estado": "Cambio de estado",
+      "comentario": "Comentario",
+      "actualizacion": "Actualización",
+      "importacion": "Estado previo"
+    }
+  },
+  "avisos": {
+    "recursoNoDisponible": "No se pudo abrir el recurso. Puede haber sido eliminado o no tener acceso.",
+    "tipo": "Tipo de evento",
+    "todos": "Todos los tipos",
+    "error": "No se pudo completar la operación. Vuelve a intentar.",
+    "cargando": "Cargando…",
+    "mas": "Cargar más",
+    "tipos": {
+      "TICKET_ASSIGNED": "Ticket asignado",
+      "STATUS_CHANGED": "Cambio de estado",
+      "TICKET_REDIRECTED": "Ticket redirigido",
+      "TICKET_COMPLETED": "Ticket completado",
+      "QUESTION_RAISED": "Pregunta",
+      "INCIDENT_REPORTED": "Incidencia reportada",
+      "INCIDENT_ASSIGNED": "Incidencia asignada",
+      "SYSTEM": "Sistema"
+    }
+  }
+,
 }

@@ -40,6 +40,7 @@ async def deliver_notification(
     message: str,
     notification_type: str,
     ticket_id: str | None = None,
+    incident_id: str | None = None,
     created_at: str,
 ) -> None:
     """
@@ -63,6 +64,7 @@ async def deliver_notification(
         "title": title,
         "message": message,
         "ticket_id": ticket_id,
+        "incident_id": incident_id,
         "is_read": False,
         "created_at": created_at,
     })

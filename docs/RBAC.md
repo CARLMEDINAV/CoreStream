@@ -153,9 +153,24 @@ distinción de rol.
 
 | Acción | ADMIN | TEAM_LEADER | DEVELOPER |
 |---|---|---|---|
-| Crear / listar / ver | ✅ | ✅ | ✅ |
-| Editar (`PATCH /{id}`) | ✅ | ✅ | ❌ |
-| Cambiar estado (`PATCH /{id}/status`) | ✅ (cualquier autenticado; sin ownership) | ✅ | ✅ |
+| Reportar / listar / ver / comentar / consultar historial | ✅ | ✅ | ✅ |
+| Asignar, reasignar o editar datos | ✅ | ✅ | ❌ |
+| Editar notas de mitigación | ✅ | ✅ | Solo si es el asignado |
+| Tomar, mitigar, retomar o enviar a revisión | ✅ | ✅ | Solo si es el asignado |
+| Resolver, cerrar o reabrir | ✅ | ✅ | ❌ |
+| Consultar lista de atención (`?atencion=true`) | ✅ | ✅ | ❌ |
+
+WEB-14: todas las operaciones se limitan al cliente autenticado. El responsable
+asignado debe ser un DEVELOPER o TEAM_LEADER activo del mismo cliente. Los cambios
+de estado validan la transición y registran autor y fecha en `eventos_incidencia`.
+P1 y P2 corresponden a crítica y alta; aparecen en atención hasta resolver o cerrar.
+
+WEB-17: el listado de notificaciones admite `?type=INCIDENT_REPORTED` y los demás
+tipos del enum. Reportar avisa a administradores y líderes; asignar avisa al nuevo
+responsable. Los avisos de incidencias exigen solo `incident_id`; los de tickets,
+solo `ticket_id`. Los mensajes generales SYSTEM pueden no tener recurso, pero
+nunca pueden tener ambos. El enlace conserva los permisos del recurso de destino.
+
 
 ### Tickets de soporte (`/api/support-tickets`)
 

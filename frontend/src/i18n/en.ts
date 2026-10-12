@@ -727,4 +727,92 @@ export default {
     eventBlocked: 'Blocked',
     eventBlockedQuestion: 'Blocking Question',
   },
+
+  "incidencias": {
+    "titulo": "Incidents",
+    "reportar": "Report incident",
+    "actualizar": "Refresh",
+    "atencion": "Attention: open critical and high incidents",
+    "sinUrgentes": "No urgent incidents are open",
+    "activas": "Active",
+    "cerradas": "Resolved and closed",
+    "vacio": "No incidents",
+    "detalle": "View details",
+    "errorCarga": "Could not load data. Try again.",
+    "errorAbrir": "Could not open the incident. It may have been deleted or access is denied.",
+    "errorGuardar": "Could not save. Refresh the details and check your permissions.",
+    "nombre": "Title",
+    "descripcion": "Description",
+    "categoria": "Category",
+    "severidad": "Severity",
+    "entorno": "Environment",
+    "tiempo": "Estimated time (seconds)",
+    "cancelar": "Cancel",
+    "cerrar": "Close",
+    "responsable": "Assignee",
+    "sinAsignar": "Unassigned",
+    "notas": "Mitigation notes",
+    "guardar": "Save changes",
+    "historial": "History",
+    "sinHistorial": "No events recorded",
+    "comentario": "Comment",
+    "enviar": "Send comment",
+    "estados": {
+      "REPORTED": "Reported",
+      "ASSIGNED": "Assigned",
+      "INVESTIGATING": "Investigating",
+      "IN_REVIEW": "In review",
+      "MITIGATED": "Mitigated",
+      "RESOLVED": "Resolved",
+      "CLOSED": "Closed",
+      "REOPENED": "Reopened"
+    },
+    "acciones": {
+      "REPORTED": "Report",
+      "ASSIGNED": "Assign",
+      "INVESTIGATING": "Take / resume",
+      "IN_REVIEW": "Send for review",
+      "MITIGATED": "Mitigate",
+      "RESOLVED": "Resolve",
+      "CLOSED": "Close incident",
+      "REOPENED": "Reopen"
+    },
+    "severidades": {
+      "P1": "P1 · Critical",
+      "P2": "P2 · High",
+      "P3": "P3 · Medium"
+    },
+    "entornos": {
+      "PRODUCTION": "Production",
+      "STAGING": "Staging",
+      "DEV": "Development"
+    },
+    "eventos": {
+      "reporte": "Report",
+      "asignacion": "Assignment",
+      "estado": "Status change",
+      "comentario": "Comment",
+      "actualizacion": "Update",
+      "importacion": "Previous state"
+    }
+  },
+  "avisos": {
+    "recursoNoDisponible": "Could not open the resource. It may have been deleted or access is denied.",
+    "tipo": "Event type",
+    "todos": "All types",
+    "error": "Could not complete the operation. Try again.",
+    "cargando": "Loading…",
+    "mas": "Load more",
+    "tipos": {
+      "TICKET_ASSIGNED": "Ticket assigned",
+      "STATUS_CHANGED": "Status changed",
+      "TICKET_REDIRECTED": "Ticket redirected",
+      "TICKET_COMPLETED": "Ticket completed",
+      "QUESTION_RAISED": "Question raised",
+      "INCIDENT_REPORTED": "Incident reported",
+      "INCIDENT_ASSIGNED": "Incident assigned",
+      "SYSTEM": "System"
+    }
+  }
+,
 }

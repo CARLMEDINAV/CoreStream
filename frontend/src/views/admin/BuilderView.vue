@@ -1155,20 +1155,33 @@ onUnmounted(() => {
   eventBus.off('ws-update', handleWsTicketUpdate)
 })
 
+let aperturaTicket = 0
+const abrirTicketNotificado = async (notifTicketId: string | undefined) => {
+  if (!notifTicketId) return
+  const aperturaActual = ++aperturaTicket
+  try {
+    const ticket = await api.tickets.getById(notifTicketId)
+    if (aperturaActual !== aperturaTicket) return
+    selectedTicket.value = ticket
+    isTicketPanelOpen.value = true
+  } catch {
+    if (aperturaActual === aperturaTicket) dialogStore.alert(t('avisos.recursoNoDisponible'))
+  }
+  if (aperturaActual === aperturaTicket) {
+    const consulta = { ...route.query }
+    delete consulta.ticketId
+    router.replace({ query: consulta })
+  }
+}
+
+watch(() => route.query.ticketId, identificador => {
+  if (typeof identificador === 'string') abrirTicketNotificado(identificador)
+})
+
 onMounted(async () => {
   eventBus.on('ws-update', handleWsTicketUpdate)
   await loadApps()
-  const notifTicketId = route.query.ticketId as string | undefined
-  if (notifTicketId) {
-    try {
-      const ticket = await api.tickets.getById(notifTicketId)
-      selectedTicket.value = ticket
-      isTicketPanelOpen.value = true
-    } catch {
-      // ticket not found or unauthorized — ignore
-    }
-    router.replace({ query: {} })
-  }
+  await abrirTicketNotificado(route.query.ticketId as string | undefined)
 })
 
 watch(

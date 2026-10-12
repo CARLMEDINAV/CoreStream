@@ -5,7 +5,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 from uuid import UUID as PyUUID
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, String
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -29,8 +29,25 @@ class NotificationType(str, Enum):
     SYSTEM            = "SYSTEM"
 
 
+def validar_enlace(tipo, ticket_id, incident_id):
+    if ticket_id is not None and incident_id is not None:
+        raise ValueError("La notificación no puede enlazar dos recursos")
+    if tipo in (NotificationType.INCIDENT_REPORTED, NotificationType.INCIDENT_ASSIGNED):
+        if incident_id is None or ticket_id is not None:
+            raise ValueError("La notificación de incidencia necesita solo incident_id")
+    elif tipo != NotificationType.SYSTEM and (ticket_id is None or incident_id is not None):
+        raise ValueError("La notificación de ticket necesita solo ticket_id")
+
+
 class Notification(Base, BaseEntity, TenantMixin):
     __tablename__ = "notifications"
+    __table_args__ = (CheckConstraint(
+        "(type IN ('INCIDENT_REPORTED', 'INCIDENT_ASSIGNED') AND incident_id IS NOT NULL AND ticket_id IS NULL) OR "
+        "(type IN ('TICKET_ASSIGNED', 'STATUS_CHANGED', 'TICKET_REDIRECTED', 'TICKET_COMPLETED', 'QUESTION_RAISED') "
+        "AND ticket_id IS NOT NULL AND incident_id IS NULL) OR "
+        "(type = 'SYSTEM' AND (ticket_id IS NULL OR incident_id IS NULL))",
+        name="ck_notificacion_recurso",
+    ),)
 
     user_id: Mapped[PyUUID] = mapped_column(
         UUID(as_uuid=True),
@@ -40,13 +57,13 @@ class Notification(Base, BaseEntity, TenantMixin):
     )
     ticket_id: Mapped[PyUUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("tickets.id", ondelete="SET NULL"),
+        ForeignKey("tickets.id", ondelete="CASCADE"),
         nullable=True,
         index=True,
     )
     incident_id: Mapped[PyUUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("incidents.id", ondelete="SET NULL"),
+        ForeignKey("incidents.id", ondelete="CASCADE"),
         nullable=True,
         index=True,
     )

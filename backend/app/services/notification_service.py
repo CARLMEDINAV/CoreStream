@@ -20,7 +20,8 @@ from arq import ArqRedis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Notification, NotificationType, User
+from app.models import Incident, Notification, NotificationType, Ticket, User
+from app.models.notification import validar_enlace
 
 logger = logging.getLogger(__name__)
 
@@ -56,16 +57,23 @@ async def create_notification(
     tid = UUID(str(ticket_id)) if ticket_id and not isinstance(ticket_id, UUID) else ticket_id
     iid = UUID(str(incident_id)) if incident_id and not isinstance(incident_id, UUID) else incident_id
 
-    # Validar que el tipo existe en el enum
-    try:
-        ntype = NotificationType(notification_type)
-    except ValueError:
-        ntype = NotificationType.SYSTEM
+    ntype = NotificationType(notification_type)
+    validar_enlace(ntype, tid, iid)
 
     # client_id del USUARIO DESTINATARIO, no de quien dispara el evento —
     # esta función solo recibe un user_id suelto (TRV-01, Fase 5).
     recipient_result = await db.execute(select(User.client_id).where(User.id == uid))
     recipient_client_id = recipient_result.scalar_one_or_none()
+    if recipient_client_id is None:
+        raise ValueError("Destinatario no encontrado")
+    recurso = Incident if iid is not None else Ticket
+    identificador = iid if iid is not None else tid
+    if identificador is not None:
+        encontrado = await db.scalar(select(recurso.id).where(
+            recurso.id == identificador, recurso.client_id == recipient_client_id,
+        ))
+        if encontrado is None:
+            raise ValueError("El recurso no pertenece al cliente del destinatario")
 
     notification = Notification(
         user_id=uid,
@@ -107,6 +115,7 @@ async def enqueue_notification(notification: Notification) -> bool:
             message=notification.message,
             notification_type=notification.type.value,
             ticket_id=str(notification.ticket_id) if notification.ticket_id else None,
+            incident_id=str(notification.incident_id) if notification.incident_id else None,
             created_at=notification.created_at.isoformat() if notification.created_at else datetime.now(timezone.utc).isoformat(),
         )
         logger.debug("Notificación %s encolada para usuario %s", notification.id, notification.user_id)

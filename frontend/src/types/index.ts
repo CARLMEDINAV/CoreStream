@@ -1046,11 +1046,12 @@ export interface SupportSummary {
  * Representa un Incidente Crítico (P1, P2, P3)
  */
 export interface Incident {
+  categoria: string
   id: string
   title: string
   description: string
   applicationId?: string
-  status: TicketStatus
+  status: string
   severity: string
   affectedEnvironment: string
   createdAt: string
@@ -1324,4 +1325,15 @@ export interface CommercialProfile {
   plan: string
   is_active: boolean
   feature_flags: Record<string, boolean>
+}
+
+export interface EventoIncidencia {
+  id: string
+  autor_id: string | null
+  autor_nombre: string
+  tipo: string
+  estado_anterior: string | null
+  estado_nuevo: string | null
+  comentario: string | null
+  created_at: string
 }

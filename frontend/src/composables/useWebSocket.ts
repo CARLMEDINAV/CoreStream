@@ -115,6 +115,7 @@ function handleMessage(event: MessageEvent): void {
               type: (message.data.type as NotificationType) ?? NotificationType.SYSTEM,
               isRead: message.data.is_read ?? false,
               ticketId: message.data.ticket_id ?? undefined,
+              incidentId: message.data.incident_id ?? undefined,
               createdAt: message.data.created_at ?? message.timestamp ?? new Date().toISOString(),
             })
           } else {
@@ -130,6 +131,7 @@ function handleMessage(event: MessageEvent): void {
                 type: (message.data.type as NotificationType) || NotificationType.SYSTEM,
                 isRead: false,
                 ticketId: message.data.ticketId || message.data.ticket_id || undefined,
+            incidentId: message.data.incidentId || message.data.incident_id || undefined,
                 createdAt: message.timestamp || new Date().toISOString(),
               })
             }

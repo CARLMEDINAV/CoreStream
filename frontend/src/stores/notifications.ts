@@ -69,6 +69,9 @@ export const useNotificationsStore = defineStore('notifications', () => {
    * Número de notificaciones por página
    */
   const pageSize = ref<number>(20)
+  const filtroTipo = ref<NotificationType | ''>('')
+  const hayMas = ref(false)
+  let numeroConsulta = 0
 
   // ========== GETTERS COMPUTADOS ==========
 
@@ -102,7 +105,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
    * Retorna si hay más notificaciones para cargar
    */
   const hasMore = computed((): boolean => {
-    return notifications.value.length < totalNotifications.value
+    return hayMas.value
   })
 
   /**
@@ -158,15 +161,23 @@ export const useNotificationsStore = defineStore('notifications', () => {
    * @param limit - Cantidad de notificaciones por página (defecto 20)
    * @returns Promise<Notification[]>
    */
-  const fetch = async (page: number = 1, limit: number = 20): Promise<Notification[]> => {
+  const fetch = async (page: number = 1, limit: number = 20, tipo = filtroTipo.value): Promise<Notification[]> => {
+    const consultaActual = ++numeroConsulta
+    if (tipo !== filtroTipo.value) {
+      notifications.value = []
+      hayMas.value = false
+      currentPage.value = 0
+    }
+    filtroTipo.value = tipo
     isLoading.value = true
     error.value = null
-    currentPage.value = page
-    pageSize.value = limit
 
     try {
       const skip = (page - 1) * limit
-      const response = await api.notifications.list({ skip, limit } as any)
+      const response = await api.notifications.list({ skip, limit, type: tipo || undefined })
+      if (consultaActual !== numeroConsulta) return []
+      currentPage.value = page
+      pageSize.value = limit
       const rawItems: any[] = Array.isArray(response)
         ? response
         : ((response as any)?.data?.items ?? (response as any)?.items ?? (response as any)?.data ?? [])
@@ -178,21 +189,23 @@ export const useNotificationsStore = defineStore('notifications', () => {
       if (page === 1) {
         notifications.value = items
       } else {
-        notifications.value.push(...items)
+        notifications.value.push(...items.filter(aviso => !notifications.value.some(actual => actual.id === aviso.id)))
       }
 
       totalNotifications.value = total
+      hayMas.value = items.length === limit
 
       await fetchUnreadCount()
 
       return items
     } catch (err) {
+      if (consultaActual !== numeroConsulta) return []
       const message = err instanceof Error ? err.message : 'Error al obtener notificaciones'
       error.value = message
       console.error('Error en fetch:', err)
       throw err
     } finally {
-      isLoading.value = false
+      if (consultaActual === numeroConsulta) isLoading.value = false
     }
   }
 
@@ -243,7 +256,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
       })
 
       // Recalcular contador
-      unreadCount.value = unreadNotifications.value.length
+      await fetchUnreadCount()
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error al marcar como leídas'
       error.value = message
@@ -300,7 +313,10 @@ export const useNotificationsStore = defineStore('notifications', () => {
         crypto.randomUUID && (notification.id = crypto.randomUUID())
       } catch {}
     }
-    notifications.value.unshift(notification)
+    if (notifications.value.some(aviso => aviso.id === notification.id)) return
+    if (!filtroTipo.value || notification.type === filtroTipo.value) {
+      notifications.value.unshift(notification)
+    }
     
     // Si la notificación no es leída, incrementar contador
     if (!notification.isRead) {
@@ -383,6 +399,10 @@ export const useNotificationsStore = defineStore('notifications', () => {
    * Limpia el estado del store (para logout)
    */
   const clear = (): void => {
+    numeroConsulta++
+    filtroTipo.value = ''
+    hayMas.value = false
+    isLoading.value = false
     notifications.value = []
     unreadCount.value = 0
     currentPage.value = 1
@@ -399,6 +419,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
     currentPage,
     totalNotifications,
     pageSize,
+    filtroTipo,
     // Getters
     unreadNotifications,
     recentNotifications,

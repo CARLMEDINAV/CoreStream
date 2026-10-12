@@ -379,6 +379,17 @@ const routes: RouteRecordRaw[] = [
           requiredRoles: ['DEVELOPER', 'TEAM_LEADER'],
           title: 'Soporte - CoreStream'
         }
+      },
+      {
+        path: 'my-incidents',
+        name: 'DevIncidents',
+        component: () => import('@/views/admin/IncidentsView.vue'),
+        meta: {
+          requiresAuth: true,
+          requiredRoles: ['DEVELOPER', 'TEAM_LEADER'],
+          featureFlag: 'incidents',
+          title: 'Incidencias - CoreStream'
+        }
       }
     ]
   },

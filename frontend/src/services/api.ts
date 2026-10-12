@@ -116,6 +116,7 @@ const toApplication = (raw: any): Application => ({
 })
 
 const toIncident = (raw: any): Incident => ({
+  categoria: raw.categoria ?? 'general',
   id: raw.id,
   title: raw.title,
   description: raw.description,
@@ -129,7 +130,7 @@ const toIncident = (raw: any): Incident => ({
   assignedToId: raw.assignedToId ?? raw.assigned_to_id ?? undefined,
   mitigationTimeSeconds: raw.mitigationTimeSeconds ?? raw.mitigation_time_seconds ?? undefined,
   mitigationState: raw.mitigationState ?? raw.mitigation_state ?? undefined,
-  isMitigated: raw.isMitigated ?? raw.is_mitigated ?? false,
+  isMitigated: ['RESOLVED', 'CLOSED'].includes(raw.status),
   mitigatedAt: raw.mitigatedAt ?? raw.mitigated_at ?? undefined,
   rootCauseAnalysis: raw.rootCauseAnalysis ?? raw.root_cause_analysis ?? undefined,
   postMortemLink: raw.postMortemLink ?? raw.post_mortem_link ?? undefined,
@@ -1012,6 +1013,7 @@ const realApi = {
 
   notifications: {
     list: async (filters?: {
+      skip?: number
       unreadOnly?: boolean
       type?: string
       page?: number
@@ -1206,7 +1208,13 @@ const realApi = {
   },
 
   incidents: {
-    list: async (filters?: { page?: number, limit?: number, application_id?: string, status?: string }): Promise<PaginatedResponse<Incident>> => {
+    eventos: async (identificador: string): Promise<import('@/types').EventoIncidencia[]> => {
+      return (await apiClient.get('/incidents/' + identificador + '/events')).data
+    },
+    comentar: async (identificador: string, comentario: string): Promise<void> => {
+      await apiClient.post('/incidents/' + identificador + '/comments', { comentario })
+    },
+    list: async (filters?: { page?: number, skip?: number, limit?: number, atencion?: boolean, application_id?: string, status?: string }): Promise<PaginatedResponse<Incident>> => {
       const response = await apiClient.get<any>('/incidents/', { params: filters })
       const data = response.data
       

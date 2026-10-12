@@ -716,4 +716,92 @@ export default {
     eventBlocked: 'Blockiert',
     eventBlockedQuestion: 'Blockierende Frage',
   },
+
+  "incidencias": {
+    "titulo": "Vorfälle",
+    "reportar": "Vorfall melden",
+    "actualizar": "Aktualisieren",
+    "atencion": "Achtung: offene kritische und schwere Vorfälle",
+    "sinUrgentes": "Keine dringenden Vorfälle offen",
+    "activas": "Aktiv",
+    "cerradas": "Gelöst und geschlossen",
+    "vacio": "Keine Vorfälle",
+    "detalle": "Details anzeigen",
+    "errorCarga": "Daten konnten nicht geladen werden. Erneut versuchen.",
+    "errorAbrir": "Vorfall nicht verfügbar. Er wurde gelöscht oder der Zugriff fehlt.",
+    "errorGuardar": "Speichern fehlgeschlagen. Details aktualisieren und Berechtigungen prüfen.",
+    "nombre": "Titel",
+    "descripcion": "Beschreibung",
+    "categoria": "Kategorie",
+    "severidad": "Schweregrad",
+    "entorno": "Umgebung",
+    "tiempo": "Geschätzte Zeit (Sekunden)",
+    "cancelar": "Abbrechen",
+    "cerrar": "Schließen",
+    "responsable": "Verantwortlich",
+    "sinAsignar": "Nicht zugewiesen",
+    "notas": "Notizen zur Eindämmung",
+    "guardar": "Speichern",
+    "historial": "Verlauf",
+    "sinHistorial": "Keine Ereignisse vorhanden",
+    "comentario": "Kommentar",
+    "enviar": "Kommentar senden",
+    "estados": {
+      "REPORTED": "Gemeldet",
+      "ASSIGNED": "Zugewiesen",
+      "INVESTIGATING": "In Untersuchung",
+      "IN_REVIEW": "In Prüfung",
+      "MITIGATED": "Eingedämmt",
+      "RESOLVED": "Gelöst",
+      "CLOSED": "Geschlossen",
+      "REOPENED": "Wieder geöffnet"
+    },
+    "acciones": {
+      "REPORTED": "Melden",
+      "ASSIGNED": "Zuweisen",
+      "INVESTIGATING": "Übernehmen / fortsetzen",
+      "IN_REVIEW": "Zur Prüfung senden",
+      "MITIGATED": "Eindämmen",
+      "RESOLVED": "Lösen",
+      "CLOSED": "Vorfall schließen",
+      "REOPENED": "Wieder öffnen"
+    },
+    "severidades": {
+      "P1": "P1 · Kritisch",
+      "P2": "P2 · Hoch",
+      "P3": "P3 · Mittel"
+    },
+    "entornos": {
+      "PRODUCTION": "Produktion",
+      "STAGING": "Test",
+      "DEV": "Entwicklung"
+    },
+    "eventos": {
+      "reporte": "Meldung",
+      "asignacion": "Zuweisung",
+      "estado": "Statusänderung",
+      "comentario": "Kommentar",
+      "actualizacion": "Änderung",
+      "importacion": "Vorheriger Zustand"
+    }
+  },
+  "avisos": {
+    "recursoNoDisponible": "Ressource nicht verfügbar. Sie wurde gelöscht oder der Zugriff fehlt.",
+    "tipo": "Ereignistyp",
+    "todos": "Alle Typen",
+    "error": "Vorgang fehlgeschlagen. Erneut versuchen.",
+    "cargando": "Laden…",
+    "mas": "Mehr laden",
+    "tipos": {
+      "TICKET_ASSIGNED": "Ticket zugewiesen",
+      "STATUS_CHANGED": "Status geändert",
+      "TICKET_REDIRECTED": "Ticket weitergeleitet",
+      "TICKET_COMPLETED": "Ticket abgeschlossen",
+      "QUESTION_RAISED": "Frage",
+      "INCIDENT_REPORTED": "Vorfall gemeldet",
+      "INCIDENT_ASSIGNED": "Vorfall zugewiesen",
+      "SYSTEM": "System"
+    }
+  }
+,
 }

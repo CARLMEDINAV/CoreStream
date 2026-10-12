@@ -716,4 +716,92 @@ export default {
     eventBlocked: 'Bloqué',
     eventBlockedQuestion: 'Question bloquante',
   },
+
+  "incidencias": {
+    "titulo": "Incidents",
+    "reportar": "Signaler un incident",
+    "actualizar": "Actualiser",
+    "atencion": "Attention : incidents critiques et élevés ouverts",
+    "sinUrgentes": "Aucun incident urgent ouvert",
+    "activas": "Actifs",
+    "cerradas": "Résolus et fermés",
+    "vacio": "Aucun incident",
+    "detalle": "Voir le détail",
+    "errorCarga": "Chargement impossible. Réessayez.",
+    "errorAbrir": "Impossible d’ouvrir cet incident. Il a été supprimé ou l’accès est refusé.",
+    "errorGuardar": "Enregistrement impossible. Actualisez le détail et vérifiez vos droits.",
+    "nombre": "Titre",
+    "descripcion": "Description",
+    "categoria": "Catégorie",
+    "severidad": "Gravité",
+    "entorno": "Environnement",
+    "tiempo": "Durée estimée (secondes)",
+    "cancelar": "Annuler",
+    "cerrar": "Fermer",
+    "responsable": "Responsable",
+    "sinAsignar": "Non attribué",
+    "notas": "Notes d’atténuation",
+    "guardar": "Enregistrer",
+    "historial": "Historique",
+    "sinHistorial": "Aucun événement enregistré",
+    "comentario": "Commentaire",
+    "enviar": "Envoyer",
+    "estados": {
+      "REPORTED": "Signalé",
+      "ASSIGNED": "Attribué",
+      "INVESTIGATING": "En investigation",
+      "IN_REVIEW": "En révision",
+      "MITIGATED": "Atténué",
+      "RESOLVED": "Résolu",
+      "CLOSED": "Fermé",
+      "REOPENED": "Rouvert"
+    },
+    "acciones": {
+      "REPORTED": "Signaler",
+      "ASSIGNED": "Attribuer",
+      "INVESTIGATING": "Prendre / reprendre",
+      "IN_REVIEW": "Envoyer en révision",
+      "MITIGATED": "Atténuer",
+      "RESOLVED": "Résoudre",
+      "CLOSED": "Fermer l’incident",
+      "REOPENED": "Rouvrir"
+    },
+    "severidades": {
+      "P1": "P1 · Critique",
+      "P2": "P2 · Élevée",
+      "P3": "P3 · Moyenne"
+    },
+    "entornos": {
+      "PRODUCTION": "Production",
+      "STAGING": "Préproduction",
+      "DEV": "Développement"
+    },
+    "eventos": {
+      "reporte": "Signalement",
+      "asignacion": "Attribution",
+      "estado": "Changement d’état",
+      "comentario": "Commentaire",
+      "actualizacion": "Mise à jour",
+      "importacion": "État précédent"
+    }
+  },
+  "avisos": {
+    "recursoNoDisponible": "Impossible d’ouvrir la ressource. Elle a été supprimée ou l’accès est refusé.",
+    "tipo": "Type d’événement",
+    "todos": "Tous les types",
+    "error": "Opération impossible. Réessayez.",
+    "cargando": "Chargement…",
+    "mas": "Charger plus",
+    "tipos": {
+      "TICKET_ASSIGNED": "Ticket attribué",
+      "STATUS_CHANGED": "État modifié",
+      "TICKET_REDIRECTED": "Ticket redirigé",
+      "TICKET_COMPLETED": "Ticket terminé",
+      "QUESTION_RAISED": "Question",
+      "INCIDENT_REPORTED": "Incident signalé",
+      "INCIDENT_ASSIGNED": "Incident attribué",
+      "SYSTEM": "Système"
+    }
+  }
+,
 }

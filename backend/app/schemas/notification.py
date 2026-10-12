@@ -5,7 +5,9 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
+
+from app.models.notification import validar_enlace
 
 
 class NotificationResponse(BaseModel):
@@ -20,6 +22,11 @@ class NotificationResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="after")
+    def validar_recurso(self):
+        validar_enlace(self.type, self.ticket_id, self.incident_id)
+        return self
 
     @field_validator("type")
     @classmethod

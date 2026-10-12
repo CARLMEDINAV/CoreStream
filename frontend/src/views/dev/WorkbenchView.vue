@@ -253,6 +253,7 @@
 import { ref, onMounted, watch, computed, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useDialogStore } from '@/stores/dialog'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import AppIcon from '@/components/shared/AppIcon.vue'
 import ApplicationFormModal from '@/components/shared/ApplicationFormModal.vue'
@@ -277,6 +278,7 @@ const TicketSidePanel = defineAsyncComponent(() =>
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
+const dialogos = useDialogStore()
 const authStore = useAuthStore()
 const ticketsStore = useTicketsStore()
 const applicationsStore = useApplicationsStore()
@@ -434,18 +436,25 @@ const submitCreateApp = async () => {
 }
 
 // Abre el panel lateral para el ticketId que viene del query param de notificación
+let aperturaTicket = 0
 const openTicketFromQuery = async (ticketId: string | undefined) => {
   if (!ticketId) return
+  const aperturaActual = ++aperturaTicket
   try {
     const ticket = await api.tickets.getById(ticketId)
+    if (aperturaActual !== aperturaTicket) return
     selectedTicket.value = ticket
     selectedTicketId.value = ticket.id
     isPanelOpen.value = true
     activeView.value = 'tickets'
   } catch {
-    // ticket no encontrado o sin permisos — ignorar silenciosamente
+    if (aperturaActual === aperturaTicket) dialogos.alert(t('avisos.recursoNoDisponible'))
   }
-  router.replace({ query: {} })
+  if (aperturaActual === aperturaTicket) {
+    const consulta = { ...route.query }
+    delete consulta.ticketId
+    router.replace({ query: consulta })
+  }
 }
 
 // Observa cambios en el query param para cuando el usuario ya está en esta vista

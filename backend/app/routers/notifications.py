@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.middleware.auth import get_current_user
-from app.models import Notification, User
+from app.models import Notification, NotificationType, User
 from app.schemas import NotificationMarkRead, NotificationResponse
 
 # Router para notificaciones
@@ -40,6 +40,7 @@ async def get_user_notifications(
     skip: int = Query(0, ge=0, description="Número de notificaciones a saltar"),
     limit: int = Query(20, ge=1, le=100, description="Máximo de notificaciones a retornar"),
     unread_only: bool = Query(False, description="Mostrar solo notificaciones no leídas"),
+    tipo: NotificationType | None = Query(None, alias="type", description="Tipo de evento"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ) -> List[NotificationResponse]:
@@ -58,7 +59,8 @@ async def get_user_notifications(
     """
     # Construir consulta base
     query = select(Notification).where(
-        Notification.user_id == current_user.id
+        Notification.user_id == current_user.id,
+        Notification.client_id == current_user.client_id,
     )
 
     # Filtrar por estado de lectura si se solicita.
@@ -67,16 +69,18 @@ async def get_user_notifications(
     # nada. Se usa `~` (NOT SQL) sobre la columna.
     if unread_only:
         query = query.where(~Notification.is_read)
+    if tipo is not None:
+        query = query.where(Notification.type == tipo)
 
     # Ordenar por fecha de creación descendente (más recientes primero)
     result = await db.execute(
-        query.order_by(Notification.created_at.desc())
+        query.order_by(Notification.created_at.desc(), Notification.id.desc())
         .offset(skip)
         .limit(limit)
     )
     notifications = result.scalars().all()
 
-    return [NotificationResponse.from_orm(notif) for notif in notifications]
+    return [NotificationResponse.model_validate(notif) for notif in notifications]
 
 
 @router.get(

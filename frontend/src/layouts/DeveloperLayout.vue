@@ -55,6 +55,11 @@
         >
           {{ t('nav.support') }}
         </router-link>
+        <router-link to="/dev/my-incidents"
+          class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
+          active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm">
+          {{ t('incidencias.titulo') }}
+        </router-link>
 
       </nav>
     </aside>

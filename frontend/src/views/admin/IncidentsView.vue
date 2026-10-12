@@ -1,215 +1,122 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { 
-  AlertTriangle, 
-  ShieldAlert, 
-  CheckCircle, 
-  Clock, 
-  Plus,
-  Server,
-  User as UserIcon,
-  Activity
-} from 'lucide-vue-next'
+import { ref, onMounted, computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { api } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import type { Incident } from '@/types'
-import { TicketStatus } from '@/types'
 import CreateIncidentModal from '@/components/dev/CreateIncidentModal.vue'
 import ManageIncidentModal from '@/components/dev/ManageIncidentModal.vue'
 import AppHeader from '@/components/layout/AppHeader.vue'
 
 const authStore = useAuthStore()
-
+const ruta = useRoute()
+const navegador = useRouter()
+const { t } = useI18n()
 const incidents = ref<Incident[]>([])
 const isLoading = ref(true)
 const showCreateModal = ref(false)
 const showManageModal = ref(false)
 const selectedIncident = ref<Incident | null>(null)
+const avisoError = ref('')
+const pendientesAtencion = ref<Incident[]>([])
+const hayMas = ref(false)
+let numeroApertura = 0
+const puedeGestionar = computed(() => authStore.isAdmin || authStore.isTeamLeader)
+const activeIncidents = computed(() => incidents.value.filter(i => !i.isMitigated))
+const pastIncidents = computed(() => incidents.value.filter(i => i.isMitigated))
 
 const openManageModal = (incident: Incident) => {
-  selectedIncident.value = incident
-  showManageModal.value = true
+  navegador.push({ query: { ...ruta.query, incidentId: incident.id } })
 }
 
-const loadIncidents = async () => {
+const loadIncidents = async (agregar = false) => {
   isLoading.value = true
+  avisoError.value = ''
   try {
-    const response = await api.incidents.list({ limit: 100 })
-    incidents.value = response.items || []
-  } catch (error) {
-    console.error('Error fetching incidents:', error)
+    const response = await api.incidents.list({ limit: 100, skip: agregar ? incidents.value.length : 0 })
+    incidents.value = agregar ? [...incidents.value, ...response.items] : response.items
+    hayMas.value = response.items.length === 100
+    if (puedeGestionar.value) {
+      pendientesAtencion.value = (await api.incidents.list({ atencion: true, limit: 100 })).items
+    }
+  } catch {
+    avisoError.value = t('incidencias.errorCarga')
   } finally {
     isLoading.value = false
   }
 }
 
-const activeIncidents = computed(() => {
-  return incidents.value.filter(i => !i.isMitigated)
-})
-
-const pastIncidents = computed(() => {
-  return incidents.value.filter(i => i.isMitigated)
-})
-
-const getSeverityColor = (severity: string) => {
-  if (severity === 'P1') return 'bg-red-500 border-red-600 text-white'
-  if (severity === 'P2') return 'bg-orange-500 border-orange-600 text-white'
-  return 'bg-yellow-500 border-yellow-600 text-white'
+const abrirDesdeEnlace = async () => {
+  const aperturaActual = ++numeroApertura
+  const identificador = ruta.query.incidentId
+  selectedIncident.value = null
+  showManageModal.value = false
+  if (typeof identificador !== 'string') return
+  try {
+    const incidencia = await api.incidents.getById(identificador)
+    if (aperturaActual !== numeroApertura) return
+    selectedIncident.value = incidencia
+    showManageModal.value = true
+    avisoError.value = ''
+  } catch {
+    if (aperturaActual === numeroApertura) avisoError.value = t('incidencias.errorAbrir')
+  }
 }
 
-const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleString()
+const cerrarDetalle = () => {
+  showManageModal.value = false
+  const consulta = { ...ruta.query }
+  delete consulta.incidentId
+  navegador.replace({ query: consulta })
 }
 
-onMounted(() => {
-  loadIncidents()
-})
+const actualizarDetalle = async () => {
+  await loadIncidents()
+  await abrirDesdeEnlace()
+}
+
+watch(() => ruta.query.incidentId, abrirDesdeEnlace, { immediate: true })
+onMounted(() => loadIncidents())
 </script>
 
 <template>
-  <div class="h-full bg-slate-50 dark:bg-[var(--bg-body)]">
+  <div class="h-full bg-[var(--bg-body)] text-[var(--text-primary)]">
     <AppHeader />
-    <!-- Header -->
-    <header class="bg-white dark:bg-[var(--bg-panel)] border-b border-slate-200 dark:border-[var(--border-subtle)] px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      <div>
-        <h1 class="text-2xl font-bold text-slate-900 dark:text-[var(--text-primary)] flex items-center gap-2">
-          <ShieldAlert class="text-red-500" :size="28" />
-          Centro de Incidentes
-        </h1>
-        <p class="text-sm text-slate-500 dark:text-[var(--text-muted)] mt-1">
-          Gestión de crisis, caída de servicios y resolución de urgencias (P1, P2, P3).
-        </p>
-      </div>
-
-      <div class="flex items-center gap-3">
-        <button
-          @click="showCreateModal = true"
-          class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2 shadow-sm"
-        >
-          <Plus :size="18" /> Reportar Incidente
+    <main class="space-y-6 p-6">
+      <header class="flex flex-wrap items-center justify-between gap-3">
+        <h1 class="text-2xl font-bold">{{ t('incidencias.titulo') }}</h1>
+        <div class="flex gap-3">
+          <button class="rounded bg-red-600 px-4 py-2 text-white" @click="showCreateModal = true">{{ t('incidencias.reportar') }}</button>
+          <button class="rounded border px-4 py-2" :disabled="isLoading" @click="loadIncidents()">{{ t('incidencias.actualizar') }}</button>
+        </div>
+      </header>
+      <p v-if="avisoError" role="alert" class="text-red-500">{{ avisoError }}</p>
+      <section v-if="puedeGestionar" class="rounded border border-red-400 p-4">
+        <h2 class="mb-2 font-semibold">{{ t('incidencias.atencion') }}</h2>
+        <p v-if="!pendientesAtencion.length">{{ t('incidencias.sinUrgentes') }}</p>
+        <button v-for="incidencia in pendientesAtencion" :key="incidencia.id"
+          class="block py-1 text-left underline" @click="openManageModal(incidencia)">
+          {{ incidencia.severity }} · {{ incidencia.title }}
         </button>
-        <button
-          @click="loadIncidents"
-          :disabled="isLoading"
-          class="px-4 py-2 bg-slate-100 dark:bg-[var(--bg-card)] text-slate-700 dark:text-[var(--text-secondary)] font-medium rounded-lg hover:bg-slate-200 dark:hover:bg-[var(--border-subtle)] transition-colors disabled:opacity-50"
-        >
-          🔄 Actualizar
-        </button>
-      </div>
-    </header>
-
-    <div class="p-6 overflow-y-auto" style="height: calc(100vh - 89px);">
-      <div v-if="isLoading" class="flex justify-center py-12">
-        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500"></div>
-      </div>
-
-      <div v-else class="space-y-8">
-        
-        <!-- Active Incidents -->
-        <section>
-          <h2 class="text-lg font-semibold text-slate-800 dark:text-[var(--text-primary)] mb-4 flex items-center gap-2">
-            <Activity class="text-red-500" :size="20" />
-            Incidentes Activos
-            <span class="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-xs py-0.5 px-2 rounded-full font-bold">
-              {{ activeIncidents.length }}
-            </span>
-          </h2>
-
-          <div v-if="activeIncidents.length === 0" class="bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30 rounded-xl p-8 flex flex-col items-center justify-center text-center">
-            <CheckCircle class="text-green-500 mb-3" :size="48" />
-            <h3 class="text-lg font-semibold text-green-800 dark:text-green-400">Todos los sistemas operativos</h3>
-            <p class="text-green-600 dark:text-green-500 mt-1">No hay incidentes activos en este momento.</p>
-          </div>
-
-          <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            <div v-for="incident in activeIncidents" :key="incident.id" class="bg-white dark:bg-[var(--bg-panel)] rounded-xl border border-red-200 dark:border-red-900/50 shadow-sm overflow-hidden flex flex-col relative group">
-              <div class="absolute top-0 left-0 w-1 h-full" :class="getSeverityColor(incident.severity)"></div>
-              <div class="p-5 pl-6 flex-1">
-                <div class="flex justify-between items-start mb-3">
-                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold" :class="getSeverityColor(incident.severity)">
-                    {{ incident.severity }}
-                  </span>
-                  <span class="text-xs text-slate-500 dark:text-[var(--text-muted)] flex items-center gap-1">
-                    <Clock :size="12" /> {{ formatDate(incident.createdAt) }}
-                  </span>
-                </div>
-                <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2">{{ incident.title }}</h3>
-                <p class="text-sm text-slate-600 dark:text-[var(--text-secondary)] mb-4 line-clamp-2">{{ incident.description }}</p>
-                
-                <div class="space-y-2 mt-auto">
-                  <div class="flex justify-between items-center text-xs">
-                    <span class="text-slate-500 dark:text-[var(--text-muted)] flex items-center gap-1"><Server :size="14"/> Entorno</span>
-                    <span class="font-medium text-slate-700 dark:text-slate-300">{{ incident.affectedEnvironment }}</span>
-                  </div>
-                  <div class="flex justify-between items-center text-xs">
-                    <span class="text-slate-500 dark:text-[var(--text-muted)] flex items-center gap-1"><Activity :size="14"/> Estado</span>
-                    <span class="font-medium text-amber-600 dark:text-amber-400">{{ incident.status }}</span>
-                  </div>
-                </div>
-              </div>
-              <div class="bg-slate-50 dark:bg-[var(--bg-card)] px-5 py-3 border-t border-slate-100 dark:border-[var(--border-subtle)] flex justify-between items-center pl-6">
-                <div class="text-xs text-slate-500 dark:text-[var(--text-muted)] flex items-center gap-1">
-                  <UserIcon :size="14" /> {{ incident.assignedToId ? 'Asignado' : 'Sin asignar' }}
-                </div>
-                <button @click="openManageModal(incident)" class="text-sm text-red-600 dark:text-red-400 font-medium hover:underline">Gestionar</button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- Past Incidents -->
-        <section v-if="pastIncidents.length > 0">
-          <h2 class="text-lg font-semibold text-slate-800 dark:text-[var(--text-primary)] mb-4 flex items-center gap-2">
-            <CheckCircle class="text-green-500" :size="20" />
-            Incidentes Mitigados
-          </h2>
-          <div class="bg-white dark:bg-[var(--bg-panel)] rounded-xl shadow-sm border border-slate-200 dark:border-[var(--border-subtle)] overflow-hidden">
-            <table class="w-full text-left text-sm">
-              <thead class="bg-slate-50 dark:bg-[var(--bg-card)] border-b border-slate-200 dark:border-[var(--border-subtle)] text-slate-500 dark:text-[var(--text-muted)]">
-                <tr>
-                  <th class="px-6 py-3 font-medium">Incidente</th>
-                  <th class="px-6 py-3 font-medium">Severidad</th>
-                  <th class="px-6 py-3 font-medium">Entorno</th>
-                  <th class="px-6 py-3 font-medium">Mitigado el</th>
-                  <th class="px-6 py-3 font-medium text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-slate-100 dark:divide-[var(--border-subtle)]">
-                <tr v-for="incident in pastIncidents" :key="incident.id" class="hover:bg-slate-50 dark:hover:bg-[var(--bg-card)] transition-colors">
-                  <td class="px-6 py-4">
-                    <p class="font-medium text-slate-900 dark:text-white">{{ incident.title }}</p>
-                    <p class="text-xs text-slate-500 dark:text-[var(--text-muted)]">{{ formatDate(incident.createdAt) }}</p>
-                  </td>
-                  <td class="px-6 py-4">
-                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold" :class="getSeverityColor(incident.severity)">
-                      {{ incident.severity }}
-                    </span>
-                  </td>
-                  <td class="px-6 py-4 text-slate-600 dark:text-[var(--text-secondary)]">{{ incident.affectedEnvironment }}</td>
-                  <td class="px-6 py-4 text-slate-600 dark:text-[var(--text-secondary)]">{{ incident.mitigatedAt ? formatDate(incident.mitigatedAt) : 'N/A' }}</td>
-                  <td class="px-6 py-4 text-right">
-                    <button @click="openManageModal(incident)" class="text-teal-600 dark:text-teal-400 hover:underline">Post-mortem</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-      </div>
-    </div>
-    
-    <CreateIncidentModal 
-      :show="showCreateModal" 
-      @close="showCreateModal = false" 
-      @created="loadIncidents" 
-    />
-    
-    <ManageIncidentModal 
-      :show="showManageModal" 
-      :incident="selectedIncident" 
-      @close="showManageModal = false" 
-      @updated="loadIncidents" 
-    />
+      </section>
+      <p v-if="isLoading" role="status">{{ t('avisos.cargando') }}</p>
+      <section v-for="grupo in [{ titulo: 'activas', lista: activeIncidents }, { titulo: 'cerradas', lista: pastIncidents }]" :key="grupo.titulo">
+        <h2 class="mb-3 text-lg font-semibold">{{ t('incidencias.' + grupo.titulo) }}</h2>
+        <p v-if="!grupo.lista.length && !isLoading">{{ t('incidencias.vacio') }}</p>
+        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <article v-for="incident in grupo.lista" :key="incident.id" class="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] p-4">
+            <p class="text-sm">{{ t('incidencias.severidades.' + incident.severity) }} · {{ incident.categoria }}</p>
+            <h3 class="my-2 font-semibold">{{ incident.title }}</h3>
+            <p class="line-clamp-2 text-sm">{{ incident.description }}</p>
+            <p class="my-2 text-sm">{{ t('incidencias.estados.' + incident.status) }}</p>
+            <button class="underline" @click="openManageModal(incident)">{{ t('incidencias.detalle') }}</button>
+          </article>
+        </div>
+      </section>
+      <button v-if="hayMas" :disabled="isLoading" class="rounded border px-4 py-2" @click="loadIncidents(true)">{{ t('avisos.mas') }}</button>
+    </main>
+    <CreateIncidentModal :show="showCreateModal" @close="showCreateModal = false" @created="loadIncidents()" />
+    <ManageIncidentModal :show="showManageModal" :incident="selectedIncident" @close="cerrarDetalle" @updated="actualizarDetalle" />
   </div>
 </template>

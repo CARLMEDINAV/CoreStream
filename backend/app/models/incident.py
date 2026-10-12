@@ -23,9 +23,13 @@ class IncidentSeverity(str, Enum):
 
 class IncidentStatus(str, Enum):
     REPORTED = "REPORTED"
+    ASSIGNED = "ASSIGNED"
     INVESTIGATING = "INVESTIGATING"
+    IN_REVIEW = "IN_REVIEW"
     MITIGATED = "MITIGATED"
     RESOLVED = "RESOLVED"
+    CLOSED = "CLOSED"
+    REOPENED = "REOPENED"
 
 class AffectedEnvironment(str, Enum):
     PRODUCTION = "PRODUCTION"
@@ -37,6 +41,7 @@ class Incident(Base, BaseEntity, TenantMixin):
 
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    categoria: Mapped[str] = mapped_column(String(50), default="general", server_default="general", nullable=False)
     status: Mapped[IncidentStatus] = mapped_column(
         SQLEnum(IncidentStatus, name="incident_status_enum"),
         default=IncidentStatus.REPORTED,
@@ -81,3 +86,19 @@ class Incident(Base, BaseEntity, TenantMixin):
     application: Mapped["Application | None"] = relationship(lazy="raise_on_sql", foreign_keys=[application_id])
     created_by: Mapped["User | None"] = relationship(lazy="raise_on_sql", foreign_keys=[created_by_id])
     assigned_to: Mapped["User | None"] = relationship(lazy="raise_on_sql", foreign_keys=[assigned_to_id])
+
+
+class EventoIncidencia(Base, BaseEntity, TenantMixin):
+    __tablename__ = "eventos_incidencia"
+
+    incident_id: Mapped[PyUUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("incidents.id", ondelete="CASCADE"), index=True,
+    )
+    autor_id: Mapped[PyUUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True,
+    )
+    autor_nombre: Mapped[str] = mapped_column(String(255))
+    tipo: Mapped[str] = mapped_column(String(30))
+    estado_anterior: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    estado_nuevo: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    comentario: Mapped[str | None] = mapped_column(Text, nullable=True)

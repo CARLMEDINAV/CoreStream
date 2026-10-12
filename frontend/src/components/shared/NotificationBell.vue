@@ -59,10 +59,22 @@
         <!-- ================================================================ -->
         <!-- SUB-SECCIÓN: Lista de Notificaciones -->
         <!-- ================================================================ -->
+        <label class="block p-3 text-sm text-[var(--text-primary)]">
+          {{ t('avisos.tipo') }}
+          <select :value="notificationsStore.filtroTipo" @change="cambiarFiltro"
+            class="mt-1 w-full rounded border border-[var(--border-subtle)] bg-[var(--bg-panel)] p-2">
+            <option value="">{{ t('avisos.todos') }}</option>
+            <option v-for="tipo in Object.values(NotificationType)" :key="tipo" :value="tipo">
+              {{ t('avisos.tipos.' + tipo) }}
+            </option>
+          </select>
+        </label>
+        <p v-if="notificationsStore.error" role="alert" class="p-3 text-sm text-red-500">{{ t('avisos.error') }}</p>
+        <p v-if="notificationsStore.isLoading" role="status" class="p-3 text-sm">{{ t('avisos.cargando') }}</p>
         <div class="max-h-96 overflow-y-auto">
           <!-- Estado vacío -->
           <div
-            v-if="notifications.length === 0"
+            v-if="notifications.length === 0 && !notificationsStore.isLoading"
             class="p-8 text-center text-[var(--text-secondary)]"
           >
             <Icon icon="mdi:bell-off-outline" class="text-3xl mx-auto mb-2 opacity-50" />
@@ -120,6 +132,10 @@
               </div>
             </button>
           </div>
+          <button v-if="notificationsStore.hasMore" :disabled="notificationsStore.isLoading"
+            @click="notificationsStore.loadMore().catch(() => {})" class="w-full p-3 text-sm text-[var(--text-primary)]">
+            {{ t('avisos.mas') }}
+          </button>
         </div>
       </div>
     </Transition>
@@ -134,7 +150,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { Icon } from '@iconify/vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -157,6 +173,15 @@ const notifications = computed(() =>
 
 const unreadCount = computed(() => notificationsStore.unreadCount)
 
+const cambiarFiltro = (evento: Event) => {
+  const tipo = (evento.target as HTMLSelectElement).value as NotificationType | ''
+  notificationsStore.fetch(1, 20, tipo).catch(() => {})
+}
+
+watch(isDropdownOpen, abierto => {
+  if (abierto) notificationsStore.fetch().catch(() => {})
+})
+
 const getNotificationIcon = (type: string): string => {
   const icons: Record<string, string> = {
     [NotificationType.TICKET_ASSIGNED]:   'mdi:account-check',
@@ -165,6 +190,8 @@ const getNotificationIcon = (type: string): string => {
     [NotificationType.TICKET_COMPLETED]:  'mdi:check-circle',
     [NotificationType.QUESTION_RAISED]:   'mdi:help-circle',
     [NotificationType.SYSTEM]:            'mdi:bell',
+    [NotificationType.INCIDENT_REPORTED]: 'mdi:alert-circle',
+    [NotificationType.INCIDENT_ASSIGNED]: 'mdi:account-alert',
   }
   return icons[type] ?? 'mdi:bell'
 }
@@ -199,9 +226,12 @@ const formatTime = (isoString: string): string => {
 }
 
 const handleNotificationClick = (notification: Notification) => {
-  notificationsStore.markAsRead([notification.id])
+  notificationsStore.markAsRead([notification.id]).catch(() => {})
   isDropdownOpen.value = false
-  if (notification.ticketId) {
+  if (notification.incidentId) {
+    const destino = authStore.user?.role === 'DEVELOPER' ? 'DevIncidents' : 'AdminIncidents'
+    router.push({ name: destino, query: { incidentId: notification.incidentId } })
+  } else if (notification.ticketId) {
     const role = authStore.user?.role
     const routeName = role === 'ADMIN' ? 'Builder' : 'Workbench'
     router.push({ name: routeName, query: { ticketId: notification.ticketId } })
@@ -209,7 +239,7 @@ const handleNotificationClick = (notification: Notification) => {
 }
 
 const markAllAsRead = () => {
-  notificationsStore.markAllAsRead()
+  notificationsStore.markAllAsRead().catch(() => {})
 }
 
 function formatNotificationMessage(msg: string): string {
