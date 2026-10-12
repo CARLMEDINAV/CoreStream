@@ -316,6 +316,7 @@ async def create_ticket(
             client_id=current_user.client_id,
         )
         db.add(new_ticket)
+        await db.flush()
 
         if new_ticket.assignee_id:
             await notify_ticket_assigned(

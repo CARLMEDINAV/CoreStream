@@ -236,13 +236,35 @@ async def test_listar_incidentes(client, dev_headers, incident):
     assert res.status_code == 200
 
 
-async def test_cambiar_estado_de_incidente(client, leader_headers, incident):
+async def test_cambiar_estado_de_incidente(client, leader_headers, incident, dev_id):
+    respuesta = await client.patch(
+        f"/api/incidents/{incident['id']}",
+        json={"assigned_to_id": dev_id},
+        headers=leader_headers,
+    )
+    assert respuesta.status_code == 200
+    respuesta = await client.patch(
+        f"/api/incidents/{incident['id']}/status",
+        json={"status": "INVESTIGATING"},
+        headers=leader_headers,
+    )
+    assert respuesta.status_code == 200
     res = await client.patch(
         f"/api/incidents/{incident['id']}/status",
         json={"status": "MITIGATED"},
         headers=leader_headers,
     )
     assert res.status_code == 200
+    assert res.json()["status"] == "MITIGATED"
+
+
+async def test_incidente_reportado_no_salta_a_mitigado(client, leader_headers, incident):
+    respuesta = await client.patch(
+        f"/api/incidents/{incident['id']}/status",
+        json={"status": "MITIGATED"},
+        headers=leader_headers,
+    )
+    assert respuesta.status_code == 409
 
 
 @pytest.mark.xfail(
