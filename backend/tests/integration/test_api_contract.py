@@ -236,6 +236,30 @@ async def test_listar_incidentes(client, dev_headers, incident):
     assert res.status_code == 200
 
 
+async def test_estadisticas_de_incidentes(client, leader_headers, admin_headers, incident):
+    """
+    WEB-15: GET /api/incidents/dashboard/stats.
+
+    Comprueba de paso que la ruta no queda capturada por /incidents/{incident_id}
+    (que devolvería 422 al parsear "dashboard" como UUID).
+    """
+    res = await client.get("/api/incidents/dashboard/stats", headers=leader_headers)
+    assert res.status_code == 200, res.text[:300]
+    datos = res.json()
+    assert datos["total"] >= 1
+    assert set(datos["by_severity"]) == {"P1", "P2", "P3"}
+    assert datos["by_severity"]["P1"] >= 1
+    assert "REPORTED" in datos["by_status"]
+    assert sum(datos["by_status"].values()) == datos["total"]
+    # El ADMIN también tiene acceso (roles ADMIN | TEAM_LEADER).
+    assert (await client.get("/api/incidents/dashboard/stats", headers=admin_headers)).status_code == 200
+
+
+async def test_estadisticas_de_incidentes_requiere_rol(client, dev_headers):
+    res = await client.get("/api/incidents/dashboard/stats", headers=dev_headers)
+    assert res.status_code == 403
+
+
 async def test_cambiar_estado_de_incidente(client, leader_headers, incident, dev_id):
     respuesta = await client.patch(
         f"/api/incidents/{incident['id']}",

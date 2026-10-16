@@ -2,18 +2,24 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.context import set_audit_resource
 from app.database import get_db
 from app.middleware.auth import get_current_user
 from app.models import Application, Role, User
-from app.models.incident import EventoIncidencia, Incident, IncidentStatus
+from app.models.incident import (
+    EventoIncidencia,
+    Incident,
+    IncidentSeverity,
+    IncidentStatus,
+)
 from app.schemas.incident import (
     ComentarioIncidencia,
     EventoIncidenciaRespuesta,
     IncidentCreate,
+    IncidentDashboardStats,
     IncidentResponse,
     IncidentStatusUpdate,
     IncidentUpdate,
@@ -123,6 +129,47 @@ async def get_incidents(
         )
     result = await db.execute(query.order_by(Incident.created_at.desc(), Incident.id).offset(skip).limit(limit))
     return result.scalars().all()
+
+
+@router.get("/dashboard/stats", response_model=IncidentDashboardStats)
+async def get_incidents_dashboard_stats(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Estadísticas agregadas de incidencias para los paneles de administración y
+    liderazgo (WEB-15).
+
+    Los conteos por severidad y por estado se calculan con dos GROUP BY sobre
+    las incidencias del cliente autenticado, por lo que siempre reflejan el
+    estado real de la base de datos (no hay contadores persistidos que puedan
+    desincronizarse).
+
+    Se declara ANTES de `/{incident_id}` a propósito: si no, FastAPI intentaría
+    parsear "dashboard" como UUID y devolvería 422.
+
+    Raises:
+        HTTPException 403: si el usuario no es ADMIN ni TEAM_LEADER.
+    """
+    require_admin_or_leader(current_user)
+
+    by_status = {estado.value: 0 for estado in IncidentStatus}
+    by_severity = {severidad.value: 0 for severidad in IncidentSeverity}
+
+    filtro_cliente = Incident.client_id == current_user.client_id
+    for columna, destino in ((Incident.status, by_status), (Incident.severity, by_severity)):
+        filas = await db.execute(
+            select(columna, func.count(Incident.id)).where(filtro_cliente).group_by(columna)
+        )
+        for valor, total in filas.all():
+            clave = valor.value if hasattr(valor, "value") else str(valor)
+            destino[clave] = total
+
+    return IncidentDashboardStats(
+        total=sum(by_status.values()),
+        by_severity=by_severity,
+        by_status=by_status,
+    )
 
 
 @router.get("/{incident_id}", response_model=IncidentResponse)

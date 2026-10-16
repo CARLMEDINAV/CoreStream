@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from app.database import get_db
 from app.middleware.auth import get_current_user
 from app.models import Client, Notification, Role, User
-from app.models.incident import Incident
+from app.models.incident import Incident, IncidentStatus
 from app.routers import incidents, notifications
 from app.services import notification_service
 from app.worker.tasks import deliver_notification
@@ -222,4 +222,55 @@ async def test_borrar_recurso_borra_sus_avisos(entorno):
     await entorno.db.delete(registro)
     await entorno.db.commit()
     assert (await entorno.db.scalars(select(Notification))).all() == []
+
+
+# ---------------------------------------------------------------------------
+# WEB-15: Panel de estadísticas de incidencias
+# ---------------------------------------------------------------------------
+
+async def test_panel_agrega_por_severidad_y_estado(entorno):
+    entorno.usuario = entorno.lider
+    await crear(entorno, severity="P1")
+    await crear(entorno, severity="P1")
+    await crear(entorno, severity="P2")
+    asignada = await crear(entorno, severity="P3", assigned_to_id=str(entorno.dev.id))
+
+    datos = (await entorno.api.get("/api/incidents/dashboard/stats")).json()
+
+    assert datos["total"] == 4
+    assert datos["by_severity"] == {"P1": 2, "P2": 1, "P3": 1}
+    # Siempre vienen todas las claves, con 0 donde no hay incidencias.
+    assert set(datos["by_severity"]) == {"P1", "P2", "P3"}
+    assert set(datos["by_status"]) == {estado.value for estado in IncidentStatus}
+    assert datos["by_status"]["REPORTED"] == 3
+    assert datos["by_status"]["ASSIGNED"] == 1
+
+    # El panel se actualiza con el estado real tras mover la incidencia.
+    respuesta = await entorno.api.patch(
+        "/api/incidents/" + asignada["id"] + "/status", json={"status": "INVESTIGATING"}
+    )
+    assert respuesta.status_code == 200, respuesta.text
+    actualizado = (await entorno.api.get("/api/incidents/dashboard/stats")).json()
+    assert actualizado["total"] == 4
+    assert actualizado["by_status"]["ASSIGNED"] == 0
+    assert actualizado["by_status"]["INVESTIGATING"] == 1
+
+
+async def test_panel_solo_admin_o_lider(entorno):
+    entorno.usuario = entorno.dev
+    assert (await entorno.api.get("/api/incidents/dashboard/stats")).status_code == 403
+    for usuario in (entorno.lider, entorno.admin):
+        entorno.usuario = usuario
+        assert (await entorno.api.get("/api/incidents/dashboard/stats")).status_code == 200
+
+
+async def test_panel_aislado_por_cliente(entorno):
+    await crear(entorno, severity="P1")
+    entorno.usuario = entorno.ajeno
+    await crear(entorno, severity="P1")
+    entorno.usuario = entorno.lider
+    datos = (await entorno.api.get("/api/incidents/dashboard/stats")).json()
+    # Solo cuenta la incidencia del cliente autenticado, no la del tenant ajeno.
+    assert datos["total"] == 1
+    assert datos["by_severity"]["P1"] == 1
 

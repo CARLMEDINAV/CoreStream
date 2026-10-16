@@ -159,6 +159,7 @@ distinción de rol.
 | Tomar, mitigar, retomar o enviar a revisión | ✅ | ✅ | Solo si es el asignado |
 | Resolver, cerrar o reabrir | ✅ | ✅ | ❌ |
 | Consultar lista de atención (`?atencion=true`) | ✅ | ✅ | ❌ |
+| Consultar estadísticas del panel (`GET /dashboard/stats`) | ✅ | ✅ | ❌ |
 
 WEB-14: todas las operaciones se limitan al cliente autenticado. El responsable
 asignado debe ser un DEVELOPER o TEAM_LEADER activo del mismo cliente. Los cambios
@@ -170,6 +171,11 @@ tipos del enum. Reportar avisa a administradores y líderes; asignar avisa al nu
 responsable. Los avisos de incidencias exigen solo `incident_id`; los de tickets,
 solo `ticket_id`. Los mensajes generales SYSTEM pueden no tener recurso, pero
 nunca pueden tener ambos. El enlace conserva los permisos del recurso de destino.
+
+WEB-15: `GET /api/incidents/dashboard/stats` expone los conteos agregados por
+severidad y por estado para ADMIN y TEAM_LEADER. Los conteos se calculan en el
+momento con `GROUP BY`, no se persisten, así que siempre reflejan el estado real
+de las incidencias del cliente. Un DEVELOPER recibe 403.
 
 
 ### Tickets de soporte (`/api/support-tickets`)

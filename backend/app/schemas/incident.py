@@ -54,6 +54,27 @@ class IncidentResponse(IncidentBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class IncidentDashboardStats(BaseModel):
+    """
+    Estadísticas agregadas de incidencias para los paneles de administración y
+    liderazgo (WEB-15).
+
+    Los conteos se calculan sobre el estado real de las incidencias (no hay
+    valores persistidos), de modo que el panel siempre refleja la base de datos.
+
+    Atributos:
+        total: Número total de incidencias del cliente autenticado.
+        by_severity: Conteo por severidad {P1, P2, P3}. Siempre incluye las
+            tres claves, con 0 cuando no hay incidencias de ese nivel.
+        by_status: Conteo por estado {REPORTED, ASSIGNED, INVESTIGATING,
+            IN_REVIEW, MITIGATED, RESOLVED, CLOSED, REOPENED}. Siempre incluye
+            las ocho claves, con 0 cuando no hay incidencias en ese estado.
+    """
+    total: int
+    by_severity: dict[str, int]
+    by_status: dict[str, int]
+
+
 class ComentarioIncidencia(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
     comentario: str = Field(min_length=1, max_length=10000)

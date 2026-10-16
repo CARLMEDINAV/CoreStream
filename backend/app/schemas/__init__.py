@@ -24,6 +24,7 @@ from app.schemas.epic import (
 )
 from app.schemas.incident import (
     IncidentCreate,
+    IncidentDashboardStats,
     IncidentResponse,
     IncidentStatusUpdate,
     IncidentUpdate,
@@ -142,6 +143,7 @@ __all__ = [
     "IncidentUpdate",
     "IncidentStatusUpdate",
     "IncidentResponse",
+    "IncidentDashboardStats",
     # Esquemas de Reuniones
     "MeetingAttendanceCreate",
     "MeetingAttendanceResponse",
