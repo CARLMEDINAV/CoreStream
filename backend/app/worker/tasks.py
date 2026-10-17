@@ -183,6 +183,7 @@ async def deliver_webhook(
     payload: dict,
     event_type: str,
     payload_format: str = "JSON",
+    message_template: str | None = None,
 ) -> None:
     """ARQ task: entrega un webhook por HTTP POST y persiste el resultado.
 
@@ -197,7 +198,11 @@ async def deliver_webhook(
     from app.services.webhook_service import build_slack_payload, compute_signature
 
     attempt = int(ctx.get("job_try") or 1)
-    outgoing = build_slack_payload(payload) if payload_format == "SLACK" else payload
+    outgoing = (
+        build_slack_payload(payload, message_template)
+        if payload_format == "SLACK"
+        else payload
+    )
     body = json.dumps(outgoing, separators=(",", ":"), default=str).encode("utf-8")
 
     headers = {

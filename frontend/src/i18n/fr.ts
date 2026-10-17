@@ -852,5 +852,7 @@ export default {
     formatJson: 'JSON (générique)',
     formatSlack: 'Slack',
     formatHint: 'Avec « Slack », le corps est envoyé dans le champ "text" attendu par Slack — pratique pour viser directement un Incoming Webhook.',
+    messageTemplate: 'Modèle de message (facultatif)',
+    messageTemplateHint: 'Laissez vide pour utiliser le message par défaut. Variables disponibles : evento, ticket, id, estado, prioridad, proyecto, autor, mensaje, fecha (les alias en anglais fonctionnent aussi).',
   },
 }

@@ -50,6 +50,7 @@ def _serialize(webhook: Webhook) -> dict:
         "project_id": webhook.project_id,
         "is_active": webhook.is_active,
         "format": webhook.format,
+        "message_template": webhook.message_template,
         "has_secret": bool(webhook.secret),
         "last_status": webhook.last_status,
         "last_triggered_at": webhook.last_triggered_at,
@@ -183,6 +184,7 @@ async def create_webhook(
         project_id=payload.project_id,
         is_active=payload.is_active,
         format=payload.format.value,
+        message_template=payload.message_template,
         created_by_id=current_user.id,
         client_id=current_user.client_id,
     )

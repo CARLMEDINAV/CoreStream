@@ -349,6 +349,7 @@ const toWebhook = (raw: any): Webhook => ({
   projectId: raw.project_id ?? undefined,
   isActive: Boolean(raw.is_active ?? true),
   format: raw.format === 'SLACK' ? 'SLACK' : 'JSON',
+  messageTemplate: raw.message_template ?? undefined,
   hasSecret: Boolean(raw.has_secret ?? false),
   lastStatus: raw.last_status ?? undefined,
   lastTriggeredAt: raw.last_triggered_at ?? undefined,
@@ -1350,6 +1351,7 @@ const realApi = {
       projectId?: string
       isActive?: boolean
       format?: WebhookFormat
+      messageTemplate?: string | null
       secret?: string
     }): Promise<Webhook> => {
       const response = await apiClient.post<any>('/webhooks/', {
@@ -1359,6 +1361,7 @@ const realApi = {
         project_id: data.projectId ?? undefined,
         is_active: data.isActive ?? true,
         format: data.format ?? 'JSON',
+        message_template: data.messageTemplate ?? undefined,
         secret: data.secret ?? undefined,
       })
       return toWebhook(response.data)
@@ -1371,6 +1374,7 @@ const realApi = {
       projectId?: string | null
       isActive?: boolean
       format?: WebhookFormat
+      messageTemplate?: string | null
     }): Promise<Webhook> => {
       const body: Record<string, any> = {}
       if (data.name !== undefined) body.name = data.name
@@ -1379,6 +1383,7 @@ const realApi = {
       if (data.projectId !== undefined) body.project_id = data.projectId
       if (data.isActive !== undefined) body.is_active = data.isActive
       if (data.format !== undefined) body.format = data.format
+      if (data.messageTemplate !== undefined) body.message_template = data.messageTemplate
       const response = await apiClient.put<any>(`/webhooks/${webhookId}`, body)
       return toWebhook(response.data)
     },

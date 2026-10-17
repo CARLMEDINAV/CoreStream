@@ -89,6 +89,10 @@ class Webhook(Base, BaseEntity, TenantMixin):
     format: Mapped[str] = mapped_column(
         String(20), default=WebhookFormat.JSON.value, nullable=False
     )
+    # Plantilla opcional del texto enviado cuando `format = SLACK`. Admite
+    # variables entre llaves ({ticket}, {estado}, …); si está vacía se usa el
+    # texto por defecto generado por `webhook_service.build_slack_payload`.
+    message_template: Mapped[str | None] = mapped_column(String(2000), nullable=True)
 
     last_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     last_triggered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

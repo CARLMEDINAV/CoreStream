@@ -51,6 +51,7 @@ const form = ref({
   projectId: '' as string,
   isActive: true,
   format: 'JSON' as WebhookFormat,
+  messageTemplate: '',
 })
 
 const secretRevealed = ref<string | null>(null)
@@ -84,7 +85,7 @@ const loadAll = async () => {
 
 const openCreate = () => {
   editing.value = null
-  form.value = { name: '', url: '', eventTypes: [], projectId: '', isActive: true, format: 'JSON' }
+  form.value = { name: '', url: '', eventTypes: [], projectId: '', isActive: true, format: 'JSON', messageTemplate: '' }
   secretRevealed.value = null
   showForm.value = true
 }
@@ -98,6 +99,7 @@ const openEdit = (webhook: Webhook) => {
     projectId: webhook.projectId ?? '',
     isActive: webhook.isActive,
     format: webhook.format,
+    messageTemplate: webhook.messageTemplate ?? '',
   }
   secretRevealed.value = null
   showForm.value = true
@@ -122,6 +124,7 @@ const save = async () => {
         projectId: form.value.projectId || null,
         isActive: form.value.isActive,
         format: form.value.format,
+        messageTemplate: form.value.format === 'SLACK' ? (form.value.messageTemplate.trim() || null) : null,
       })
       const index = webhooks.value.findIndex((w) => w.id === updated.id)
       if (index >= 0) webhooks.value[index] = updated
@@ -133,6 +136,7 @@ const save = async () => {
         projectId: form.value.projectId || undefined,
         isActive: form.value.isActive,
         format: form.value.format,
+        messageTemplate: form.value.format === 'SLACK' ? (form.value.messageTemplate.trim() || null) : null,
       })
       webhooks.value.unshift(created)
       // El secreto sólo se muestra una vez, al crear.
@@ -420,6 +424,17 @@ onMounted(loadAll)
               <option value="SLACK">{{ t('webhooksView.formatSlack') }}</option>
             </select>
             <p class="text-xs text-slate-500 dark:text-[var(--text-muted)] mt-2">{{ t('webhooksView.formatHint') }}</p>
+          </div>
+
+          <div v-if="form.format === 'SLACK'">
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{{ t('webhooksView.messageTemplate') }}</label>
+            <textarea
+              v-model="form.messageTemplate"
+              rows="3"
+              placeholder="{evento}: {ticket} ({estado}, {prioridad}) en {proyecto}"
+              class="w-full rounded-lg border border-slate-300 dark:border-[var(--border-subtle)] bg-white dark:bg-[var(--bg-card)] px-3 py-2 text-slate-900 dark:text-white font-mono text-sm"
+            ></textarea>
+            <p class="text-xs text-slate-500 dark:text-[var(--text-muted)] mt-2">{{ t('webhooksView.messageTemplateHint') }}</p>
           </div>
 
           <div>

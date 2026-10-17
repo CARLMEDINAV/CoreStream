@@ -29,6 +29,7 @@ class WebhookCreate(BaseModel):
     project_id: Optional[UUID] = None
     is_active: bool = True
     format: WebhookFormat = WebhookFormat.JSON
+    message_template: Optional[str] = Field(None, max_length=2000)
     secret: Optional[str] = Field(None, max_length=255)
 
     @field_validator("name")
@@ -60,6 +61,7 @@ class WebhookUpdate(BaseModel):
     project_id: Optional[UUID] = None
     is_active: Optional[bool] = None
     format: Optional[WebhookFormat] = None
+    message_template: Optional[str] = Field(None, max_length=2000)
 
     @field_validator("name")
     @classmethod
@@ -93,6 +95,7 @@ class WebhookResponse(BaseModel):
     project_id: Optional[UUID] = None
     is_active: bool
     format: WebhookFormat = WebhookFormat.JSON
+    message_template: Optional[str] = None
     has_secret: bool = False
     last_status: Optional[str] = None
     last_triggered_at: Optional[datetime] = None

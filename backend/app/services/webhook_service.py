@@ -101,14 +101,63 @@ def compute_signature(secret: str, body: bytes) -> str:
     return f"sha256={digest}"
 
 
-def build_slack_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    """Traduce el payload de CoreStream al formato de Slack Incoming Webhooks.
+def _template_context(payload: dict[str, Any]) -> dict[str, str]:
+    """Variables disponibles en una plantilla de mensaje (formato Slack).
 
-    Slack espera un cuerpo `{"text": ...}` (o `blocks`); el JSON propio de
-    CoreStream sería rechazado con `invalid_payload`. Se construye un mensaje
-    legible a partir de los campos presentes, tolerante a payloads parciales
-    (p. ej. el evento de prueba `PING`, donde `ticket`/`project` son null).
+    Se admiten claves en español (las de la UI) y sus equivalentes en inglés,
+    para no obligar a recordar cuál es cuál.
     """
+    ticket = payload.get("ticket") or {}
+    project = payload.get("project") or {}
+    actor = payload.get("actor") or {}
+    data = payload.get("data") or {}
+    event = str(payload.get("event") or "")
+
+    def _get(mapping: Any, key: str) -> str:
+        return str(mapping.get(key)) if isinstance(mapping, dict) and mapping.get(key) else ""
+
+    label = _EVENT_LABELS.get(event, event)
+    return {
+        "evento": label,
+        "event": label,
+        "evento_codigo": event,
+        "event_code": event,
+        "ticket": _get(ticket, "title") or _get(ticket, "id"),
+        "titulo": _get(ticket, "title"),
+        "title": _get(ticket, "title"),
+        "id": _get(ticket, "id"),
+        "ticket_id": _get(ticket, "id"),
+        "estado": _get(ticket, "status"),
+        "status": _get(ticket, "status"),
+        "prioridad": _get(ticket, "priority"),
+        "priority": _get(ticket, "priority"),
+        "proyecto": _get(project, "name"),
+        "project": _get(project, "name"),
+        "autor": _get(actor, "name"),
+        "actor": _get(actor, "name"),
+        "mensaje": _get(data, "message"),
+        "message": _get(data, "message"),
+        "fecha": _get(payload, "occurred_at"),
+        "occurred_at": _get(payload, "occurred_at"),
+    }
+
+
+def render_template(template: str, payload: dict[str, Any]) -> str:
+    """Sustituye las variables `{clave}` de `template` por sus valores.
+
+    No usa `str.format` a propósito: un `{` suelto o una variable desconocida
+    lanzarían excepción y tumbaría la entrega. Las variables no reconocidas se
+    dejan tal cual, y el resto del texto se respeta literalmente.
+    """
+    context = _template_context(payload)
+    rendered = template
+    for key, value in context.items():
+        rendered = rendered.replace("{" + key + "}", value)
+    return rendered
+
+
+def _default_slack_text(payload: dict[str, Any]) -> str:
+    """Mensaje de Slack por defecto cuando no hay plantilla propia."""
     event = str(payload.get("event") or "EVENT")
     heading = _EVENT_LABELS.get(event, event)
 
@@ -141,7 +190,23 @@ def build_slack_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if isinstance(ticket, dict) and ticket.get("id"):
         text += f"\n`{ticket['id']}`"
 
-    return {"text": text}
+    return text
+
+
+def build_slack_payload(
+    payload: dict[str, Any], template: str | None = None
+) -> dict[str, Any]:
+    """Traduce el payload de CoreStream al formato de Slack Incoming Webhooks.
+
+    Slack espera un cuerpo `{"text": ...}` (o `blocks`); el JSON propio de
+    CoreStream sería rechazado con `invalid_payload`. Si se pasa una `template`
+    no vacía se renderiza con las variables disponibles
+    (`_template_context`); en caso contrario se usa el mensaje por defecto,
+    tolerante a payloads parciales (p. ej. el evento `PING`, sin `ticket`).
+    """
+    if template and template.strip():
+        return {"text": render_template(template.strip(), payload)}
+    return {"text": _default_slack_text(payload)}
 
 
 def validate_webhook_url(url: str) -> str:
@@ -366,6 +431,7 @@ async def enqueue_delivery(delivery: WebhookDelivery, webhook: Webhook) -> bool:
             payload=delivery.payload,
             event_type=delivery.event_type,
             payload_format=getattr(webhook, "format", None) or "JSON",
+            message_template=getattr(webhook, "message_template", None),
         )
         return True
     except Exception as exc:

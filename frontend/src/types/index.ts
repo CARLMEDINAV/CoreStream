@@ -1356,6 +1356,8 @@ export interface Webhook {
   projectId?: string
   isActive: boolean
   format: WebhookFormat
+  /** Plantilla opcional del texto enviado cuando `format` es `SLACK`. */
+  messageTemplate?: string
   hasSecret: boolean
   lastStatus?: string
   lastTriggeredAt?: string

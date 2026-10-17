@@ -438,3 +438,106 @@ async def test_flush_passes_payload_format(db_session, sample_client, sample_tic
         assert pool.jobs[0][1]["payload_format"] == "SLACK"
     finally:
         current_client_id_ctx.reset(token)
+
+
+# ---------------------------------------------------------------------------
+# Plantilla de mensaje (NEW-12+)
+# ---------------------------------------------------------------------------
+
+def _full_payload() -> dict:
+    return {
+        "event": "STATUS_CHANGED",
+        "occurred_at": "2026-01-01T00:00:00+00:00",
+        "project": {"id": "p1", "name": "Web"},
+        "ticket": {
+            "id": "t1",
+            "title": "Arreglar login",
+            "status": "IN_PROGRESS",
+            "priority": "HIGH",
+        },
+        "actor": {"id": "u1", "name": "Ana"},
+        "data": {"from_status": "TODO", "to_status": "IN_PROGRESS"},
+    }
+
+
+def test_render_template_replaces_variables():
+    text = webhook_service.render_template(
+        "{evento}: {ticket} ({estado}, {prioridad}) en {proyecto} por {autor}",
+        _full_payload(),
+    )
+    assert text == "Cambio de estado: Arreglar login (IN_PROGRESS, HIGH) en Web por Ana"
+
+
+def test_render_template_keeps_unknown_placeholders():
+    text = webhook_service.render_template("Hola {desconocido} {ticket}", _full_payload())
+    assert text == "Hola {desconocido} Arreglar login"
+
+
+def test_render_template_does_not_raise_on_stray_braces():
+    # A diferencia de str.format, una llave suelta no debe lanzar excepción.
+    assert webhook_service.render_template("50% {", _full_payload()) == "50% {"
+
+
+def test_build_slack_payload_uses_template_when_present():
+    message = webhook_service.build_slack_payload(
+        _full_payload(), "{ticket} → {estado}"
+    )
+    assert message == {"text": "Arreglar login → IN_PROGRESS"}
+
+
+def test_build_slack_payload_falls_back_to_default_on_blank_template():
+    message = webhook_service.build_slack_payload(_full_payload(), "   ")
+    assert "Cambio de estado" in message["text"]
+    assert "Arreglar login" in message["text"]
+
+
+async def test_deliver_webhook_slack_uses_template(monkeypatch):
+    import json as _json
+
+    worker_tasks, _ = await _capture_updates(monkeypatch)
+    sink: dict = {}
+    monkeypatch.setattr(worker_tasks.httpx, "AsyncClient", _capturing_client_factory(200, sink))
+
+    await worker_tasks.deliver_webhook(
+        {"job_try": 1},
+        delivery_id=str(uuid4()),
+        url="https://hooks.slack.com/services/T/B/X",
+        secret=None,
+        payload=_full_payload(),
+        event_type="STATUS_CHANGED",
+        payload_format="SLACK",
+        message_template="Ticket {ticket}: {estado}",
+    )
+
+    assert _json.loads(sink["content"].decode("utf-8")) == {
+        "text": "Ticket Arreglar login: IN_PROGRESS"
+    }
+
+
+async def test_flush_passes_message_template(db_session, sample_client, sample_ticket, monkeypatch):
+    token = current_client_id_ctx.set(sample_client.id)
+    try:
+        await _make_webhook(
+            db_session,
+            sample_client,
+            name="slack-plantilla",
+            format="SLACK",
+            message_template="Evento {evento}",
+            event_types=[],
+        )
+        await webhook_service.record_ticket_event(
+            db_session,
+            ticket_id=sample_ticket.id,
+            event_type=TicketEventType.CREATED,
+            detail={},
+        )
+        await db_session.commit()
+
+        pool = _FakePool()
+        monkeypatch.setattr(webhook_service, "get_arq_pool", lambda: pool)
+        await webhook_service.flush_pending_webhook_deliveries(db_session)
+
+        assert len(pool.jobs) == 1
+        assert pool.jobs[0][1]["message_template"] == "Evento {evento}"
+    finally:
+        current_client_id_ctx.reset(token)
