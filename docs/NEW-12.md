@@ -6,6 +6,10 @@ puede acotar a un proyecto concreto o dejarlo global, y se puede limitar a un
 subconjunto de tipos de evento. Cada intento de entrega se registra y las
 entregas fallidas se reintentan automáticamente.
 
+El cuerpo se puede enviar en dos formatos (ver *Formatos de entrega*): el JSON
+propio de CoreStream, o un mensaje compatible con los *Incoming Webhooks* de
+Slack, para apuntar la URL directamente a un canal sin intermediarios.
+
 El requisito se apoya en piezas que ya existían: el aislamiento multi-tenant de
 TRV-01, las banderas comerciales de TRV-02, el RBAC y la cola de tareas del
 worker ARQ. No se añadió un servicio de colas nuevo.
@@ -85,6 +89,32 @@ tiempo constante antes de confiar en el contenido. El secreto se genera con
 256 bits de entropía (`secrets.token_hex(32)`) y **sólo se muestra una vez**
 al crear o al rotar; las lecturas devuelven `has_secret` en lugar del valor.
 
+## Formatos de entrega
+
+El campo `format` del webhook decide el cuerpo que recibe el destino:
+
+| Valor   | Cuerpo                                                  | Uso |
+|---------|---------------------------------------------------------|-----|
+| `JSON`  | el payload completo documentado arriba (por defecto)     | integraciones que consumen el esquema de CoreStream |
+| `SLACK` | `{"text": …}` (compatible con Incoming Webhooks)         | pegar la URL de Slack directamente |
+
+Con `SLACK`, CoreStream traduce el payload a un mensaje legible
+(`app/services/webhook_service.py`, `build_slack_payload`). Ejemplo del evento
+de prueba `PING`:
+
+```json
+{ "text": ":bell: *PING*\nAutor: Ana Ruiz\nEvento de prueba enviado desde CoreStream" }
+```
+
+Notas:
+
+- La **firma HMAC cubre el cuerpo realmente enviado**: con `SLACK` se firma el
+  mensaje de Slack, no el JSON interno.
+- El payload canónico sigue guardándose en `webhook_deliveries.payload` (esquema
+  CoreStream) para auditoría, sea cual sea el formato de envío.
+- El formato sólo afecta al cuerpo; las cabeceras `X-CoreStream-*` se envían
+  igual en ambos casos.
+
 ## Entrega y reintentos
 
 1. El servicio de tickets registra el evento de negocio y, en la **misma
@@ -117,7 +147,7 @@ recibir eventos de webhooks de otro cliente.
 - **Sólo ADMIN.** El router se registra con `require_role([UserRole.ADMIN])`;
   TEAM_LEADER y DEVELOPER reciben 403.
 - **Bandera comercial `webhooks`.** Se añadió a `CORE_FEATURES`, así que está
-  incluida tanto en `Basico` como en `Pro`. Un cliente inactivo o con un plan
+  incluida en `Basico`, `Pro` y `Enterprise`. Un cliente inactivo o con un plan
   desconocido no la obtiene (403 `FEATURE_NOT_INCLUDED`).
 - Notificaciones al usuario se siguen sirviendo por el canal existente; NEW-12
   no introduce canales nuevos.
@@ -160,11 +190,13 @@ salto) queda como trabajo futuro.
 
 ## Backend
 
-- `app/models/webhook.py` — `Webhook`, `WebhookDelivery` y sus enums.
+- `app/models/webhook.py` — `Webhook`, `WebhookDelivery` y sus enums
+  (`WebhookEventType`, `WebhookDeliveryStatus`, `WebhookFormat`).
 - `app/schemas/webhook.py` — validación y contratos de API.
-- `app/services/webhook_service.py` — selección, payload, firma, encolado.
+- `app/services/webhook_service.py` — selección, payload, firma, encolado y
+  traducción a Slack (`build_slack_payload`).
 - `app/routers/webhooks.py` — CRUD y operaciones de ADMIN.
-- `app/worker/tasks.py` — `deliver_webhook` + `_update_delivery`.
+- `app/worker/tasks.py` — `deliver_webhook` (con `payload_format`) + `_update_delivery`.
 - `app/worker/settings.py` — registra la tarea; reutiliza los reintentos.
 - `app/middleware/commercial.py` — bandera `webhooks`.
 - `app/main.py` — inclusión del router con feature + rol.
@@ -193,8 +225,9 @@ Con el entorno y las variables del backend configurados, desde `backend`:
 ..\.venv\Scripts\python.exe -m alembic upgrade head
 ```
 
-La migración nueva es `b7c8d9e0f1a2`, posterior a TRV-02 (`7e9ab80b3e68`).
-No se aplicó a la base local de trabajo durante este desarrollo.
+Migraciones nuevas, en este orden: `b7c8d9e0f1a2` (tablas de webhooks) y
+`c1d2e3f4a5b6` (columna `webhooks.format`). En este checkout quedan encadenadas
+tras el head real de la base (`k7l8m9n0o1p2`).
 
 Para probar de extremo a extremo hace falta un worker ARQ vivo
 (`python -m arq app.worker.settings.WorkerSettings`) y un receptor HTTP que
@@ -214,18 +247,20 @@ npm run build
 
 ## Verificación realizada
 
-- 18 pruebas unitarias nuevas en `backend/tests/test_webhooks.py`: correctas.
+- 23 pruebas unitarias en `backend/tests/test_webhooks.py`: correctas.
   Cubren validación de URL, firma HMAC, selección por proyecto/tipo de evento,
-  aislamiento multi-tenant del payload, encolado post-commit y la tarea de
-  entrega (éxito y fallo con reintento).
-- Suite unitaria completa del backend: 189 pruebas correctas.
-- Ruff sobre `app` y `tests`: sin avisos.
-- Frontend: `npm run type-check` y `npm run build` correctos. La suite unitaria
-  conserva sus 2 fallos previos (un `authStore.spec.ts` que no compila y una
-  prueba de drag & drop), ajenos a este cambio.
-- Se añadieron pruebas de integración en
-  `backend/tests/integration/test_webhooks.py` (RBAC, aislamiento por tenant y
-  disparo real al crear un ticket). No pudieron ejecutarse: requieren
-  PostgreSQL y Redis reales y el usuario `corestream` no puede crear la base de
-  pruebas. La migración completa en PostgreSQL y el recorrido manual con
-  servidor y worker reales quedan pendientes.
+  aislamiento multi-tenant del payload, encolado post-commit, la tarea de
+  entrega (éxito y fallo con reintento) y el formato Slack (incluida la firma
+  calculada sobre el cuerpo real enviado).
+- Suite unitaria completa del backend: 312 correctas, 1 omitida.
+- `ruff check app tests`: sin avisos.
+- Frontend: `npm run type-check` correcto.
+- Migración aplicada sobre PostgreSQL real (`alembic upgrade head` →
+  `c1d2e3f4a5b6`) y recorrido manual de extremo a extremo con backend, worker y
+  un receptor HTTP en la red de Docker: alta de un webhook `SLACK`, envío de
+  prueba, entrega `SUCCESS` con cuerpo `{"text": …}` y firma válida, cambio de
+  formato y borrado.
+- Las pruebas de integración de `backend/tests/integration/test_webhooks.py`
+  (RBAC, aislamiento por tenant y disparo real al crear un ticket) requieren
+  PostgreSQL y Redis con permiso para crear la base de pruebas; el recorrido
+  manual anterior cubre el mismo camino de extremo a extremo.

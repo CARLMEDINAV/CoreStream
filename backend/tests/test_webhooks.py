@@ -309,3 +309,132 @@ async def test_deliver_webhook_failure_raises_for_retry(monkeypatch):
 
     assert calls and calls[0]["status"] == "FAILED"
     assert calls[0]["response_status"] == 503
+
+
+# ---------------------------------------------------------------------------
+# Formato Slack (NEW-12+)
+# ---------------------------------------------------------------------------
+
+def test_build_slack_payload_includes_ticket_details():
+    payload = {
+        "event": "STATUS_CHANGED",
+        "occurred_at": "2026-01-01T00:00:00+00:00",
+        "project": {"id": "p1", "name": "Web"},
+        "ticket": {
+            "id": "t1",
+            "title": "Arreglar login",
+            "status": "IN_PROGRESS",
+            "priority": "HIGH",
+        },
+        "actor": {"id": "u1", "name": "Ana"},
+        "data": {"from_status": "TODO", "to_status": "IN_PROGRESS"},
+    }
+    message = webhook_service.build_slack_payload(payload)
+    assert set(message) == {"text"}
+    text = message["text"]
+    assert "Cambio de estado" in text
+    assert "Arreglar login" in text
+    assert "estado: IN_PROGRESS" in text
+    assert "prioridad: HIGH" in text
+    assert "Proyecto: Web" in text
+    assert "Autor: Ana" in text
+    assert "t1" in text
+
+
+def test_build_slack_payload_handles_ping_without_ticket():
+    message = webhook_service.build_slack_payload({"event": "PING"})
+    assert set(message) == {"text"}
+    assert "PING" in message["text"]
+
+
+def _capturing_client_factory(status_code, sink):
+    class _FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, url, content=None, headers=None):
+            sink["url"] = url
+            sink["content"] = content
+            sink["headers"] = headers or {}
+            return _FakeResponse(status_code)
+
+    return _FakeAsyncClient
+
+
+async def test_deliver_webhook_slack_format_sends_text_body(monkeypatch):
+    import json as _json
+
+    worker_tasks, calls = await _capture_updates(monkeypatch)
+    sink: dict = {}
+    monkeypatch.setattr(worker_tasks.httpx, "AsyncClient", _capturing_client_factory(200, sink))
+
+    payload = {
+        "event": "TICKET_CREATED",
+        "ticket": {"id": "t1", "title": "Nuevo", "status": "TODO", "priority": "LOW"},
+    }
+    await worker_tasks.deliver_webhook(
+        {"job_try": 1},
+        delivery_id=str(uuid4()),
+        url="https://hooks.slack.com/services/T/B/X",
+        secret="s",
+        payload=payload,
+        event_type="TICKET_CREATED",
+        payload_format="SLACK",
+    )
+
+    sent = _json.loads(sink["content"].decode("utf-8"))
+    assert set(sent) == {"text"}
+    assert "Nuevo" in sent["text"]
+    # La firma cubre el cuerpo REAL enviado (el de Slack), no el JSON propio.
+    assert sink["headers"]["X-CoreStream-Signature"] == compute_signature("s", sink["content"])
+    assert calls[0]["status"] == "SUCCESS"
+
+
+async def test_deliver_webhook_json_is_sent_unchanged(monkeypatch):
+    import json as _json
+
+    worker_tasks, _ = await _capture_updates(monkeypatch)
+    sink: dict = {}
+    monkeypatch.setattr(worker_tasks.httpx, "AsyncClient", _capturing_client_factory(200, sink))
+
+    payload = {"event": "TICKET_CREATED", "ticket": {"id": "t1"}}
+    await worker_tasks.deliver_webhook(
+        {"job_try": 1},
+        delivery_id=str(uuid4()),
+        url="https://example.com/hook",
+        secret=None,
+        payload=payload,
+        event_type="TICKET_CREATED",
+    )
+
+    assert _json.loads(sink["content"].decode("utf-8")) == payload
+
+
+async def test_flush_passes_payload_format(db_session, sample_client, sample_ticket, monkeypatch):
+    token = current_client_id_ctx.set(sample_client.id)
+    try:
+        await _make_webhook(
+            db_session, sample_client, name="slack", format="SLACK", event_types=[]
+        )
+        await webhook_service.record_ticket_event(
+            db_session,
+            ticket_id=sample_ticket.id,
+            event_type=TicketEventType.CREATED,
+            detail={},
+        )
+        await db_session.commit()
+
+        pool = _FakePool()
+        monkeypatch.setattr(webhook_service, "get_arq_pool", lambda: pool)
+        await webhook_service.flush_pending_webhook_deliveries(db_session)
+
+        assert len(pool.jobs) == 1
+        assert pool.jobs[0][1]["payload_format"] == "SLACK"
+    finally:
+        current_client_id_ctx.reset(token)

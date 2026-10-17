@@ -101,6 +101,49 @@ def compute_signature(secret: str, body: bytes) -> str:
     return f"sha256={digest}"
 
 
+def build_slack_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Traduce el payload de CoreStream al formato de Slack Incoming Webhooks.
+
+    Slack espera un cuerpo `{"text": ...}` (o `blocks`); el JSON propio de
+    CoreStream sería rechazado con `invalid_payload`. Se construye un mensaje
+    legible a partir de los campos presentes, tolerante a payloads parciales
+    (p. ej. el evento de prueba `PING`, donde `ticket`/`project` son null).
+    """
+    event = str(payload.get("event") or "EVENT")
+    heading = _EVENT_LABELS.get(event, event)
+
+    ticket = payload.get("ticket") or {}
+    project = payload.get("project") or {}
+    actor = payload.get("actor") or {}
+    data = payload.get("data") or {}
+
+    lines: list[str] = []
+    if isinstance(ticket, dict) and ticket:
+        title = ticket.get("title") or ticket.get("id") or "(sin título)"
+        lines.append(f"*{title}*")
+        details: list[str] = []
+        if ticket.get("status"):
+            details.append(f"estado: {ticket['status']}")
+        if ticket.get("priority"):
+            details.append(f"prioridad: {ticket['priority']}")
+        if details:
+            lines.append(" · ".join(details))
+    if isinstance(project, dict) and project.get("name"):
+        lines.append(f"Proyecto: {project['name']}")
+    if isinstance(actor, dict) and actor.get("name"):
+        lines.append(f"Autor: {actor['name']}")
+    if isinstance(data, dict) and data.get("message"):
+        lines.append(str(data["message"]))
+
+    text = f":bell: *{heading}*"
+    if lines:
+        text += "\n" + "\n".join(lines)
+    if isinstance(ticket, dict) and ticket.get("id"):
+        text += f"\n`{ticket['id']}`"
+
+    return {"text": text}
+
+
 def validate_webhook_url(url: str) -> str:
     """Valida esquema y host de la URL destino.
 
@@ -322,6 +365,7 @@ async def enqueue_delivery(delivery: WebhookDelivery, webhook: Webhook) -> bool:
             secret=webhook.secret,
             payload=delivery.payload,
             event_type=delivery.event_type,
+            payload_format=getattr(webhook, "format", None) or "JSON",
         )
         return True
     except Exception as exc:

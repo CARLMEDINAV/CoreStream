@@ -19,7 +19,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.middleware import get_current_user
-from app.models import Application, User, Webhook, WebhookDelivery, WebhookDeliveryStatus
+from app.models import (
+    Application,
+    User,
+    Webhook,
+    WebhookDelivery,
+    WebhookDeliveryStatus,
+    WebhookFormat,
+)
 from app.schemas import (
     WebhookCreate,
     WebhookCreatedResponse,
@@ -42,6 +49,7 @@ def _serialize(webhook: Webhook) -> dict:
         "event_types": list(webhook.event_types or []),
         "project_id": webhook.project_id,
         "is_active": webhook.is_active,
+        "format": webhook.format,
         "has_secret": bool(webhook.secret),
         "last_status": webhook.last_status,
         "last_triggered_at": webhook.last_triggered_at,
@@ -174,6 +182,7 @@ async def create_webhook(
         event_types=payload.event_types,
         project_id=payload.project_id,
         is_active=payload.is_active,
+        format=payload.format.value,
         created_by_id=current_user.id,
         client_id=current_user.client_id,
     )
@@ -212,6 +221,8 @@ async def update_webhook(
     webhook = await _get_webhook_or_404(db, webhook_id)
 
     data = payload.model_dump(exclude_unset=True)
+    if isinstance(data.get("format"), WebhookFormat):
+        data["format"] = data["format"].value
     if "project_id" in data and data["project_id"] is not None:
         await _get_owned_project_or_400(db, data["project_id"])
 

@@ -36,7 +36,8 @@ import type {
   TranslateResponse,
   Webhook,
   WebhookDelivery,
-  WebhookEventTypeOption
+  WebhookEventTypeOption,
+  WebhookFormat
 } from '@/types'
 
 interface AuthState {
@@ -347,6 +348,7 @@ const toWebhook = (raw: any): Webhook => ({
   eventTypes: Array.isArray(raw.event_types) ? raw.event_types : [],
   projectId: raw.project_id ?? undefined,
   isActive: Boolean(raw.is_active ?? true),
+  format: raw.format === 'SLACK' ? 'SLACK' : 'JSON',
   hasSecret: Boolean(raw.has_secret ?? false),
   lastStatus: raw.last_status ?? undefined,
   lastTriggeredAt: raw.last_triggered_at ?? undefined,
@@ -1347,6 +1349,7 @@ const realApi = {
       eventTypes?: string[]
       projectId?: string
       isActive?: boolean
+      format?: WebhookFormat
       secret?: string
     }): Promise<Webhook> => {
       const response = await apiClient.post<any>('/webhooks/', {
@@ -1355,6 +1358,7 @@ const realApi = {
         event_types: data.eventTypes ?? [],
         project_id: data.projectId ?? undefined,
         is_active: data.isActive ?? true,
+        format: data.format ?? 'JSON',
         secret: data.secret ?? undefined,
       })
       return toWebhook(response.data)
@@ -1366,6 +1370,7 @@ const realApi = {
       eventTypes?: string[]
       projectId?: string | null
       isActive?: boolean
+      format?: WebhookFormat
     }): Promise<Webhook> => {
       const body: Record<string, any> = {}
       if (data.name !== undefined) body.name = data.name
@@ -1373,6 +1378,7 @@ const realApi = {
       if (data.eventTypes !== undefined) body.event_types = data.eventTypes
       if (data.projectId !== undefined) body.project_id = data.projectId
       if (data.isActive !== undefined) body.is_active = data.isActive
+      if (data.format !== undefined) body.format = data.format
       const response = await apiClient.put<any>(`/webhooks/${webhookId}`, body)
       return toWebhook(response.data)
     },

@@ -848,5 +848,9 @@ export default {
     close: 'Schließen',
     loadError: 'Webhooks konnten nicht geladen werden.',
     saveError: 'Der Webhook konnte nicht gespeichert werden.',
+    format: 'Format',
+    formatJson: 'JSON (generisch)',
+    formatSlack: 'Slack',
+    formatHint: 'Mit „Slack“ wird der Text im Feld "text" gesendet, das Slack erwartet – ideal für einen direkten Incoming Webhook.',
   },
 }

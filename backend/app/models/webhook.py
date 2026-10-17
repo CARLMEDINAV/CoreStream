@@ -53,6 +53,19 @@ class WebhookDeliveryStatus(str, Enum):
     FAILED = "FAILED"
 
 
+class WebhookFormat(str, Enum):
+    """Formato del cuerpo que recibe el destino.
+
+    JSON  — payload propio de CoreStream (por defecto), pensado para
+            integraciones que consumen su esquema completo.
+    SLACK — cuerpo `{"text": ...}` compatible con los Incoming Webhooks de
+            Slack, para apuntar la URL directamente a un canal sin intermediario.
+    """
+
+    JSON = "JSON"
+    SLACK = "SLACK"
+
+
 class Webhook(Base, BaseEntity, TenantMixin):
     """Integración saliente configurada por un ADMIN.
 
@@ -70,6 +83,12 @@ class Webhook(Base, BaseEntity, TenantMixin):
     secret: Mapped[str | None] = mapped_column(String(255), nullable=True)
     event_types: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    # Formato del cuerpo enviado al destino (ver WebhookFormat). Se guarda como
+    # texto, igual que `last_status`, para no depender de un tipo ENUM de
+    # PostgreSQL al añadir formatos nuevos.
+    format: Mapped[str] = mapped_column(
+        String(20), default=WebhookFormat.JSON.value, nullable=False
+    )
 
     last_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     last_triggered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

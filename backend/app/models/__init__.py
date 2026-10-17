@@ -13,7 +13,13 @@ from .subtask import Subtask
 from .ticket import SupportSeverity, Ticket, TicketPriority, TicketStatus, TicketType
 from .ticket_event import TicketEvent, TicketEventType
 from .user import User
-from .webhook import Webhook, WebhookDelivery, WebhookDeliveryStatus, WebhookEventType
+from .webhook import (
+    Webhook,
+    WebhookDelivery,
+    WebhookDeliveryStatus,
+    WebhookEventType,
+    WebhookFormat,
+)
 
 __all__ = [
     "Base",
@@ -51,4 +57,5 @@ __all__ = [
     "WebhookDelivery",
     "WebhookDeliveryStatus",
     "WebhookEventType",
+    "WebhookFormat",
 ]

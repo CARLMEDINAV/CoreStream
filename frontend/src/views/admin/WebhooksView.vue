@@ -29,6 +29,7 @@ import type {
   Webhook,
   WebhookDelivery,
   WebhookEventTypeOption,
+  WebhookFormat,
 } from '@/types'
 import AppHeader from '@/components/layout/AppHeader.vue'
 
@@ -49,6 +50,7 @@ const form = ref({
   eventTypes: [] as string[],
   projectId: '' as string,
   isActive: true,
+  format: 'JSON' as WebhookFormat,
 })
 
 const secretRevealed = ref<string | null>(null)
@@ -82,7 +84,7 @@ const loadAll = async () => {
 
 const openCreate = () => {
   editing.value = null
-  form.value = { name: '', url: '', eventTypes: [], projectId: '', isActive: true }
+  form.value = { name: '', url: '', eventTypes: [], projectId: '', isActive: true, format: 'JSON' }
   secretRevealed.value = null
   showForm.value = true
 }
@@ -95,6 +97,7 @@ const openEdit = (webhook: Webhook) => {
     eventTypes: [...webhook.eventTypes],
     projectId: webhook.projectId ?? '',
     isActive: webhook.isActive,
+    format: webhook.format,
   }
   secretRevealed.value = null
   showForm.value = true
@@ -118,6 +121,7 @@ const save = async () => {
         eventTypes: form.value.eventTypes,
         projectId: form.value.projectId || null,
         isActive: form.value.isActive,
+        format: form.value.format,
       })
       const index = webhooks.value.findIndex((w) => w.id === updated.id)
       if (index >= 0) webhooks.value[index] = updated
@@ -128,6 +132,7 @@ const save = async () => {
         eventTypes: form.value.eventTypes,
         projectId: form.value.projectId || undefined,
         isActive: form.value.isActive,
+        format: form.value.format,
       })
       webhooks.value.unshift(created)
       // El secreto sólo se muestra una vez, al crear.
@@ -311,6 +316,9 @@ onMounted(loadAll)
                   <span class="px-2 py-1 rounded-md bg-slate-100 dark:bg-[var(--bg-card)] text-slate-600 dark:text-[var(--text-secondary)]">
                     {{ webhook.eventTypes.length === 0 ? t('webhooksView.allEvents') : webhook.eventTypes.map(eventLabel).join(', ') }}
                   </span>
+                  <span class="px-2 py-1 rounded-md bg-slate-100 dark:bg-[var(--bg-card)] text-slate-600 dark:text-[var(--text-secondary)]">
+                    {{ webhook.format === 'SLACK' ? t('webhooksView.formatSlack') : t('webhooksView.formatJson') }}
+                  </span>
                 </div>
               </div>
 
@@ -403,6 +411,15 @@ onMounted(loadAll)
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{{ t('webhooksView.url') }}</label>
             <input v-model="form.url" type="url" placeholder="https://hooks.example.com/..." class="w-full rounded-lg border border-slate-300 dark:border-[var(--border-subtle)] bg-white dark:bg-[var(--bg-card)] px-3 py-2 text-slate-900 dark:text-white" />
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{{ t('webhooksView.format') }}</label>
+            <select v-model="form.format" class="w-full rounded-lg border border-slate-300 dark:border-[var(--border-subtle)] bg-white dark:bg-[var(--bg-card)] px-3 py-2 text-slate-900 dark:text-white">
+              <option value="JSON">{{ t('webhooksView.formatJson') }}</option>
+              <option value="SLACK">{{ t('webhooksView.formatSlack') }}</option>
+            </select>
+            <p class="text-xs text-slate-500 dark:text-[var(--text-muted)] mt-2">{{ t('webhooksView.formatHint') }}</p>
           </div>
 
           <div>

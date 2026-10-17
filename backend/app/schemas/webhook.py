@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.models.webhook import WebhookFormat
+
 
 def _clean_event_types(values: list[str] | None) -> list[str]:
     if not values:
@@ -26,6 +28,7 @@ class WebhookCreate(BaseModel):
     event_types: list[str] = Field(default_factory=list)
     project_id: Optional[UUID] = None
     is_active: bool = True
+    format: WebhookFormat = WebhookFormat.JSON
     secret: Optional[str] = Field(None, max_length=255)
 
     @field_validator("name")
@@ -56,6 +59,7 @@ class WebhookUpdate(BaseModel):
     event_types: Optional[list[str]] = None
     project_id: Optional[UUID] = None
     is_active: Optional[bool] = None
+    format: Optional[WebhookFormat] = None
 
     @field_validator("name")
     @classmethod
@@ -88,6 +92,7 @@ class WebhookResponse(BaseModel):
     event_types: list[str]
     project_id: Optional[UUID] = None
     is_active: bool
+    format: WebhookFormat = WebhookFormat.JSON
     has_secret: bool = False
     last_status: Optional[str] = None
     last_triggered_at: Optional[datetime] = None

@@ -182,17 +182,23 @@ async def deliver_webhook(
     secret: str | None,
     payload: dict,
     event_type: str,
+    payload_format: str = "JSON",
 ) -> None:
     """ARQ task: entrega un webhook por HTTP POST y persiste el resultado.
+
+    `payload_format` decide el cuerpo enviado: `JSON` (esquema propio de
+    CoreStream) o `SLACK` (mensaje `{"text": ...}` compatible con Incoming
+    Webhooks). La firma HMAC se calcula sobre el cuerpo REAL enviado.
 
     Ante cualquier fallo (timeout, error de red, respuesta no-2xx) se relanza
     la excepción para que ARQ reintente según `max_tries`/`retry_delay` de
     WorkerSettings. El número de intento lo aporta ARQ en `ctx['job_try']`.
     """
-    from app.services.webhook_service import compute_signature
+    from app.services.webhook_service import build_slack_payload, compute_signature
 
     attempt = int(ctx.get("job_try") or 1)
-    body = json.dumps(payload, separators=(",", ":"), default=str).encode("utf-8")
+    outgoing = build_slack_payload(payload) if payload_format == "SLACK" else payload
+    body = json.dumps(outgoing, separators=(",", ":"), default=str).encode("utf-8")
 
     headers = {
         "Content-Type": "application/json",

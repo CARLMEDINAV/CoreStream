@@ -1339,6 +1339,12 @@ export interface EventoIncidencia {
 }
 
 /**
+ * Formato del cuerpo que recibe el destino. `SLACK` envía `{"text": ...}`
+ * compatible con Incoming Webhooks de Slack; `JSON` es el esquema propio.
+ */
+export type WebhookFormat = 'JSON' | 'SLACK'
+
+/**
  * Webhook saliente configurado por un ADMIN (NEW-12).
  * El `secret` sólo viaja en la respuesta de creación/rotación.
  */
@@ -1349,6 +1355,7 @@ export interface Webhook {
   eventTypes: string[]
   projectId?: string
   isActive: boolean
+  format: WebhookFormat
   hasSecret: boolean
   lastStatus?: string
   lastTriggeredAt?: string
