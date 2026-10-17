@@ -15,9 +15,11 @@ from sqlalchemy import text
 from app.config import get_settings
 from app.database import dispose_engine, get_session_maker
 from app.logging_config import configure_logging
+from app.middleware import require_role
 from app.middleware.audit import AuditMiddleware
 from app.middleware.commercial import require_feature
 from app.middleware.request_id import RequestIDMiddleware, get_request_id
+from app.models import UserRole
 from app.redis_client import ARQ_QUEUE_NAME, close_redis, get_redis, init_redis
 
 # Importar routers (estos se crearían en carpetas routers/)
@@ -39,6 +41,7 @@ from app.routers import (
     tickets,
     uploads,
     users,
+    webhooks,
     websocket,
 )
 from app.services.notification_service import set_arq_pool
@@ -256,6 +259,15 @@ app.include_router(
 # prefijo embebido en el router: /api/audit-logs. El feature gating lo aplica
 # cada endpoint por separado — la consulta es CORE, la exportación Enterprise.
 app.include_router(audit_logs.router)
+
+# Webhooks salientes (NEW-12): sólo ADMIN y sólo si el plan incluye la bandera.
+app.include_router(
+    webhooks.router, prefix="/api/webhooks",
+    dependencies=[
+        Depends(require_feature("webhooks")),
+        Depends(require_role([UserRole.ADMIN])),
+    ],
+)
 
 
 # Endpoint raíz de salud — Railway lo usa como healthcheck en /health

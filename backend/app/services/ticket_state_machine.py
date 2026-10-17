@@ -27,6 +27,12 @@ from app.models import Ticket, TicketEvent, TicketStatus
 from app.models.ticket_event import TicketEventType
 from app.services.timer_service import TimerService
 from app.services.transition_audit import TransitionAuditService
+from app.services.webhook_service import (
+    flush_pending_webhook_deliveries,
+)
+from app.services.webhook_service import (
+    record_ticket_event as _record_webhook_event,
+)
 
 
 class TicketStateMachine:
@@ -143,9 +149,20 @@ class TicketStateMachine:
             )
             db.add(new_event)
 
+            await _record_webhook_event(
+                db,
+                ticket_id=ticket_id,
+                event_type=event_type_str,
+                actor_id=user_id,
+                detail=detail_payload,
+            )
+
             # Guardamos en la base de datos
             await db.commit()
             await db.refresh(new_event)
+
+            # Entrega de webhooks post-commit (no bloquea el evento ya guardado)
+            await flush_pending_webhook_deliveries(db)
 
             return new_event
 

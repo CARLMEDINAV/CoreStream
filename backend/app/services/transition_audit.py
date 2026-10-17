@@ -33,6 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.ticket import Ticket
 from app.models.ticket_event import TicketEvent, TicketEventType
+from app.services.webhook_service import record_ticket_event as _record_webhook_event
 
 
 class TransitionAuditService:
@@ -104,6 +105,14 @@ class TransitionAuditService:
                 client_id=ticket_client_id,
             )
             db.add(event)
+
+            await _record_webhook_event(
+                db,
+                ticket_id=ticket_id,
+                event_type=event_type,
+                actor_id=user_id,
+                detail=detail,
+            )
             return event
 
         except Exception as exc:
@@ -158,6 +167,14 @@ class TransitionAuditService:
                 client_id=ticket_client_id,
             )
             db.add(event)
+
+            await _record_webhook_event(
+                db,
+                ticket_id=ticket_id,
+                event_type=event_type,
+                actor_id=user_id,
+                detail=detail,
+            )
             return event
 
         except Exception as exc:

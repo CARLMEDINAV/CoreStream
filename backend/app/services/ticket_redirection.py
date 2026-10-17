@@ -18,6 +18,12 @@ from app.models import Application, Ticket, TicketEvent, TicketEventType, Ticket
 from app.routers.websocket import manager
 from app.services.notification_service import flush_pending_notifications, notify_ticket_redirected
 from app.services.timer_service import timer_service
+from app.services.webhook_service import (
+    flush_pending_webhook_deliveries,
+)
+from app.services.webhook_service import (
+    record_ticket_event as _record_webhook_event,
+)
 
 logger = logging.getLogger("corestream.ticket_redirection")
 
@@ -189,6 +195,20 @@ class TicketRedirectionService:
                 justification=justification,
             )
 
+            # ── 9c. Webhook saliente por la redirección (antes del commit) ─────
+            await _record_webhook_event(
+                self.db,
+                ticket_id=ticket_id,
+                event_type=TicketEventType.REDIRECTED,
+                actor_id=from_user_id,
+                detail={
+                    "justification": justification,
+                    "previous_status": previous_status,
+                    "new_status": new_status,
+                    "to_user_id": str(to_user_id),
+                },
+            )
+
             # ── 10. ÚNICO COMMIT — todo entra o nada entra ────────────────────
             await self.db.commit()
             await self.db.refresh(ticket)
@@ -202,6 +222,7 @@ class TicketRedirectionService:
 
         # ── 11. Encolar entrega WebSocket de notificación (post-commit) ─────
         await flush_pending_notifications(self.db)
+        await flush_pending_webhook_deliveries(self.db)
 
         # ── 12. Evento WebSocket en tiempo real para actualizar workbench ────
         await self._send_redirection_notification(

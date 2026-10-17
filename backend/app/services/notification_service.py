@@ -252,6 +252,14 @@ async def flush_pending_notifications(db: AsyncSession) -> None:
     for notif in pending:
         await enqueue_notification(notif)
 
+    # Webhooks salientes (NEW-12): se encolan en los mismos puntos post-commit
+    # que ya usaban las notificaciones. Import diferido para evitar el ciclo
+    # notification_service <-> webhook_service (este último reutiliza
+    # get_arq_pool de aquí).
+    from app.services.webhook_service import flush_pending_webhook_deliveries
+
+    await flush_pending_webhook_deliveries(db)
+
 
 # Instancia singleton para compatibilidad con código que usa notification_service.X
 notification_service = None  # La nueva API es funcional (no basada en instancias)

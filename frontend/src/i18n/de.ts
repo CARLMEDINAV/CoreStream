@@ -602,6 +602,7 @@ export default {
     myUploads: 'Meine Uploads',
     teamAssignment: 'Team-Zuweisung',
     support: 'Support',
+    webhooks: 'Webhooks',
   },
 
   // ==========================================
@@ -802,6 +803,50 @@ export default {
       "INCIDENT_ASSIGNED": "Vorfall zugewiesen",
       "SYSTEM": "System"
     }
-  }
-,
+  },
+
+  // ==========================================
+  // ABSCHNITT: Ausgehende Integrationen (NEW-12)
+  // ==========================================
+  webhooksView: {
+    title: 'Webhooks',
+    subtitle: 'Ausgehende Integrationen pro Projekt oder Ereignistyp konfigurieren. Nur Administratoren.',
+    createButton: 'Neuer Webhook',
+    refresh: 'Aktualisieren',
+    empty: 'Noch keine Webhooks konfiguriert.',
+    activeCount: '{count} von {total} aktiv',
+    project: 'Projekt',
+    allProjects: 'Alle Projekte',
+    allEvents: 'Alle Ereignisse',
+    allEventsHint: 'Wenn Sie keine Ereignisse auswählen, werden alle Ereignisse des Projekts gesendet.',
+    active: 'Aktiv',
+    inactive: 'Inaktiv',
+    activate: 'Aktivieren',
+    deactivate: 'Deaktivieren',
+    test: 'Test senden',
+    rotate: 'Secret erneuern',
+    edit: 'Bearbeiten',
+    delete: 'Löschen',
+    deleteConfirm: 'Webhook "{name}" löschen? Dies kann nicht rückgängig gemacht werden.',
+    rotateConfirm: 'Secret für "{name}" erneuern? Das vorherige Secret funktioniert danach nicht mehr.',
+    lastTriggered: 'Letzte Zustellung',
+    deliveries: 'Zustellungen',
+    loading: 'Wird geladen ...',
+    noDeliveries: 'Keine Zustellungen aufgezeichnet',
+    attempts: 'Versuche',
+    retry: 'Erneut versuchen',
+    name: 'Name',
+    url: 'Ziel-URL',
+    events: 'Ereignistypen',
+    createTitle: 'Neuer Webhook',
+    editTitle: 'Webhook bearbeiten',
+    save: 'Speichern',
+    saving: 'Speichern ...',
+    cancel: 'Abbrechen',
+    secretOnce: 'Kopieren Sie Ihr Secret jetzt',
+    secretHelp: 'Dieses Secret wird nur einmal angezeigt. Verwenden Sie es, um die HMAC-Signatur der Zustellungen zu prüfen.',
+    close: 'Schließen',
+    loadError: 'Webhooks konnten nicht geladen werden.',
+    saveError: 'Der Webhook konnte nicht gespeichert werden.',
+  },
 }

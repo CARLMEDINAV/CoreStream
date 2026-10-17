@@ -18,7 +18,10 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timezone
+from uuid import UUID
 
+import httpx
 import redis.asyncio as aioredis
 
 from app.config import get_settings
@@ -120,3 +123,110 @@ async def purge_audit_logs(ctx: dict) -> dict[str, int]:
     })
 
     return deleted
+
+
+# ---------------------------------------------------------------------------
+# Webhooks salientes (NEW-12)
+# ---------------------------------------------------------------------------
+
+async def _update_delivery(
+    delivery_id: str,
+    *,
+    status: str,
+    attempt: int,
+    response_status: int | None = None,
+    error: str | None = None,
+) -> None:
+    """Persiste el resultado de un intento de entrega (sesión propia).
+
+    Se ejecuta en el worker, donde no hay ContextVar de tenant: el filtro de
+    TRV-01 queda inactivo y la consulta por id es global, que es lo correcto
+    para actualizar una entrega concreta ya identificada por su id.
+    """
+    from app.database import get_session_maker
+    from app.models import Webhook, WebhookDelivery, WebhookDeliveryStatus
+
+    now = datetime.now(timezone.utc)
+    resolved = WebhookDeliveryStatus(status)
+
+    async with get_session_maker()() as db:
+        delivery = await db.get(WebhookDelivery, UUID(delivery_id))
+        if delivery is None:
+            logger.warning("Entrega de webhook %s no encontrada al actualizar", delivery_id)
+            return
+
+        delivery.status = resolved
+        delivery.attempt_count = attempt
+        delivery.response_status = response_status
+        delivery.error = error
+        if resolved is WebhookDeliveryStatus.SUCCESS:
+            delivery.delivered_at = now
+
+        webhook = await db.get(Webhook, delivery.webhook_id)
+        if webhook is not None:
+            webhook.last_status = resolved.value
+            if resolved is WebhookDeliveryStatus.SUCCESS:
+                webhook.last_triggered_at = now
+                webhook.failure_count = 0
+            else:
+                webhook.failure_count = (webhook.failure_count or 0) + 1
+
+        await db.commit()
+
+
+async def deliver_webhook(
+    ctx: dict,
+    *,
+    delivery_id: str,
+    url: str,
+    secret: str | None,
+    payload: dict,
+    event_type: str,
+) -> None:
+    """ARQ task: entrega un webhook por HTTP POST y persiste el resultado.
+
+    Ante cualquier fallo (timeout, error de red, respuesta no-2xx) se relanza
+    la excepción para que ARQ reintente según `max_tries`/`retry_delay` de
+    WorkerSettings. El número de intento lo aporta ARQ en `ctx['job_try']`.
+    """
+    from app.services.webhook_service import compute_signature
+
+    attempt = int(ctx.get("job_try") or 1)
+    body = json.dumps(payload, separators=(",", ":"), default=str).encode("utf-8")
+
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "CoreStream-Webhooks/1.0",
+        "X-CoreStream-Event": event_type,
+        "X-CoreStream-Delivery": str(delivery_id),
+    }
+    if secret:
+        headers["X-CoreStream-Signature"] = compute_signature(secret, body)
+
+    status_code: int | None = None
+    error: str | None = None
+    try:
+        async with httpx.AsyncClient(timeout=settings.WEBHOOK_TIMEOUT_SECONDS) as client:
+            response = await client.post(url, content=body, headers=headers)
+        status_code = response.status_code
+        if 200 <= status_code < 300:
+            await _update_delivery(
+                delivery_id, status="SUCCESS", attempt=attempt, response_status=status_code
+            )
+            logger.info(
+                "Webhook entregado | delivery=%s | evento=%s | status=%d",
+                delivery_id, event_type, status_code,
+            )
+            return
+        error = f"HTTP {status_code}"
+    except Exception as exc:
+        error = f"{type(exc).__name__}: {exc}"[:500]
+
+    await _update_delivery(
+        delivery_id,
+        status="FAILED",
+        attempt=attempt,
+        response_status=status_code,
+        error=error,
+    )
+    raise RuntimeError(f"Entrega de webhook {delivery_id} falló: {error}")

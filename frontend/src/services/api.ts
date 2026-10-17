@@ -33,7 +33,10 @@ import type {
   UserPerformance,
   BurndownData,
   SupportSummary,
-  TranslateResponse
+  TranslateResponse,
+  Webhook,
+  WebhookDelivery,
+  WebhookEventTypeOption
 } from '@/types'
 
 interface AuthState {
@@ -336,6 +339,35 @@ function toTranslateResponse(raw: any): TranslateResponse {
     translatedText: raw.translated_text,
   }
 }
+
+const toWebhook = (raw: any): Webhook => ({
+  id: String(raw.id ?? ''),
+  name: raw.name ?? '',
+  url: raw.url ?? '',
+  eventTypes: Array.isArray(raw.event_types) ? raw.event_types : [],
+  projectId: raw.project_id ?? undefined,
+  isActive: Boolean(raw.is_active ?? true),
+  hasSecret: Boolean(raw.has_secret ?? false),
+  lastStatus: raw.last_status ?? undefined,
+  lastTriggeredAt: raw.last_triggered_at ?? undefined,
+  failureCount: Number(raw.failure_count ?? 0),
+  createdAt: String(raw.created_at ?? ''),
+  updatedAt: String(raw.updated_at ?? ''),
+  secret: raw.secret ?? undefined,
+})
+
+const toWebhookDelivery = (raw: any): WebhookDelivery => ({
+  id: String(raw.id ?? ''),
+  webhookId: String(raw.webhook_id ?? ''),
+  eventType: raw.event_type ?? '',
+  status: raw.status ?? 'PENDING',
+  attemptCount: Number(raw.attempt_count ?? 0),
+  responseStatus: raw.response_status ?? undefined,
+  error: raw.error ?? undefined,
+  deliveredAt: raw.delivered_at ?? undefined,
+  createdAt: String(raw.created_at ?? ''),
+  payload: raw.payload ?? {},
+})
 
 const realApi = {
   auth: {
@@ -1287,6 +1319,90 @@ const realApi = {
     updateSummary: async (meetingId: string, summary: string): Promise<Meeting> => {
       const response = await apiClient.patch<any>(`/meetings/${meetingId}`, { summary_markdown: summary })
       return toMeeting(response.data)
+    }
+  },
+
+  webhooks: {
+    list: async (filters?: { projectId?: string; isActive?: boolean }): Promise<Webhook[]> => {
+      const params: Record<string, any> = {}
+      if (filters?.projectId) params.project_id = filters.projectId
+      if (filters?.isActive !== undefined) params.is_active = filters.isActive
+      const response = await apiClient.get<any[]>('/webhooks/', { params })
+      return Array.isArray(response.data) ? response.data.map(toWebhook) : []
+    },
+
+    eventTypes: async (): Promise<WebhookEventTypeOption[]> => {
+      const response = await apiClient.get<WebhookEventTypeOption[]>('/webhooks/event-types')
+      return Array.isArray(response.data) ? response.data : []
+    },
+
+    getById: async (webhookId: string): Promise<Webhook> => {
+      const response = await apiClient.get<any>(`/webhooks/${webhookId}`)
+      return toWebhook(response.data)
+    },
+
+    create: async (data: {
+      name: string
+      url: string
+      eventTypes?: string[]
+      projectId?: string
+      isActive?: boolean
+      secret?: string
+    }): Promise<Webhook> => {
+      const response = await apiClient.post<any>('/webhooks/', {
+        name: data.name,
+        url: data.url,
+        event_types: data.eventTypes ?? [],
+        project_id: data.projectId ?? undefined,
+        is_active: data.isActive ?? true,
+        secret: data.secret ?? undefined,
+      })
+      return toWebhook(response.data)
+    },
+
+    update: async (webhookId: string, data: {
+      name?: string
+      url?: string
+      eventTypes?: string[]
+      projectId?: string | null
+      isActive?: boolean
+    }): Promise<Webhook> => {
+      const body: Record<string, any> = {}
+      if (data.name !== undefined) body.name = data.name
+      if (data.url !== undefined) body.url = data.url
+      if (data.eventTypes !== undefined) body.event_types = data.eventTypes
+      if (data.projectId !== undefined) body.project_id = data.projectId
+      if (data.isActive !== undefined) body.is_active = data.isActive
+      const response = await apiClient.put<any>(`/webhooks/${webhookId}`, body)
+      return toWebhook(response.data)
+    },
+
+    remove: async (webhookId: string): Promise<void> => {
+      await apiClient.delete(`/webhooks/${webhookId}`)
+    },
+
+    rotateSecret: async (webhookId: string): Promise<string> => {
+      const response = await apiClient.post<{ secret: string }>(
+        `/webhooks/${webhookId}/rotate-secret`
+      )
+      return response.data.secret
+    },
+
+    deliveries: async (webhookId: string, limit = 50): Promise<WebhookDelivery[]> => {
+      const response = await apiClient.get<any[]>(`/webhooks/${webhookId}/deliveries`, {
+        params: { limit },
+      })
+      return Array.isArray(response.data) ? response.data.map(toWebhookDelivery) : []
+    },
+
+    test: async (webhookId: string): Promise<WebhookDelivery> => {
+      const response = await apiClient.post<any>(`/webhooks/${webhookId}/test`)
+      return toWebhookDelivery(response.data)
+    },
+
+    retryDelivery: async (deliveryId: string): Promise<WebhookDelivery> => {
+      const response = await apiClient.post<any>(`/webhooks/deliveries/${deliveryId}/retry`)
+      return toWebhookDelivery(response.data)
     }
   },
 }

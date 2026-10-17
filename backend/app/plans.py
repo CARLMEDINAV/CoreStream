@@ -25,7 +25,7 @@ from uuid import UUID
 # la exportación para auditorías externas.
 CORE_FEATURES = frozenset({
     "projects", "tickets", "documents", "team", "incidents", "meetings",
-    "support", "notifications", "audit_log",
+    "support", "notifications", "webhooks", "audit_log",
 })
 PREMIUM_FEATURES = frozenset({"analytics", "document_translation"})
 ENTERPRISE_FEATURES = frozenset({"audit_export"})

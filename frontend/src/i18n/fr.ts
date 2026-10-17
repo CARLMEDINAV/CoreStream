@@ -602,6 +602,7 @@ export default {
     myUploads: 'Mes téléchargements',
     teamAssignment: 'Assignation d\'équipe',
     support: 'Support',
+    webhooks: 'Webhooks',
   },
 
   // ==========================================
@@ -802,6 +803,50 @@ export default {
       "INCIDENT_ASSIGNED": "Incident attribué",
       "SYSTEM": "Système"
     }
-  }
-,
+  },
+
+  // ==========================================
+  // SECTION : Intégrations sortantes (NEW-12)
+  // ==========================================
+  webhooksView: {
+    title: 'Webhooks',
+    subtitle: "Configurez des intégrations sortantes par projet ou type d'événement. Administrateurs uniquement.",
+    createButton: 'Nouveau webhook',
+    refresh: 'Actualiser',
+    empty: 'Aucun webhook configuré pour le moment.',
+    activeCount: '{count} sur {total} actifs',
+    project: 'Projet',
+    allProjects: 'Tous les projets',
+    allEvents: 'Tous les événements',
+    allEventsHint: 'Si vous ne sélectionnez aucun événement, tous les événements du projet seront envoyés.',
+    active: 'Actif',
+    inactive: 'Inactif',
+    activate: 'Activer',
+    deactivate: 'Désactiver',
+    test: 'Envoyer un test',
+    rotate: 'Renouveler le secret',
+    edit: 'Modifier',
+    delete: 'Supprimer',
+    deleteConfirm: 'Supprimer le webhook « {name} » ? Cette action est irréversible.',
+    rotateConfirm: "Renouveler le secret de « {name} » ? L'ancien secret cessera de fonctionner.",
+    lastTriggered: 'Dernier envoi',
+    deliveries: 'Livraisons',
+    loading: 'Chargement...',
+    noDeliveries: 'Aucune livraison enregistrée',
+    attempts: 'Tentatives',
+    retry: 'Réessayer',
+    name: 'Nom',
+    url: 'URL de destination',
+    events: "Types d'événement",
+    createTitle: 'Nouveau webhook',
+    editTitle: 'Modifier le webhook',
+    save: 'Enregistrer',
+    saving: 'Enregistrement...',
+    cancel: 'Annuler',
+    secretOnce: 'Copiez votre secret maintenant',
+    secretHelp: "Ce secret n'est affiché qu'une seule fois. Utilisez-le pour valider la signature HMAC des envois.",
+    close: 'Fermer',
+    loadError: 'Impossible de charger les webhooks.',
+    saveError: "Impossible d'enregistrer le webhook.",
+  },
 }

@@ -609,6 +609,7 @@ export default {
     myUploads: 'My Files',
     teamAssignment: 'Team Assignment',
     support: 'Support',
+    webhooks: 'Webhooks',
   },
 
   // ==========================================
@@ -813,6 +814,50 @@ export default {
       "INCIDENT_ASSIGNED": "Incident assigned",
       "SYSTEM": "System"
     }
-  }
-,
+  },
+
+  // ==========================================
+  // SECTION: Outgoing integrations (NEW-12)
+  // ==========================================
+  webhooksView: {
+    title: 'Webhooks',
+    subtitle: 'Configure outgoing integrations per project or event type. Administrators only.',
+    createButton: 'New webhook',
+    refresh: 'Refresh',
+    empty: 'No webhooks configured yet.',
+    activeCount: '{count} of {total} active',
+    project: 'Project',
+    allProjects: 'All projects',
+    allEvents: 'All events',
+    allEventsHint: 'If you do not select events, every event for the project will be sent.',
+    active: 'Active',
+    inactive: 'Inactive',
+    activate: 'Activate',
+    deactivate: 'Deactivate',
+    test: 'Send test',
+    rotate: 'Rotate secret',
+    edit: 'Edit',
+    delete: 'Delete',
+    deleteConfirm: 'Delete the webhook "{name}"? This cannot be undone.',
+    rotateConfirm: 'Rotate the secret for "{name}"? The previous secret will stop working.',
+    lastTriggered: 'Last delivery',
+    deliveries: 'Deliveries',
+    loading: 'Loading...',
+    noDeliveries: 'No deliveries recorded',
+    attempts: 'Attempts',
+    retry: 'Retry',
+    name: 'Name',
+    url: 'Destination URL',
+    events: 'Event types',
+    createTitle: 'New webhook',
+    editTitle: 'Edit webhook',
+    save: 'Save',
+    saving: 'Saving...',
+    cancel: 'Cancel',
+    secretOnce: 'Copy your secret now',
+    secretHelp: 'This secret is shown only once. Use it to validate the HMAC signature of deliveries.',
+    close: 'Close',
+    loadError: 'Could not load webhooks.',
+    saveError: 'Could not save the webhook.',
+  },
 }

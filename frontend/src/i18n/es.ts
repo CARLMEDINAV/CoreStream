@@ -613,6 +613,7 @@ export default {
     myUploads: 'Mis Archivos',
     teamAssignment: 'Asignación de Equipo',
     support: 'Soporte',
+    webhooks: 'Webhooks',
   },
 
   // ==========================================
@@ -824,6 +825,50 @@ export default {
       "INCIDENT_ASSIGNED": "Incidencia asignada",
       "SYSTEM": "Sistema"
     }
-  }
-,
+  },
+
+  // ==========================================
+  // SECCIÓN: Integraciones salientes (NEW-12)
+  // ==========================================
+  webhooksView: {
+    title: 'Webhooks',
+    subtitle: 'Configura integraciones salientes por proyecto o tipo de evento. Sólo administradores.',
+    createButton: 'Nuevo webhook',
+    refresh: 'Actualizar',
+    empty: 'Aún no hay webhooks configurados.',
+    activeCount: '{count} de {total} activos',
+    project: 'Proyecto',
+    allProjects: 'Todos los proyectos',
+    allEvents: 'Todos los eventos',
+    allEventsHint: 'Si no seleccionas eventos, se enviarán todos los eventos del proyecto.',
+    active: 'Activo',
+    inactive: 'Inactivo',
+    activate: 'Activar',
+    deactivate: 'Desactivar',
+    test: 'Enviar prueba',
+    rotate: 'Rotar secreto',
+    edit: 'Editar',
+    delete: 'Eliminar',
+    deleteConfirm: '¿Eliminar el webhook "{name}"? Esta acción no se puede deshacer.',
+    rotateConfirm: '¿Rotar el secreto de "{name}"? El secreto anterior dejará de funcionar.',
+    lastTriggered: 'Último envío',
+    deliveries: 'Entregas',
+    loading: 'Cargando...',
+    noDeliveries: 'Sin entregas registradas',
+    attempts: 'Intentos',
+    retry: 'Reintentar',
+    name: 'Nombre',
+    url: 'URL de destino',
+    events: 'Tipos de evento',
+    createTitle: 'Nuevo webhook',
+    editTitle: 'Editar webhook',
+    save: 'Guardar',
+    saving: 'Guardando...',
+    cancel: 'Cancelar',
+    secretOnce: 'Copia tu secreto ahora',
+    secretHelp: 'Este secreto sólo se muestra una vez. Úsalo para validar la firma HMAC de los envíos.',
+    close: 'Cerrar',
+    loadError: 'No se pudieron cargar los webhooks.',
+    saveError: 'No se pudo guardar el webhook.',
+  },
 }

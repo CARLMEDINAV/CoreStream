@@ -1337,3 +1337,44 @@ export interface EventoIncidencia {
   comentario: string | null
   created_at: string
 }
+
+/**
+ * Webhook saliente configurado por un ADMIN (NEW-12).
+ * El `secret` sólo viaja en la respuesta de creación/rotación.
+ */
+export interface Webhook {
+  id: string
+  name: string
+  url: string
+  eventTypes: string[]
+  projectId?: string
+  isActive: boolean
+  hasSecret: boolean
+  lastStatus?: string
+  lastTriggeredAt?: string
+  failureCount: number
+  createdAt: string
+  updatedAt: string
+  /** Sólo presente justo después de crear o rotar el secreto. */
+  secret?: string
+}
+
+export type WebhookDeliveryStatus = 'PENDING' | 'SUCCESS' | 'FAILED'
+
+export interface WebhookDelivery {
+  id: string
+  webhookId: string
+  eventType: string
+  status: WebhookDeliveryStatus
+  attemptCount: number
+  responseStatus?: number
+  error?: string
+  deliveredAt?: string
+  createdAt: string
+  payload: Record<string, any>
+}
+
+export interface WebhookEventTypeOption {
+  value: string
+  label: string
+}

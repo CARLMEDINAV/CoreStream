@@ -61,6 +61,7 @@ Entidades clave:
 - `applications`, `epics`, `tickets`, `subtasks`
 - `ticket_events` (auditoría de las transiciones de estado)
 - `notifications`
+- `webhooks`, `webhook_deliveries` (integraciones salientes y su auditoría — NEW-12)
 - `incidents`, `meetings` (soporte operativo y ceremonias de equipo)
 
 Y, en un esquema aparte de `public`:

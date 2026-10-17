@@ -256,6 +256,22 @@ const routes: RouteRecordRaw[] = [
 
       {
         /**
+         * Integraciones salientes por webhooks (NEW-12).
+         * Sólo ADMIN y sólo si el plan incluye la bandera `webhooks`.
+         */
+        path: 'webhooks',
+        name: 'AdminWebhooks',
+        component: () => import('@/views/admin/WebhooksView.vue'),
+        meta: {
+          requiresAuth: true,
+          requiredRoles: ['ADMIN'],
+          featureFlag: 'webhooks',
+          title: 'Webhooks - CoreStream Admin'
+        }
+      },
+
+      {
+        /**
          * Vista de tickets de soporte para Admin
          * Permite gestionar bugs de producción reportados por el equipo
          */

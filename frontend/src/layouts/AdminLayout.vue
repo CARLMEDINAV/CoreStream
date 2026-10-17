@@ -86,6 +86,15 @@
           >
             {{ t('nav.support') }}
           </router-link>
+
+          <router-link
+            v-if="authStore.hasFeature('webhooks')"
+            to="/admin/webhooks"
+            class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
+            active-class="bg-[var(--bg-panel)] text-[var(--teal)] font-bold shadow-sm"
+          >
+            {{ t('nav.webhooks') }}
+          </router-link>
         </template>
 
         <div v-if="isAdmin && authStore.commercialProfile" class="px-4 py-3 text-sm text-[var(--text-secondary)] border-t border-[var(--border-subtle)]">

@@ -16,7 +16,7 @@ from arq.connections import RedisSettings
 
 from app.config import get_settings
 from app.redis_client import ARQ_HEALTH_CHECK_KEY, ARQ_QUEUE_NAME
-from app.worker.tasks import deliver_notification, purge_audit_logs
+from app.worker.tasks import deliver_notification, deliver_webhook, purge_audit_logs
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -34,7 +34,7 @@ async def shutdown(ctx: dict) -> None:
 class WorkerSettings:
     """Configuración central del worker ARQ."""
 
-    functions = [deliver_notification, purge_audit_logs]
+    functions = [deliver_notification, deliver_webhook, purge_audit_logs]
 
     # La retención de TRV-08 se aplica una vez al día. run_at_startup=False a
     # propósito: con varias réplicas del worker, un arranque escalonado

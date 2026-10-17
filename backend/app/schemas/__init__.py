@@ -80,6 +80,15 @@ from app.schemas.user import (
     UserResponse,
     UserUpdate,
 )
+from app.schemas.webhook import (
+    WebhookCreate,
+    WebhookCreatedResponse,
+    WebhookDeliveryResponse,
+    WebhookEventTypeOption,
+    WebhookResponse,
+    WebhookSecretResponse,
+    WebhookUpdate,
+)
 
 __all__ = [
     # Esquemas de Usuario
@@ -150,4 +159,12 @@ __all__ = [
     "MeetingCreate",
     "MeetingUpdate",
     "MeetingResponse",
+    # Esquemas de Webhooks
+    "WebhookCreate",
+    "WebhookUpdate",
+    "WebhookResponse",
+    "WebhookCreatedResponse",
+    "WebhookDeliveryResponse",
+    "WebhookSecretResponse",
+    "WebhookEventTypeOption",
 ]

@@ -162,6 +162,14 @@ class Settings(BaseSettings):
     # Elasticsearch lento no puede quedarse colgado del request del usuario.
     ELASTIC_TIMEOUT_SECONDS: float = 2.0
 
+    # Webhooks salientes (NEW-12)
+    # Timeout de la llamada HTTP de entrega (segundos).
+    WEBHOOK_TIMEOUT_SECONDS: int = 10
+    # Permite URLs de webhook hacia direcciones privadas/loopback. Desactivado
+    # por defecto como defensa básica contra SSRF; habilitar sólo en despliegues
+    # on-premise donde el destino sea de confianza.
+    WEBHOOK_ALLOW_PRIVATE_URLS: bool = False
+
     # Configuración de Pydantic Settings
     class Config:
         """
