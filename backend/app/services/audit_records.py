@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Mapping
+from uuid import UUID
 
 from app.models import AuditOutcome
 
@@ -50,6 +51,52 @@ def outcome_for(status_code: int) -> str:
     if status_code < 500:
         return AuditOutcome.FAILED
     return AuditOutcome.ERROR
+
+
+def build_entry(
+    *,
+    method: str,
+    path: str,
+    status_code: int,
+    route_template: str | None = None,
+    request_id: str | None = None,
+    client_id: UUID | None = None,
+    actor_user_id: UUID | None = None,
+    actor_email: str | None = None,
+    actor_role: str | None = None,
+    resource_type: str | None = None,
+    resource_id: UUID | None = None,
+    ip: str | None = None,
+    user_agent: str | None = None,
+    duration_ms: int | None = None,
+) -> dict[str, Any]:
+    """
+    Entrada de auditoría para un acto que no atraviesa el middleware HTTP.
+
+    TRV-07 habla de "todo evento de la plataforma", y no todos llegan por una
+    petición HTTP: hay conexiones WebSocket, entregas salientes y tareas del
+    worker. Cada una construía su diccionario a mano, con el riesgo de olvidar
+    una clave o de calcular el resultado de otra forma; aquí la forma de la
+    entrada y la clasificación del resultado son las mismas que usa el
+    middleware.
+    """
+    return {
+        "client_id": client_id,
+        "request_id": request_id,
+        "actor_user_id": actor_user_id,
+        "actor_email": actor_email,
+        "actor_role": actor_role,
+        "method": method,
+        "path": path[:512],
+        "route_template": route_template,
+        "resource_type": resource_type,
+        "resource_id": resource_id,
+        "status_code": status_code,
+        "outcome": outcome_for(status_code),
+        "ip": ip,
+        "user_agent": user_agent,
+        "duration_ms": duration_ms,
+    }
 
 
 def to_primitive(value: Any) -> Any:

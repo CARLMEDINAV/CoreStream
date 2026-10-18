@@ -40,17 +40,22 @@ def set_audit_subject(email: str) -> None:
         bucket["actor_email"] = email
 
 
-def mark_auditable() -> None:
+def defer_audit() -> None:
     """
-    Fuerza el registro de una petición que las reglas por defecto omitirían.
+    Declara que el acto lo registra el propio handler, no el middleware.
 
-    Lo necesita cualquier lectura que sí sea un acto auditable — la
-    exportación del propio registro de auditoría es el caso evidente: es un
-    GET que devuelve 200, y por volumen esas no se registran.
+    Lo necesita una respuesta que se envía por trozos: el middleware escribe
+    la entrada en cuanto el handler devuelve la respuesta, cuando el cuerpo
+    todavía no ha salido, así que registraría un 200 aunque el volcado se
+    corte a mitad. En una auditoría eso es afirmar que una extracción
+    terminó bien sin saberlo.
+
+    Quien difiere el registro se obliga a hacerlo: si el handler no lo
+    escribe, el acto no queda en ninguna parte.
     """
     bucket = audit_ctx.get()
     if bucket is not None:
-        bucket["force"] = True
+        bucket["deferred"] = True
 
 
 def set_audit_resource(resource_type: str, resource_id: UUID | str | None = None) -> None:

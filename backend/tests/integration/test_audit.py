@@ -6,11 +6,15 @@ atravesar la aplicación entera, que el trigger de inmutabilidad existe y
 aborta, y que el gating comercial de la exportación responde por HTTP.
 """
 
+import csv
+import io
+
 import psycopg2
 import pytest
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 from tests.integration.conftest import (
+    CLIENT_B_SLUG,
     DEFAULT_CLIENT_SLUG,
     DEV,
     TEST_DATABASE_URL,
@@ -459,7 +463,8 @@ async def test_la_exportacion_se_audita_a_si_misma(client, admin_headers):
 
     filas = _consulta(
         "SELECT resource_type, outcome, actor_role FROM audit.audit_logs "
-        "WHERE path = '/api/audit-logs/export' ORDER BY occurred_at DESC LIMIT 1"
+        "WHERE path LIKE %s ORDER BY occurred_at DESC LIMIT 1",
+        ('/api/audit-logs/export%',),
     )
     assert filas, "una extracción completa del historial debe quedar registrada"
     resource_type, outcome, actor_role = filas[0]
@@ -487,6 +492,193 @@ async def test_la_exportacion_denegada_tambien_queda_registrada(client, admin_he
 
     filas = _consulta(
         "SELECT outcome, status_code FROM audit.audit_logs "
-        "WHERE path = '/api/audit-logs/export' ORDER BY occurred_at DESC LIMIT 1"
+        "WHERE path LIKE %s ORDER BY occurred_at DESC LIMIT 1",
+        ('/api/audit-logs/export%',),
     )
     assert filas and filas[0] == ("DENIED", 403)
+
+
+# ---------------------------------------------------------------------------
+# NEW-14 — visor: filtros compartidos y valores de los desplegables
+# ---------------------------------------------------------------------------
+
+def _filas_csv(cuerpo: str) -> list[dict]:
+    """La exportacion tal como la lee un auditor: cabecera y filas."""
+    return list(csv.DictReader(io.StringIO(cuerpo)))
+
+
+async def test_la_exportacion_respeta_los_filtros_del_visor(
+    client, admin_headers, dev_headers
+):
+    """
+    El hueco que NEW-14 cierra: antes /export solo admitia fechas, asi que
+    filtrar por un criterio y exportar devolvian cosas distintas.
+    """
+    await client.get("/api/users/", headers=dev_headers)  # genera un DENIED
+    _set_plan("Enterprise")
+
+    res = await client.get("/api/audit-logs/export?outcome=DENIED", headers=admin_headers)
+    assert res.status_code == 200, res.text[:300]
+
+    filas = _filas_csv(res.text)
+    assert filas, "la exportacion filtrada no devolvio ninguna fila"
+    assert {fila["outcome"] for fila in filas} == {"DENIED"}
+
+
+async def test_la_exportacion_filtrada_contiene_lo_que_muestra_el_visor(
+    client, admin_headers, dev_headers
+):
+    """Lo que ves es lo que exportas, con el mismo filtro aplicado."""
+    await client.get("/api/users/", headers=dev_headers)
+    _set_plan("Enterprise")
+
+    visor = (
+        await client.get("/api/audit-logs/?outcome=DENIED&limit=200", headers=admin_headers)
+    ).json()
+    exportado = _filas_csv(
+        (await client.get("/api/audit-logs/export?outcome=DENIED", headers=admin_headers)).text
+    )
+
+    # El visor pagina y la exportacion no, asi que lo exportado los contiene.
+    del_visor = {item["request_id"] for item in visor["items"] if item["request_id"]}
+    exportados = {fila["request_id"] for fila in exportado if fila["request_id"]}
+    assert del_visor <= exportados
+
+
+async def test_la_exportacion_registra_con_que_filtros_se_hizo(client, admin_headers):
+    """Criterio 2 de NEW-14, con el alcance del acto y no solo el acto."""
+    _set_plan("Enterprise")
+    await client.get(
+        "/api/audit-logs/export?outcome=DENIED&method=GET", headers=admin_headers
+    )
+
+    filas = _consulta(
+        "SELECT path FROM audit.audit_logs "
+        "WHERE path LIKE %s ORDER BY occurred_at DESC LIMIT 1",
+        ('/api/audit-logs/export?%',),
+    )
+    assert filas, "no quedo registrada la exportacion con sus filtros"
+    ruta = filas[0][0]
+    assert "outcome=DENIED" in ruta
+    assert "method=GET" in ruta
+
+
+async def test_solo_admin_consulta_los_valores_de_los_filtros(
+    client, dev_headers, leader_headers
+):
+    for headers in (dev_headers, leader_headers):
+        res = await client.get("/api/audit-logs/filters", headers=headers)
+        assert res.status_code == 403
+
+
+async def test_los_valores_de_los_filtros_salen_del_historial(
+    client, admin_headers, dev_headers
+):
+    _set_plan("Pro")
+    await client.get("/api/users/", headers=dev_headers)  # deja un DENIED
+
+    res = await client.get("/api/audit-logs/filters", headers=admin_headers)
+    assert res.status_code == 200, res.text[:300]
+
+    cuerpo = res.json()
+    assert cuerpo["retention_days"] == 180
+    assert cuerpo["outcomes"] == ["SUCCESS", "DENIED", "FAILED", "ERROR"]
+    assert "GET" in cuerpo["methods"]
+    assert isinstance(cuerpo["resource_types"], list)
+    assert cuerpo["actors_truncated"] is False
+    for actor in cuerpo["actors"]:
+        assert "email" in actor and "id" in actor
+
+
+async def test_los_valores_de_los_filtros_respetan_los_filtros(client, admin_headers):
+    """
+    El endpoint comparte el objeto de filtros con el visor: acotando a un
+    rango sin eventos, no puede ofrecer ninguna opcion.
+    """
+    _set_plan("Pro")
+    res = await client.get(
+        "/api/audit-logs/filters?date_from=2099-01-01T00:00:00Z", headers=admin_headers
+    )
+    assert res.status_code == 200
+    cuerpo = res.json()
+    assert cuerpo["resource_types"] == []
+    assert cuerpo["actors"] == []
+
+
+async def test_los_valores_de_los_filtros_no_cruzan_clientes(
+    client, admin_headers, admin_b_headers
+):
+    """Aislamiento por tenant tambien en los desplegables (TRV-01)."""
+    _set_plan("Pro")
+    _set_plan("Pro", slug=CLIENT_B_SLUG)
+
+    propios = (await client.get("/api/audit-logs/filters", headers=admin_headers)).json()
+    ajenos = (await client.get("/api/audit-logs/filters", headers=admin_b_headers)).json()
+
+    correos_propios = {a["email"] for a in propios["actors"]}
+    correos_ajenos = {a["email"] for a in ajenos["actors"]}
+    assert not (correos_propios & correos_ajenos)
+
+
+# ---------------------------------------------------------------------------
+# TRV-07 — eventos de la plataforma que no son peticiones HTTP
+# ---------------------------------------------------------------------------
+
+async def test_la_entrega_de_un_webhook_queda_auditada(
+    client, admin_headers, leader_headers, epic
+):
+    """
+    Enviar datos de una empresa a un tercero es un evento de la plataforma.
+    Antes la entrega solo se guardaba en su propia tabla y no dejaba rastro en
+    la auditoria de no repudio.
+    """
+    from app.worker.tasks import _update_delivery
+
+    creado = (
+        await client.post(
+            "/api/webhooks/",
+            json={
+                "name": "Auditoria de entrega",
+                "url": "https://example.com/hook",
+                "event_types": ["TICKET_CREATED"],
+            },
+            headers=admin_headers,
+        )
+    ).json()
+
+    await client.post(
+        "/api/tickets/",
+        json={"epic_id": epic["id"], "title": "Dispara webhook", "priority": "LOW"},
+        headers=leader_headers,
+    )
+
+    entregas = (
+        await client.get(f"/api/webhooks/{creado['id']}/deliveries", headers=admin_headers)
+    ).json()
+    assert entregas, "no se creo ninguna entrega que auditar"
+
+    await _update_delivery(
+        entregas[0]["id"], status="SUCCESS", attempt=1, response_status=200
+    )
+
+    filas = _consulta(
+        "SELECT resource_type, outcome, actor_role, client_id FROM audit.audit_logs "
+        "WHERE route_template = %s ORDER BY occurred_at DESC LIMIT 1",
+        ("/worker/deliver_webhook",),
+    )
+    assert filas, "la entrega del webhook no quedo registrada"
+    resource_type, outcome, actor_role, client_id = filas[0]
+    assert resource_type == "webhook_delivery"
+    assert outcome == "SUCCESS"
+    assert actor_role == "SYSTEM"
+    assert client_id is not None
+
+    # Y el ADMIN de esa empresa lo ve en su visor, que es lo que lo hace util.
+    # Se comprueba aqui mismo porque la tabla de auditoria se trunca entre
+    # tests: en uno aparte no quedaria nada que mirar.
+    _set_plan("Pro")
+    visor = await client.get(
+        "/api/audit-logs/?resource_type=webhook_delivery&limit=50", headers=admin_headers
+    )
+    assert visor.status_code == 200, visor.text[:300]
+    assert visor.json()["total"] >= 1

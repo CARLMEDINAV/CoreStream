@@ -8,15 +8,19 @@ completo por HTTP, la inmutabilidad por trigger y la purga real están en
 tests/integration/test_audit.py.
 """
 
+import asyncio
+import contextlib
+import inspect
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
+from starlette.requests import Request
 
 from app.context import (
     audit_ctx,
+    defer_audit,
     get_audit_bucket,
-    mark_auditable,
     set_audit_actor,
     set_audit_resource,
     set_audit_subject,
@@ -33,6 +37,8 @@ from app.plans import (
     group_by_retention,
     retention_cutoff,
 )
+from app.routers import audit_logs
+from app.schemas.audit import METHOD_VALUES, OUTCOME_VALUES, AuditFilters
 from app.services import audit_export, audit_records, audit_service
 
 # ---------------------------------------------------------------------------
@@ -108,23 +114,37 @@ def test_sin_audit_reads_un_500_en_lectura_no_es_un_acto_auditable():
     assert _should_record("GET", 500, "/api/tickets/", audit_reads=False) is False
 
 
-def test_una_lectura_puede_marcarse_como_auditable():
+def _peticion(query: str = "") -> Request:
+    """Peticion minima, solo con lo que lee la construccion de la entrada."""
+    return Request({
+        "type": "http",
+        "method": "GET",
+        "path": "/api/audit-logs/export",
+        "query_string": query.encode(),
+        "headers": [],
+        "client": None,
+    })
+
+
+def test_el_middleware_no_registra_lo_que_el_handler_difiere():
     """
-    mark_auditable() fuerza el registro de una lectura concreta — lo usa la
-    exportación, que debe quedar registrada incluso con AUDIT_READS=false.
+    Quien difiere el registro se obliga a hacerlo: si el middleware escribiera
+    tambien, habria dos entradas para un mismo acto.
     """
     ruta = "/api/audit-logs/export"
-    assert _should_record("GET", 200, ruta, audit_reads=False) is False
-    assert _should_record("GET", 200, ruta, forced=True, audit_reads=False) is True
+    assert _should_record("GET", 200, ruta, deferred=True) is False
+    assert _should_record("GET", 200, ruta, deferred=False) is True
+    # Ni aun siendo una ruta que siempre se registra por si misma.
+    assert _should_record("POST", 201, ruta, deferred=True) is False
 
 
-def test_mark_auditable_marca_el_contexto():
+def test_defer_audit_marca_el_contexto():
     bucket: dict = {}
     token = audit_ctx.set(bucket)
     try:
-        assert not bucket.get("force")
-        mark_auditable()
-        assert bucket["force"] is True
+        assert not bucket.get("deferred")
+        defer_audit()
+        assert bucket["deferred"] is True
     finally:
         audit_ctx.reset(token)
 
@@ -193,7 +213,7 @@ def test_sin_contexto_sembrado_no_revienta():
     set_audit_actor(user_id=uuid4(), email="a@b.c", role="ADMIN")
     set_audit_subject("x@y.z")
     set_audit_resource("ticket")
-    mark_auditable()
+    defer_audit()
 
 
 def test_el_actor_autenticado_gana_al_email_intentado():
@@ -415,27 +435,331 @@ def _fila(**kwargs) -> AuditLog:
     return AuditLog(**base)
 
 
+async def _como_flujo(entries):
+    for entry in entries:
+        yield entry
+
+
+def _csv(entries) -> str:
+    """Junta los trozos de iter_csv: el fichero tal como lo recibe el cliente."""
+    async def juntar() -> str:
+        return "".join([t async for t in audit_export.iter_csv(_como_flujo(entries))])
+
+    return asyncio.run(juntar())
+
+
 def test_csv_lleva_cabecera_y_una_linea_por_entrada():
-    salida = audit_export.render_csv([_fila(), _fila()]).strip().splitlines()
+    salida = _csv([_fila(), _fila()]).strip().splitlines()
     assert salida[0] == ",".join(audit_records.ENTRY_FIELDS)
     assert len(salida) == 3
 
 
 def test_csv_vacio_conserva_la_cabecera():
     """Una exportación sin resultados sigue siendo un fichero válido."""
-    assert audit_export.render_csv([]).strip() == ",".join(audit_records.ENTRY_FIELDS)
+    assert _csv([]).strip() == ",".join(audit_records.ENTRY_FIELDS)
 
 
 def test_las_fechas_se_exportan_en_iso_8601():
     """Criterio explícito de TRV-07."""
     momento = datetime(2026, 10, 2, 9, 30, tzinfo=timezone.utc)
-    salida = audit_export.render_csv([_fila(occurred_at=momento)])
+    salida = _csv([_fila(occurred_at=momento)])
     assert momento.isoformat() in salida
 
 
 def test_los_nulos_no_se_exportan_como_la_cadena_none():
-    salida = audit_export.render_csv([_fila(ip=None, user_agent=None, request_id=None)])
+    salida = _csv([_fila(ip=None, user_agent=None, request_id=None)])
     assert "None" not in salida
+
+
+def test_la_exportacion_no_tiene_tope_de_filas():
+    """
+    Regresión del defecto: el tope de 50.000 filas truncaba el fichero sin
+    avisar, y un Enterprise con 730 días de retención lo supera de sobra.
+    """
+    cuantas = audit_export._ROWS_PER_CHUNK * 2 + 37
+    lineas = _csv([_fila() for _ in range(cuantas)]).strip().splitlines()
+    assert len(lineas) == cuantas + 1
+
+
+def test_el_csv_se_entrega_en_trozos():
+    """
+    Lo que mantiene la memoria acotada: el fichero no se construye entero
+    antes de empezar a enviarlo.
+    """
+    async def contar() -> int:
+        filas = [_fila() for _ in range(audit_export._ROWS_PER_CHUNK * 3)]
+        return len([t async for t in audit_export.iter_csv(_como_flujo(filas))])
+
+    assert asyncio.run(contar()) > 1
+
+
+# ---------------------------------------------------------------------------
+# Filtros del visor (NEW-14)
+# ---------------------------------------------------------------------------
+
+def test_el_visor_y_la_exportacion_comparten_los_filtros():
+    """
+    El defecto que NEW-14 corrige: la exportación admitía solo el rango de
+    fechas, así que filtrar por usuario y exportar daban cosas distintas. Con
+    un único objeto de filtros ya no pueden divergir.
+    """
+    for endpoint in (audit_logs.list_audit_logs, audit_logs.export_audit_logs):
+        # eval_str resuelve la anotacion: el router usa anotaciones diferidas.
+        parametros = inspect.signature(endpoint, eval_str=True).parameters
+        assert parametros["filters"].annotation is AuditFilters
+def test_los_resultados_del_desplegable_son_los_que_el_sistema_escribe():
+    """
+    El filtro debe ofrecer exactamente los resultados que la aplicación
+    produce. Si outcome_for empezara a devolver uno nuevo, esto lo detecta.
+    """
+    producidos = {
+        audit_records.outcome_for(codigo) for codigo in (200, 401, 403, 422, 429, 500)
+    }
+    assert set(OUTCOME_VALUES) == producidos
+
+
+def test_los_verbos_del_desplegable_salen_del_propio_filtro():
+    """Una sola lista: la del filtro, no una copia para la interfaz."""
+    assert set(METHOD_VALUES) == {"POST", "PUT", "PATCH", "DELETE", "GET"}
+
+
+# ---------------------------------------------------------------------------
+# Eventos que no atraviesan el middleware HTTP (TRV-07)
+# ---------------------------------------------------------------------------
+
+def test_la_entrada_construida_a_mano_lleva_los_mismos_campos():
+    """
+    Un acto del worker o del WebSocket debe registrarse con la misma forma que
+    una peticion HTTP, o el visor no podria filtrarlo igual.
+    """
+    entrada = audit_records.build_entry(
+        method="WS", path="/api/ws/mobile/notifications", status_code=101
+    )
+    esperados = set(audit_records.ENTRY_FIELDS) - {"occurred_at", "request_id"}
+    assert esperados <= set(entrada)
+    assert "client_id" in entrada
+
+
+def test_el_resultado_se_clasifica_igual_que_en_una_peticion():
+    assert audit_records.build_entry(
+        method="WS", path="/x", status_code=101
+    )["outcome"] == "SUCCESS"
+    assert audit_records.build_entry(
+        method="WS", path="/x", status_code=403
+    )["outcome"] == "DENIED"
+    assert audit_records.build_entry(
+        method="POST", path="/x", status_code=504
+    )["outcome"] == "ERROR"
+
+
+def test_la_ruta_construida_a_mano_esta_acotada():
+    """La columna son 512 caracteres: una ruta larga no puede desbordarla."""
+    entrada = audit_records.build_entry(method="POST", path="/x" * 600, status_code=200)
+    assert len(entrada["path"]) == 512
+
+
+def test_una_exportacion_completa_se_registra_al_terminar_el_volcado():
+    """
+    El middleware escribia la entrada antes de que el cuerpo saliera, asi que
+    un volcado cortado quedaba igual registrado como 200. Ahora el acto se
+    registra cuando el fichero ha salido entero, con las filas entregadas.
+    """
+    from app.routers.audit_logs import _audited_csv
+    from app.services.audit_sinks import set_audit_sink
+
+    class _Rol:
+        name = "ADMIN"
+
+    class _Usuario:
+        id = uuid4()
+        client_id = uuid4()
+        email = "admin@cliente.com"
+        role = _Rol()
+
+    cuantas = 3
+
+    async def _entradas():
+        for _ in range(cuantas):
+            yield _fila()
+
+    registradas: list[dict] = []
+
+    class _Sink:
+        name = "prueba"
+
+        async def emit(self, entry):
+            registradas.append(dict(entry))
+
+    async def consumir() -> str:
+        return "".join([
+            bloque async for bloque in _audited_csv(
+                _entradas(),
+                request=_peticion("outcome=DENIED"),
+                current_user=_Usuario(),
+                request_id="req-de-prueba",
+            )
+        ])
+
+    anterior = audit_service.get_audit_sink()
+    set_audit_sink(_Sink())
+    try:
+        cuerpo = asyncio.run(consumir())
+    finally:
+        set_audit_sink(anterior)
+
+    assert len(cuerpo.strip().splitlines()) == cuantas + 1
+    assert len(registradas) == 1
+    entrada = registradas[0]
+    assert entrada["outcome"] == "SUCCESS"
+    assert entrada["status_code"] == 200
+    assert entrada["request_id"] == "req-de-prueba"
+    assert f"filas_entregadas={cuantas}" in entrada["path"]
+    assert "outcome=DENIED" in entrada["path"]
+
+
+def test_un_fallo_a_mitad_del_envio_no_se_registra_como_exito():
+    """
+    El 200 y las cabeceras ya viajaron cuando empieza el volcado, asi que un
+    fallo no puede cambiarlos. Lo que si puede es no dejar que la auditoria
+    afirme que la extraccion termino bien: queda un evento ERROR con las filas
+    que alcanzaron a salir.
+    """
+    from app.routers.audit_logs import _audited_csv
+    from app.services.audit_sinks import set_audit_sink
+
+    class _Rol:
+        name = "ADMIN"
+
+    class _Usuario:
+        id = uuid4()
+        client_id = uuid4()
+        email = "admin@cliente.com"
+        role = _Rol()
+
+    async def _entradas_que_se_cortan():
+        for _ in range(audit_export._ROWS_PER_CHUNK):
+            yield _fila()
+        raise RuntimeError("la base se corto a mitad del volcado")
+
+    registradas: list[dict] = []
+
+    class _Sink:
+        name = "prueba"
+
+        async def emit(self, entry):
+            registradas.append(dict(entry))
+
+    async def consumir() -> list[str]:
+        bloques: list[str] = []
+        with pytest.raises(RuntimeError):
+            async for bloque in _audited_csv(
+                _entradas_que_se_cortan(),
+                request=_peticion("outcome=DENIED"),
+                current_user=_Usuario(),
+                request_id="req-de-prueba",
+            ):
+                bloques.append(bloque)
+        return bloques
+
+    anterior = audit_service.get_audit_sink()
+    set_audit_sink(_Sink())
+    try:
+        bloques = asyncio.run(consumir())
+    finally:
+        set_audit_sink(anterior)
+
+    assert bloques, "el cliente no recibio nada antes del fallo"
+    assert len(registradas) == 1
+    entrada = registradas[0]
+    assert entrada["outcome"] == "ERROR"
+    assert entrada["resource_type"] == "audit_export"
+    assert entrada["actor_role"] == "ADMIN"
+    # Las filas entregadas, sin contar la cabecera.
+    assert f"filas_entregadas={audit_export._ROWS_PER_CHUNK}" in entrada["path"]
+    # Y los filtros con que se pidio, para saber que parte del historial salio.
+    assert "outcome=DENIED" in entrada["path"]
+
+
+def test_la_conexion_websocket_rechazada_queda_registrada():
+    """
+    Hueco real de TRV-07: Starlette entrega las conexiones WebSocket sin pasar
+    por el middleware, asi que sin esto un intento de acceso no deja rastro.
+    """
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from app.routers import websocket as ws_router
+    from app.services.audit_sinks import set_audit_sink
+
+    registradas: list[dict] = []
+
+    class _Sink:
+        name = "prueba"
+
+        async def emit(self, entry):
+            registradas.append(dict(entry))
+
+    anterior = audit_service.get_audit_sink()
+    set_audit_sink(_Sink())
+    try:
+        app = FastAPI()
+        app.include_router(ws_router.router, prefix="/api")
+        cliente = TestClient(app)
+        # Sin ticket se rechaza antes de tocar Redis o la base de datos.
+        with contextlib.suppress(Exception), cliente.websocket_connect(
+            "/api/ws/mobile/notifications"
+        ):
+            pass
+    finally:
+        set_audit_sink(anterior)
+
+    assert len(registradas) == 1
+    entrada = registradas[0]
+    assert entrada["method"] == "WS"
+    assert entrada["path"] == "/api/ws/mobile/notifications"
+    assert entrada["resource_type"] == "websocket"
+    assert entrada["outcome"] == "DENIED"
+
+
+def test_los_tres_endpoints_comparten_los_filtros():
+    """
+    También el de opciones: las opciones se calculan sobre lo mismo que se
+    consulta, así que nunca ofrece un valor que no daría resultados.
+    """
+    endpoints = (
+        audit_logs.list_audit_logs,
+        audit_logs.export_audit_logs,
+        audit_logs.list_filter_options,
+    )
+    for endpoint in endpoints:
+        parametros = inspect.signature(endpoint, eval_str=True).parameters
+        assert parametros["filters"].annotation is AuditFilters
+
+
+def test_sin_filtros_solo_acotan_el_cliente_y_la_retencion():
+    """Las dos condiciones que no son negociables para ningún plan."""
+    condiciones = audit_service._filters(
+        client_id=uuid4(), plan="Basico", filters=AuditFilters()
+    )
+    assert len(condiciones) == 2
+
+
+def test_cada_filtro_anade_su_condicion():
+    condiciones = audit_service._filters(
+        client_id=uuid4(),
+        plan="Enterprise",
+        filters=AuditFilters(
+            actor_email="ana@cliente.com",
+            actor_user_id=uuid4(),
+            resource_type="ticket",
+            resource_id=uuid4(),
+            outcome="DENIED",
+            method="GET",
+            date_from=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            date_to=datetime(2026, 2, 1, tzinfo=timezone.utc),
+        ),
+    )
+    assert len(condiciones) == 2 + 8
 
 
 # ---------------------------------------------------------------------------

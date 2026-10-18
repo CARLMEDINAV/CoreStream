@@ -67,10 +67,13 @@ def _should_record(
     method: str,
     status_code: int,
     path: str,
-    forced: bool = False,
     audit_reads: bool = True,
+    deferred: bool = False,
 ) -> bool:
     """
+    Con deferred el middleware no escribe nada: el handler registra el acto
+    cuando conoce su resultado (ver context.defer_audit).
+    
     Con audit_reads (el valor por defecto) se registra toda petición que
     llegue a un handler: es la lectura estricta de "todo evento de la
     plataforma" que pide la descripción de TRV-07. Las sondas ya se han
@@ -80,7 +83,9 @@ def _should_record(
     denegados en cualquier verbo y las rutas de autenticación — bastante más
     barato, porque entonces un GET con éxito no escribe nada.
     """
-    if forced or audit_reads:
+    if deferred:
+        return False
+    if audit_reads:
         return True
     if method in _MUTATING_METHODS:
         return True
@@ -139,8 +144,8 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     request.method,
                     status_code,
                     request.url.path,
-                    forced=bool(bucket.get("force")),
                     audit_reads=get_settings().AUDIT_READS,
+                    deferred=bool(bucket.get("deferred")),
                 ):
                     await record(
                         _build_entry(

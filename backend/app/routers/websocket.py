@@ -26,12 +26,13 @@ from sqlalchemy import select
 
 from app.config import get_settings
 from app.database import get_session_maker
-from app.models import User
+from app.models import Role, User
 from app.redis_client import (
     TICKETS_UPDATES_CHANNEL,
     consume_ws_ticket,
     user_notifications_channel,
 )
+from app.services import audit_records, audit_service
 
 logger = logging.getLogger(__name__)
 
@@ -194,6 +195,47 @@ async def _handle_connection(websocket: WebSocket, user_id: str) -> None:
         logger.info("Usuario %s desconectado de notificaciones", user_id)
 
 
+# Ruta del endpoint, para que el evento de auditoria y el visor la nombren
+# igual que el resto de la API.
+_WS_PATH = "/api/ws/mobile/notifications"
+
+
+async def _auditar_conexion(
+    websocket: WebSocket,
+    *,
+    status_code: int,
+    client_id=None,
+    actor_user_id=None,
+    actor_email: str | None = None,
+    actor_role: str | None = None,
+) -> None:
+    """
+    Registra el intento de conexion (TRV-07).
+
+    El middleware de auditoria solo ve peticiones HTTP —Starlette entrega las
+    conexiones WebSocket sin pasar por el—, asi que este endpoint tiene que
+    registrarse a si mismo o queda fuera de "todo evento de la plataforma".
+
+    Los codigos son los del equivalente HTTP y no los del cierre WebSocket:
+    101 cuando la conexion se acepta y 403 cuando se rechaza por politica. Asi
+    el resultado se clasifica igual que el de cualquier otra peticion y los
+    filtros del visor siguen sirviendo.
+    """
+    await audit_service.record(audit_records.build_entry(
+        client_id=client_id,
+        actor_user_id=actor_user_id,
+        actor_email=actor_email,
+        actor_role=actor_role,
+        method="WS",
+        path=_WS_PATH,
+        route_template=_WS_PATH,
+        resource_type="websocket",
+        status_code=status_code,
+        ip=websocket.client.host if websocket.client else None,
+        user_agent=(websocket.headers.get("user-agent") or "")[:512] or None,
+    ))
+
+
 @router.websocket("/ws/mobile/notifications")
 async def websocket_notifications_secure(
     websocket: WebSocket, ticket: Optional[str] = Query(None)
@@ -207,20 +249,45 @@ async def websocket_notifications_secure(
     if not ticket:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Ticket no proporcionado")
         logger.warning("Intento de conexión sin ticket en endpoint seguro /ws/mobile/notifications")
+        await _auditar_conexion(websocket, status_code=403)
         return
 
     ticket_user_id = await consume_ws_ticket(ticket)
     if ticket_user_id is None:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Ticket inválido o expirado")
         logger.warning("Ticket inválido o ya usado en endpoint seguro /ws/mobile/notifications")
+        await _auditar_conexion(websocket, status_code=403)
         return
 
     async with get_session_maker()() as db:
-        result = await db.execute(select(User).where(User.id == ticket_user_id))
-        if result.scalar_one_or_none() is None:
+        # Se trae tambien el rol porque TRV-07 pide registrar "usuario y rol",
+        # y la relacion no se puede recorrer con lazy="raise_on_sql".
+        fila = (
+            await db.execute(
+                select(User, Role.name)
+                .join(Role, User.role_id == Role.id)
+                .where(User.id == ticket_user_id)
+            )
+        ).first()
+
+        if fila is None:
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Usuario no encontrado")
             logger.warning("Intento de conexión con usuario inexistente: %s", ticket_user_id)
+            await _auditar_conexion(
+                websocket, status_code=403, actor_user_id=ticket_user_id
+            )
             return
+
+        usuario, rol = fila
+
+    await _auditar_conexion(
+        websocket,
+        status_code=101,
+        client_id=usuario.client_id,
+        actor_user_id=usuario.id,
+        actor_email=usuario.email,
+        actor_role=rol,
+    )
 
     await _handle_connection(websocket, ticket_user_id)
 

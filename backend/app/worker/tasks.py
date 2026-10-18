@@ -26,11 +26,14 @@ import redis.asyncio as aioredis
 
 from app.config import get_settings
 from app.database import get_session_maker
-from app.models import AuditOutcome
 from app.redis_client import user_notifications_channel
-from app.services import audit_service
+from app.services import audit_records, audit_service
 
 logger = logging.getLogger(__name__)
+
+# Actor de los eventos que origina el propio sistema, no una persona.
+SYSTEM_ACTOR = "system:worker"
+SYSTEM_ROLE = "SYSTEM"
 settings = get_settings()
 
 
@@ -109,18 +112,15 @@ async def purge_audit_logs(ctx: dict) -> dict[str, int]:
 
     # El desglose por grupo de retención va en la ruta del evento: es lo que
     # permite comprobar después qué política se aplicó y a cuántas filas.
-    await audit_service.record({
-        "client_id": None,
-        "actor_email": "system:worker",
-        "actor_role": "SYSTEM",
-        "method": "DELETE",
-        "path": f"/worker/purge_audit_logs?filas={total}",
-        "route_template": "/worker/purge_audit_logs",
-        "resource_type": "audit_retention",
-        "status_code": 200,
-        "outcome": AuditOutcome.SUCCESS,
-        "duration_ms": None,
-    })
+    await audit_service.record(audit_records.build_entry(
+        actor_email=SYSTEM_ACTOR,
+        actor_role=SYSTEM_ROLE,
+        method="DELETE",
+        path=f"/worker/purge_audit_logs?filas={total}",
+        route_template="/worker/purge_audit_logs",
+        resource_type="audit_retention",
+        status_code=200,
+    ))
 
     return deleted
 
@@ -172,6 +172,30 @@ async def _update_delivery(
                 webhook.failure_count = (webhook.failure_count or 0) + 1
 
         await db.commit()
+
+        client_id = delivery.client_id
+        event_type = delivery.event_type
+
+    # Enviar datos de una empresa a un tercero es un evento de la plataforma
+    # (TRV-07). Se registra aqui porque es el unico punto por el que pasan
+    # todos los resultados de una entrega, con exito o sin el.
+    #
+    # La URL de destino no se guarda a proposito: la de un webhook entrante de
+    # Slack lleva su propio secreto en la ruta, y la auditoria no es sitio para
+    # un secreto. Queda el webhook afectado por su id.
+    await audit_service.record(audit_records.build_entry(
+        client_id=client_id,
+        actor_email=SYSTEM_ACTOR,
+        actor_role=SYSTEM_ROLE,
+        method="POST",
+        path=f"/worker/deliver_webhook?evento={event_type}&intento={attempt}",
+        route_template="/worker/deliver_webhook",
+        resource_type="webhook_delivery",
+        resource_id=UUID(delivery_id),
+        # Sin respuesta del destino (timeout o error de red) el resultado se
+        # registra como 504: el acto fallo por el otro extremo, no aqui.
+        status_code=response_status or 504,
+    ))
 
 
 async def deliver_webhook(
