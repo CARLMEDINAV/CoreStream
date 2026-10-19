@@ -1,0 +1,218 @@
+# CoreStream — backend, worker, frontend e Ingress (TRV-09). Ver docs/TRV-09_ESCALABILIDAD.md
+# Aplicar DESPUÉS de que el Job corestream-migrate haya completado.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: corestream
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  selector:
+    matchLabels: { app: backend }
+  template:
+    metadata:
+      labels: { app: backend }
+    spec:
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: backend
+          image: corestream-backend:local
+          imagePullPolicy: IfNotPresent
+          # Sobrescribe el CMD del Dockerfile: SIN "alembic upgrade head".
+          # La migración corre una sola vez en el Job corestream-migrate.
+          command: ["sh", "-c"]
+          args:
+            - exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS} --forwarded-allow-ips=${FORWARDED_ALLOW_IPS}
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef: { name: corestream-config }
+            - secretRef: { name: corestream-secrets }
+          volumeMounts:
+            - name: storage
+              mountPath: /app/storage
+          resources:
+            requests: { cpu: 250m, memory: 256Mi }
+            limits: { cpu: "1", memory: 512Mi }
+          # Liveness liviano (/health no toca BD ni Redis): si Postgres cae
+          # no se reinician todos los pods en cascada.
+          startupProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 20
+            timeoutSeconds: 3
+          # Readiness completo (/api/health comprueba Postgres y Redis y
+          # devuelve 503): el pod sale del Service si pierde una dependencia.
+          readinessProbe:
+            httpGet: { path: /api/health, port: 8000 }
+            periodSeconds: 10
+            timeoutSeconds: 5
+          lifecycle:
+            preStop:
+              exec: { command: ["sleep", "5"] }
+      volumes:
+        - name: storage
+          persistentVolumeClaim: { claimName: corestream-storage }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: corestream
+spec:
+  selector: { app: backend }
+  ports:
+    - port: 8000
+      targetPort: 8000
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend
+  namespace: corestream
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 70 }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: backend
+  namespace: corestream
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: { app: backend }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: corestream
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: worker }
+  template:
+    metadata:
+      labels: { app: worker }
+    spec:
+      terminationGracePeriodSeconds: 40   # > job_timeout (30s) de ARQ
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: worker
+          image: corestream-backend:local
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "arq", "app.worker.settings.WorkerSettings"]
+          envFrom:
+            - configMapRef: { name: corestream-config }
+            - secretRef: { name: corestream-secrets }
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: "1", memory: 512Mi }
+          # Misma sonda que docker-compose.yml. OJO: la clave de health-check
+          # de ARQ es COMPARTIDA por todos los workers de la cola, así que la
+          # sonda detecta "ningún worker vivo", no "este worker colgado".
+          livenessProbe:
+            exec:
+              command:
+                - python3
+                - -c
+                - import os,redis,sys; sys.exit(0 if redis.from_url(os.environ['REDIS_URL']).exists('corestream:arq:queue:health-check') else 1)
+            initialDelaySeconds: 40
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: corestream
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: frontend }
+  template:
+    metadata:
+      labels: { app: frontend }
+    spec:
+      containers:
+        - name: frontend
+          image: corestream-frontend:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+          resources:
+            requests: { cpu: 50m, memory: 32Mi }
+            limits: { cpu: 500m, memory: 128Mi }
+          readinessProbe:
+            httpGet: { path: /, port: 80 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /, port: 80 }
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: corestream
+spec:
+  selector: { app: frontend }
+  ports:
+    - port: 80
+      targetPort: 80
+---
+# Equivale al "enrutamiento público externo" descrito en DEPLOYMENT.md:
+#  - /api → backend (incluye /api/ws/ para WebSocket)
+#  - /    → frontend
+# Los tres ajustes de abajo son los "puntos que siempre se olvidan"
+# (timeout de WebSocket y tamaño de subida de 50 MB). /metrics NO se
+# enruta: no cuelga de /api, por lo que no queda expuesto.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: corestream
+  namespace: corestream
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service: { name: backend, port: { number: 8000 } }
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: frontend, port: { number: 80 } }

@@ -1,0 +1,47 @@
+# CoreStream — namespace, configuración y storage (TRV-09). Ver docs/TRV-09_ESCALABILIDAD.md
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: corestream
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: corestream-config
+  namespace: corestream
+data:
+  ENVIRONMENT: "production"
+  DEBUG: "false"
+  LOG_LEVEL: "info"
+  APP_NAME: "CoreStream API"
+  ALGORITHM: "HS256"
+  ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+  REFRESH_TOKEN_EXPIRE_DAYS: "7"
+  # Origen desde el que el navegador accede (local: http://localhost).
+  ALLOWED_ORIGINS: "http://localhost"
+  # UN proceso uvicorn por pod: la réplica la da Kubernetes, no uvicorn.
+  # Evita multiplicar el pool de conexiones y las métricas Prometheus
+  # multiproceso (ver sección 3 del documento).
+  UVICORN_WORKERS: "1"
+  # Pool reducido: cada pod abre como máximo DB_POOL_SIZE + DB_MAX_OVERFLOW.
+  DB_POOL_SIZE: "10"
+  DB_MAX_OVERFLOW: "5"
+  # "*" igual que docker-compose.yml. Afinar a la IP/CIDR del ingress
+  # controller si el clúster es alcanzable desde fuera.
+  FORWARDED_ALLOW_IPS: "*"
+  UPLOAD_DIR: "/app/storage"
+---
+# RWO: válido para clúster de UN nodo (varios pods del mismo nodo pueden
+# montarlo). Con varios nodos hace falta RWX (NFS/CephFS/EFS) u object
+# storage — ver "Limitaciones" en el documento.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: corestream-storage
+  namespace: corestream
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi

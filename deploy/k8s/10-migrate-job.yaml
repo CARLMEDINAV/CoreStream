@@ -1,0 +1,26 @@
+# CoreStream — Job de migración (alembic upgrade head), una sola vez (TRV-09). Ver docs/TRV-09_ESCALABILIDAD.md
+# Los Jobs son inmutables: borrar antes de re-aplicar.
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: corestream-migrate
+  namespace: corestream
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: migrate
+          image: corestream-backend:local
+          imagePullPolicy: IfNotPresent
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef: { name: corestream-config }
+            - secretRef: { name: corestream-secrets }

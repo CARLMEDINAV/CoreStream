@@ -1,0 +1,99 @@
+# =====================================================================
+# SOLO DESARROLLO LOCAL — Postgres y Redis descartables dentro del clúster
+# =====================================================================
+# Equivalente a los servicios postgres/redis de docker-compose.dev.yml.
+# En producción NO se usa: CoreStream se conecta a instancias externas
+# (ver DEPLOYMENT.md). Credenciales de ejemplo, nunca reutilizar.
+#
+# Secret correspondiente:
+#   DATABASE_URL=postgresql+asyncpg://corestream:corestream@postgres:5432/corestream
+#   REDIS_URL=redis://redis:6379/0
+# =====================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: corestream
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: corestream
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: postgres }
+  template:
+    metadata:
+      labels: { app: postgres }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15
+          env:
+            - { name: POSTGRES_DB, value: corestream }
+            - { name: POSTGRES_USER, value: corestream }
+            - { name: POSTGRES_PASSWORD, value: corestream }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "corestream"]
+            periodSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: postgres-data }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: corestream
+spec:
+  selector: { app: postgres }
+  ports:
+    - port: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: corestream
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: redis }
+  template:
+    metadata:
+      labels: { app: redis }
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: corestream
+spec:
+  selector: { app: redis }
+  ports:
+    - port: 6379
