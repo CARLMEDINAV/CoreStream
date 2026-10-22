@@ -1,224 +1,174 @@
-<template>
-  <!-- ================================================================ -->
-  <!-- COMPONENTE: WorkbenchDashboard                                   -->
-  <!-- ================================================================ -->
-  <!-- Panel de "Mis Tickets" para el dashboard personal del dev.      -->
-  <!-- Contiene: barra de filtros (estado + fecha) y grid de cards.    -->
-  <!-- Usa el composable useWorkbenchTickets para obtener y filtrar     -->
-  <!-- tickets desde el store, sin lógica duplicada.                   -->
-  <!-- ================================================================ -->
-
-  <div class="flex flex-col h-full bg-[var(--bg-app)]">
-
-    <!-- ============================================================== -->
-    <!-- BARRA DE FILTROS                                               -->
-    <!-- ============================================================== -->
-    <div class="flex-shrink-0 border-b border-[var(--border-subtle)] bg-[var(--bg-card)]/80 px-6 py-4 space-y-3">
-
-      <!-- Encabezado de la sección -->
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <Icon icon="mdi:ticket-account" class="text-[var(--teal)] text-lg" />
-          <span class="text-sm font-semibold text-[var(--text-primary)]">{{ t('workbenchDashboard.myTickets') }}</span>
-          <span class="px-2 py-0.5 text-xs font-medium bg-[var(--bg-panel)] text-[var(--text-secondary)] rounded-full">
-            {{ tickets.length }}
-          </span>
-        </div>
-
-        <!-- Botón de actualizar -->
-        <button
-          @click="refresh"
-          :disabled="isLoading"
-          class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] bg-[var(--bg-panel)] hover:bg-[var(--bg-panel)]/80 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <Icon
-            icon="mdi:refresh"
-            :class="['text-sm', isLoading ? 'animate-spin' : '']"
-          />
-          {{ t('workbenchDashboard.refresh') }}
-        </button>
-      </div>
-
-      <!-- ============================================================ -->
-      <!-- FILTROS DE ESTADO                                            -->
-      <!-- ============================================================ -->
-      <div class="flex items-center gap-2 flex-wrap">
-        <span class="text-xs font-medium text-[var(--text-muted)] flex-shrink-0">{{ t('workbenchDashboard.statusLabel') }}</span>
-
-        <button
-          v-for="f in statusFilters"
-          :key="f.value"
-          @click="setStatusFilter(f.value)"
-          :class="[
-            'px-3 py-1 rounded-full text-xs font-medium transition-colors',
-            statusFilter === f.value
-              ? 'bg-[var(--lime)] text-[var(--dark-gray)] font-semibold'
-              : 'bg-[var(--bg-panel)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:bg-[var(--bg-card-hover)]',
-          ]"
-        >
-          {{ f.label }}
-        </button>
-      </div>
-
-      <!-- ============================================================ -->
-      <!-- FILTROS DE FECHA                                             -->
-      <!-- ============================================================ -->
-      <div class="flex items-center gap-2 flex-wrap">
-        <span class="text-xs font-medium text-[var(--text-muted)] flex-shrink-0">{{ t('workbenchDashboard.dateLabel') }}</span>
-
-        <button
-          v-for="f in dateFilters"
-          :key="f.value"
-          @click="setDateFilter(f.value)"
-          :class="[
-            'px-3 py-1 rounded-full text-xs font-medium transition-colors',
-            dateFilter === f.value
-              ? f.activeClass
-              : 'bg-[var(--bg-panel)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:bg-[var(--bg-card-hover)]',
-          ]"
-        >
-          {{ f.label }}
-        </button>
-      </div>
-    </div>
-
-    <!-- ============================================================== -->
-    <!-- ÁREA DE CONTENIDO: Loading / Empty / Grid de cards            -->
-    <!-- ============================================================== -->
-    <div class="flex-1 overflow-y-auto p-6">
-
-      <!-- Estado: Error de carga -->
-      <div
-        v-if="error && !isLoading"
-        class="flex flex-col items-center justify-center h-64 gap-3 text-slate-400"
-      >
-        <Icon icon="mdi:alert-circle-outline" class="text-5xl text-red-400 opacity-80" />
-        <p class="text-sm font-medium text-red-300">{{ t('workbenchDashboard.errorLoading') }}</p>
-        <p class="text-xs opacity-60 max-w-xs text-center">{{ error }}</p>
-        <button
-          @click="refresh"
-          class="mt-1 px-4 py-1.5 text-xs font-medium text-teal-30 border border-blue-500/40 rounded-lg hover:bg-blue-500/10 transition-colors"
-        >
-          {{ t('workbenchDashboard.retry') }}
-        </button>
-      </div>
-
-      <!-- Estado: Cargando -->
-      <div
-        v-else-if="isLoading && tickets.length === 0"
-        class="flex flex-col items-center justify-center h-64 gap-3 text-slate-400"
-      >
-        <Icon icon="mdi:loading" class="text-4xl animate-spin text-teal" />
-        <p class="text-sm">{{ t('workbenchDashboard.loading') }}</p>
-      </div>
-
-      <!-- Estado: Sin resultados con filtros activos -->
-      <div
-        v-else-if="!error && tickets.length === 0 && hasActiveFilters"
-        class="flex flex-col items-center justify-center h-64 gap-3 text-slate-400"
-      >
-        <Icon icon="mdi:filter-off-outline" class="text-5xl opacity-40" />
-        <p class="text-sm font-medium">{{ t('workbenchDashboard.noResults') }}</p>
-        <button
-          @click="clearFilters"
-          class="mt-1 px-4 py-1.5 text-xs font-medium text-teal-30 border border-blue-500/40 rounded-lg hover:bg-blue-500/10 transition-colors"
-        >
-          {{ t('workbenchDashboard.clearFilters') }}
-        </button>
-      </div>
-
-      <!-- Estado: Sin tickets asignados -->
-      <div
-        v-else-if="!error && tickets.length === 0"
-        class="flex flex-col items-center justify-center h-64 gap-3 text-slate-400"
-      >
-        <Icon icon="mdi:inbox-outline" class="text-5xl opacity-40" />
-        <p class="text-sm font-medium">{{ t('workbenchDashboard.noTickets') }}</p>
-        <p class="text-xs opacity-60">{{ t('workbenchDashboard.ticketsWillAppear') }}</p>
-      </div>
-
-      <!-- Grid de tarjetas -->
-      <div
-        v-else-if="!error && tickets.length > 0"
-        class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
-      >
-        <WorkbenchTicketCard
-          v-for="ticket in tickets"
-          :key="ticket.id"
-          :ticket="ticket"
-          :selected="selectedTicketId === ticket.id"
-          @select="handleSelect"
-        />
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { Icon } from '@iconify/vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useWorkbenchTickets } from '@/composables/useWorkbenchTickets'
-import WorkbenchTicketCard from '@/components/workbench/WorkbenchTicketCard.vue'
-import type { Ticket } from '@/types'
+import { api } from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
+import ManageIncidentModal from '@/components/dev/ManageIncidentModal.vue'
+import ResumenTrabajo from '@/components/shared/ResumenTrabajo.vue'
+import type { Incident, ResumenTrabajo as DatosResumen, Ticket, TrabajoPersonal } from '@/types'
 
-const { t } = useI18n()
+const propiedades = defineProps<{ actualizacion?: number }>()
+const emit = defineEmits<{ ticketSelected: [ticket: Ticket] }>()
+const { t, locale } = useI18n()
+const sesion = useAuthStore()
+const trabajos = ref<TrabajoPersonal[]>([])
+const resumen = ref<DatosResumen | null>(null)
+const cargando = ref(false)
+const errorLista = ref(false)
+const errorResumen = ref(false)
+const errorDetalle = ref(false)
+const abriendo = ref(false)
+const incidencia = ref<Incident | null>(null)
+const tipo = ref('all')
+const estado = ref('all')
+const fecha = ref('all')
+const grupos: Record<string, string[]> = {
+  todo: ['TODO', 'REDIRECTED', 'REPORTED', 'ASSIGNED', 'REOPENED'],
+  in_progress: ['IN_PROGRESS', 'INVESTIGATING', 'MITIGATED', 'IN_REVIEW'],
+  blocked: ['BLOCKED', 'BLOCKED_QUESTION'],
+}
+const filtrosFecha = ['all', 'overdue', 'today', 'week']
+const etiquetasFecha: Record<string, string> = {
+  all: 'dateAll', overdue: 'dateOverdue', today: 'dateToday', week: 'dateThisWeek',
+}
+const estados = computed(() => [...new Set(trabajos.value
+  .filter(trabajo => tipo.value === 'all' || trabajo.type === tipo.value)
+  .map(trabajo => trabajo.status))])
+let consulta = 0
+const visibles = computed(() => {
+  const hoy = new Date()
+  hoy.setHours(0, 0, 0, 0)
+  const finSemana = new Date(hoy)
+  finSemana.setDate(hoy.getDate() + (7 - hoy.getDay()) % 7)
+  return trabajos.value.filter(trabajo => {
+    if (tipo.value !== 'all' && trabajo.type !== tipo.value) return false
+    if (estado.value !== 'all' && !(grupos[estado.value] ?? [estado.value]).includes(trabajo.status)) return false
+    if (fecha.value === 'all') return true
+    if (!trabajo.due_date) return false
+    const vencimiento = new Date(trabajo.due_date)
+    vencimiento.setHours(0, 0, 0, 0)
+    if (fecha.value === 'overdue') return vencimiento < hoy
+    if (fecha.value === 'today') return vencimiento.getTime() === hoy.getTime()
+    return vencimiento >= hoy && vencimiento <= finSemana
+  })
+})
 
-// =====================================================================
-// DATOS Y FILTROS DEL COMPOSABLE
-// =====================================================================
-
-const { tickets, statusFilter, dateFilter, isLoading, error, setStatusFilter, setDateFilter, refresh } =
-  useWorkbenchTickets()
-
-// =====================================================================
-// SELECCIÓN LOCAL
-// =====================================================================
-
-const selectedTicketId = ref<string | null>(null)
-
-const handleSelect = (ticket: Ticket) => {
-  selectedTicketId.value = selectedTicketId.value === ticket.id ? null : ticket.id
-  emit('ticketSelected', ticket)
+function mostrarFecha(valor: string) {
+  return new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(valor))
 }
 
-// =====================================================================
-// FILTROS COMPUTADOS (reactivos al idioma)
-// =====================================================================
-
-const statusFilters = computed(() => [
-  { value: 'all' as const, label: t('workbenchDashboard.statusAll') },
-  { value: 'in_progress' as const, label: t('workbenchDashboard.statusInProgress') },
-  { value: 'todo' as const, label: t('workbenchDashboard.statusTodo') },
-  { value: 'blocked' as const, label: t('workbenchDashboard.statusBlocked') },
-  { value: 'completed' as const, label: t('workbenchDashboard.statusCompleted') },
-])
-
-const dateFilters = computed(() => [
-  { value: 'all' as const, label: t('workbenchDashboard.dateAll'), activeClass: 'bg-[var(--lime)] text-[var(--dark-gray)] font-semibold' },
-  { value: 'overdue' as const, label: t('workbenchDashboard.dateOverdue'), activeClass: 'bg-[var(--priority-urg-bg)] text-white font-semibold' },
-  { value: 'today' as const, label: t('workbenchDashboard.dateToday'), activeClass: 'bg-[var(--lime)] text-[var(--dark-gray)] font-semibold' },
-  { value: 'week' as const, label: t('workbenchDashboard.dateThisWeek'), activeClass: 'bg-[var(--lime)] text-[var(--dark-gray)] font-semibold' },
-])
-
-// =====================================================================
-// UTILIDADES
-// =====================================================================
-
-const hasActiveFilters = computed(
-  () => statusFilter.value !== 'all' || dateFilter.value !== 'all',
-)
-
-const clearFilters = () => {
-  setStatusFilter('all')
-  setDateFilter('all')
+async function actualizar() {
+  const usuario = sesion.user?.id
+  if (!usuario) return
+  const solicitud = ++consulta
+  cargando.value = true
+  errorLista.value = false
+  errorResumen.value = false
+  const [lista, estadisticas] = await Promise.allSettled([
+    api.users.getWorkbench(), api.users.getStats(usuario),
+  ])
+  if (solicitud !== consulta) return
+  trabajos.value = lista.status === 'fulfilled' ? lista.value : []
+  resumen.value = estadisticas.status === 'fulfilled' ? estadisticas.value.work_summary : null
+  errorLista.value = lista.status === 'rejected'
+  errorResumen.value = estadisticas.status === 'rejected'
+  cargando.value = false
 }
 
-// =====================================================================
-// EMITS
-// =====================================================================
+async function abrir(trabajo: TrabajoPersonal) {
+  if (abriendo.value) return
+  abriendo.value = true
+  errorDetalle.value = false
+  try {
+    if (trabajo.type === 'ticket') emit('ticketSelected', await api.tickets.getById(trabajo.id))
+    else incidencia.value = await api.incidents.getById(trabajo.id)
+  } catch {
+    errorDetalle.value = true
+  } finally {
+    abriendo.value = false
+  }
+}
 
-const emit = defineEmits<{
-  ticketSelected: [ticket: Ticket]
-}>()
+async function actualizarIncidencia() {
+  incidencia.value = null
+  await actualizar()
+}
+
+watch(tipo, () => { estado.value = 'all' })
+watch(() => propiedades.actualizacion, actualizar)
+onMounted(actualizar)
 </script>
+
+<template>
+  <section class="h-full overflow-y-auto bg-[var(--bg-app)] p-4 md:p-6 space-y-5" :aria-label="t('trabajo.personal')" :aria-busy="cargando">
+    <div class="flex items-center justify-between gap-3">
+      <h2 class="text-lg font-semibold text-[var(--text-primary)]">{{ t('trabajo.personal') }}</h2>
+      <button type="button" :disabled="cargando" class="px-3 py-2 rounded-lg bg-[var(--lime)] text-[var(--dark-gray)] disabled:opacity-50" @click="actualizar">
+        {{ t('workbenchDashboard.refresh') }}
+      </button>
+    </div>
+    <p class="text-sm text-[var(--text-secondary)]">{{ t('trabajo.alcancePersonal') }}</p>
+    <p v-if="cargando" role="status">{{ t('common.loading') }}</p>
+    <div v-if="errorResumen" role="alert" class="text-red-500">
+      {{ t('trabajo.errorResumen') }}
+      <button type="button" :disabled="cargando" class="underline" @click="actualizar">{{ t('workbenchDashboard.retry') }}</button>
+    </div>
+    <ResumenTrabajo v-else-if="resumen && !cargando" :resumen="resumen" />
+
+    <div class="flex flex-wrap gap-3 text-sm text-[var(--text-primary)]">
+      <label class="flex flex-col gap-1">
+        {{ t('trabajo.tipo') }}
+        <select v-model="tipo" class="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2">
+          <option value="all">{{ t('workbenchDashboard.statusAll') }}</option>
+          <option value="ticket">{{ t('trabajo.tickets') }}</option>
+          <option value="incident">{{ t('trabajo.incidents') }}</option>
+        </select>
+      </label>
+      <label class="flex flex-col gap-1">
+        {{ t('workbenchDashboard.statusLabel') }}
+        <select v-model="estado" class="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2">
+          <option value="all">{{ t('workbenchDashboard.statusAll') }}</option>
+          <optgroup :label="t('trabajo.grupos')">
+            <option value="todo">{{ t('trabajo.pendientes') }}</option>
+            <option value="in_progress">{{ t('trabajo.in_progress') }}</option>
+            <option value="blocked">{{ t('trabajo.blocked') }}</option>
+          </optgroup>
+          <optgroup :label="t('trabajo.estadoExacto')">
+            <option v-for="valor in estados" :key="valor" :value="valor">{{ t('trabajo.estados.' + valor) }}</option>
+          </optgroup>
+        </select>
+      </label>
+      <label class="flex flex-col gap-1">
+        {{ t('workbenchDashboard.dateLabel') }}
+        <select v-model="fecha" class="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2">
+          <option v-for="valor in filtrosFecha" :key="valor" :value="valor">{{ t('workbenchDashboard.' + etiquetasFecha[valor]) }}</option>
+        </select>
+      </label>
+      <button type="button" class="self-end p-2 underline" @click="tipo = 'all'; estado = 'all'; fecha = 'all'">{{ t('workbenchDashboard.clearFilters') }}</button>
+    </div>
+    <p class="text-xs text-[var(--text-muted)]">{{ t('trabajo.orden') }}</p>
+    <p v-if="errorDetalle" role="alert" class="text-red-500">{{ t('trabajo.errorDetalle') }}</p>
+    <div v-if="errorLista" role="alert" class="text-red-500">
+      <p>{{ t('trabajo.errorLista') }}</p>
+      <button type="button" :disabled="cargando" class="underline mt-2" @click="actualizar">{{ t('workbenchDashboard.retry') }}</button>
+    </div>
+    <p v-else-if="!cargando && !visibles.length" role="status" class="py-10 text-center text-[var(--text-muted)]">
+      {{ t(trabajos.length ? 'workbenchDashboard.noResults' : 'trabajo.vacio') }}
+    </p>
+    <ul v-else-if="!cargando" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <li v-for="trabajo in visibles" :key="trabajo.type + trabajo.id">
+        <button type="button" :disabled="abriendo" class="h-full w-full text-left rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4 hover:border-[var(--teal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--teal)] disabled:opacity-50" @click="abrir(trabajo)">
+          <span class="text-xs font-semibold text-[var(--teal)]">{{ t('trabajo.' + trabajo.type) }}</span>
+          <h3 class="my-2 font-semibold text-[var(--text-primary)] break-words">{{ trabajo.title }}</h3>
+          <p class="text-sm text-[var(--text-secondary)]">{{ t('trabajo.estados.' + trabajo.status) }}</p>
+          <p class="mt-3 text-xs text-[var(--text-muted)]">
+            {{ t(trabajo.type === 'incident' ? 'trabajo.estimada' : 'trabajo.vencimiento') }}:
+            <time v-if="trabajo.due_date" :datetime="trabajo.due_date">{{ mostrarFecha(trabajo.due_date) }}</time>
+            <span v-else>{{ t('trabajo.sinFecha') }}</span>
+          </p>
+        </button>
+      </li>
+    </ul>
+    <ManageIncidentModal :show="incidencia !== null" :incident="incidencia" @close="incidencia = null" @updated="actualizarIncidencia" />
+  </section>
+</template>

@@ -5,6 +5,46 @@
  */
 
 export default {
+  trabajo: {
+    grupos: 'Work groups',
+    estadoExacto: 'Specific status',
+    "personal": "My work",
+    "equipo": "Team work",
+    "active": "Active work",
+    "in_progress": "In progress",
+    "blocked": "Blocked",
+    "completed_last_7_days": "Completed in the last 7 days",
+    "tickets": "Tickets",
+    "incidents": "Incidents",
+    "ticket": "Ticket",
+    "incident": "Incident",
+    "tipo": "Work type",
+    "pendientes": "Not started",
+    "estimada": "Estimated resolution",
+    "vencimiento": "Due date",
+    "sinFecha": "No date",
+    "alcancePersonal": "Active tickets and incidents assigned to you. Counts include all your work regardless of the list filters.",
+    "alcanceEquipo": "The entire client, including unassigned work. This summary is independent of the application and period filters below.",
+    "reglas": "In progress and blocked are part of active work. Completed counts cover the last seven rolling days. Incidents have no blocked state.",
+    "orden": "Ordered by due date, undated items last. Incident dates are estimated from creation time and estimated resolution time.",
+    "errorResumen": "Could not load the summary. Check your access and try again.",
+    "errorLista": "Could not load your work.",
+    "errorDetalle": "Could not open the details. The item may no longer be available; refresh the list and try again.",
+    "vacio": "You have no active tickets or incidents assigned.",
+    "estados": {
+      "TODO": "To do",
+      "IN_PROGRESS": "In progress",
+      "BLOCKED": "Blocked",
+      "BLOCKED_QUESTION": "Blocking question",
+      "REDIRECTED": "Redirected",
+      "REPORTED": "Reported",
+      "ASSIGNED": "Assigned",
+      "INVESTIGATING": "Investigating",
+      "MITIGATED": "Mitigated",
+      "IN_REVIEW": "In review",
+      "REOPENED": "Reopened"
+    }
+  },
   commercial: { plan: 'Commercial plan', active: 'Active', inactive: 'Inactive' },
   // ==========================================
   // SECTION: Common actions and terms

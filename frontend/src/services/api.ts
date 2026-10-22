@@ -40,6 +40,8 @@ import type {
   WebhookFormat
 } from '@/types'
 
+import type { TrabajoPersonal, ResumenTrabajo, EstadisticasUsuario } from '@/types'
+
 interface AuthState {
   accessToken: string | null
 }
@@ -553,8 +555,12 @@ const realApi = {
       return { temporaryPassword: response.data.temporary_password }
     },
 
-    getStats: async (userId: string): Promise<ApiResponse<UserPerformance>> => {
-      const response = await apiClient.get<ApiResponse<UserPerformance>>(
+    getWorkbench: async (): Promise<TrabajoPersonal[]> => {
+      return (await apiClient.get<TrabajoPersonal[]>('/users/me/workbench')).data
+    },
+
+    getStats: async (userId: string): Promise<EstadisticasUsuario> => {
+      const response = await apiClient.get<EstadisticasUsuario>(
         `/users/${userId}/stats`
       )
       return response.data
@@ -882,6 +888,9 @@ const realApi = {
   },
 
   analytics: {
+    getWorkSummary: async (): Promise<ResumenTrabajo> => {
+      return (await apiClient.get<ResumenTrabajo>('/analytics/work-summary')).data
+    },
     getSummary: async (filters?: {
       startDate?: string
       endDate?: string

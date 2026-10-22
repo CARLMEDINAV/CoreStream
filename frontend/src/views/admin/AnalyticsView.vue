@@ -15,6 +15,8 @@
       </p>
     </div>
 
+    <ResumenEquipoTrabajo />
+
     <!-- Date Range Selector -->
     <div class="mb-6 flex gap-2 items-center bg-[var(--bg-card)] p-4 rounded-xl shadow-sm border border-[var(--border-subtle)]">
       <!-- Filtros scrollables -->
@@ -220,6 +222,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import AppHeader from '@/components/layout/AppHeader.vue'
+import ResumenEquipoTrabajo from '@/components/analytics/ResumenEquipoTrabajo.vue'
 import { useAnalyticsStore } from '@/stores/analytics'
 import { useApplicationsStore } from '@/stores/applications'
 import { ref, computed, onMounted, defineAsyncComponent } from 'vue'

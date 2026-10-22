@@ -1383,6 +1383,37 @@ export interface WebhookDelivery {
   payload: Record<string, any>
 }
 
+export interface ConteosTrabajo {
+  active: number
+  in_progress: number
+  blocked: number
+  completed_last_7_days: number
+}
+
+export interface ResumenTrabajo {
+  tickets: ConteosTrabajo
+  incidents: ConteosTrabajo
+  total: ConteosTrabajo
+}
+
+export interface TrabajoPersonal {
+  id: string
+  type: 'ticket' | 'incident'
+  title: string
+  status: string
+  due_date: string | null
+}
+
+export interface EstadisticasUsuario {
+  user_id: string
+  completed_tickets: number
+  in_progress_tickets: number
+  blocked_tickets: number
+  total_activity: number
+  join_date: string | null
+  work_summary: ResumenTrabajo
+}
+
 export interface WebhookEventTypeOption {
   value: string
   label: string

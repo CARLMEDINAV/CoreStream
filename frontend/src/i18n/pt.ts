@@ -5,6 +5,46 @@
  */
 
 export default {
+  trabajo: {
+    grupos: 'Grupos de trabalho',
+    estadoExacto: 'Estado específico',
+    "personal": "Meu trabalho",
+    "equipo": "Trabalho da equipe",
+    "active": "Trabalho ativo",
+    "in_progress": "Em andamento",
+    "blocked": "Bloqueado",
+    "completed_last_7_days": "Concluído nos últimos 7 dias",
+    "tickets": "Tickets",
+    "incidents": "Incidentes",
+    "ticket": "Ticket",
+    "incident": "Incidente",
+    "tipo": "Tipo de trabalho",
+    "pendientes": "Não iniciado",
+    "estimada": "Resolução estimada",
+    "vencimiento": "Prazo",
+    "sinFecha": "Sem data",
+    "alcancePersonal": "Tickets e incidentes ativos atribuídos a você. As contagens incluem todo o seu trabalho, independentemente dos filtros da lista.",
+    "alcanceEquipo": "Todo o cliente, incluindo trabalho sem responsável. Este resumo não depende dos filtros por aplicação ou período abaixo.",
+    "reglas": "O trabalho em andamento e bloqueado faz parte do trabalho ativo. As conclusões abrangem os últimos sete dias corridos. Incidentes não têm estado de bloqueio.",
+    "orden": "Ordenado por prazo, sem data ao final. As datas estimadas dos incidentes usam a criação e o tempo estimado de resolução.",
+    "errorResumen": "Não foi possível carregar o resumo. Verifique seu acesso e tente novamente.",
+    "errorLista": "Não foi possível carregar seu trabalho.",
+    "errorDetalle": "Não foi possível abrir os detalhes. O recurso pode não estar mais disponível; atualize a lista e tente novamente.",
+    "vacio": "Você não tem tickets ou incidentes ativos atribuídos.",
+    "estados": {
+      "TODO": "A fazer",
+      "IN_PROGRESS": "Em andamento",
+      "BLOCKED": "Bloqueado",
+      "BLOCKED_QUESTION": "Pergunta bloqueante",
+      "REDIRECTED": "Redirecionado",
+      "REPORTED": "Reportado",
+      "ASSIGNED": "Atribuído",
+      "INVESTIGATING": "Em investigação",
+      "MITIGATED": "Mitigado",
+      "IN_REVIEW": "Em revisão",
+      "REOPENED": "Reaberto"
+    }
+  },
   commercial: { plan: 'Plano comercial', active: 'Ativo', inactive: 'Inativo' },
   // ==========================================
   // SECTION: Ações comuns e termos

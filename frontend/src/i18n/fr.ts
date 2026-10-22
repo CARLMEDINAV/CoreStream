@@ -5,6 +5,46 @@
  */
 
 export default {
+  trabajo: {
+    grupos: 'Groupes de travail',
+    estadoExacto: 'État précis',
+    "personal": "Mon travail",
+    "equipo": "Travail de l’équipe",
+    "active": "Travail actif",
+    "in_progress": "En cours",
+    "blocked": "Bloqué",
+    "completed_last_7_days": "Terminé au cours des 7 derniers jours",
+    "tickets": "Tickets",
+    "incidents": "Incidents",
+    "ticket": "Ticket",
+    "incident": "Incident",
+    "tipo": "Type de travail",
+    "pendientes": "Non commencé",
+    "estimada": "Résolution estimée",
+    "vencimiento": "Échéance",
+    "sinFecha": "Sans date",
+    "alcancePersonal": "Tickets et incidents actifs qui vous sont assignés. Les compteurs incluent tout votre travail, indépendamment des filtres de la liste.",
+    "alcanceEquipo": "Tout le client, y compris le travail non assigné. Ce résumé est indépendant des filtres par application ou période ci-dessous.",
+    "reglas": "Le travail en cours et bloqué fait partie du travail actif. Les éléments terminés couvrent les sept derniers jours glissants. Les incidents n’ont pas d’état bloqué.",
+    "orden": "Tri par échéance, éléments sans date à la fin. La date estimée des incidents utilise la création et le temps de résolution estimé.",
+    "errorResumen": "Impossible de charger le résumé. Vérifiez votre accès et réessayez.",
+    "errorLista": "Impossible de charger votre travail.",
+    "errorDetalle": "Impossible d’ouvrir les détails. L’élément peut ne plus être disponible ; actualisez la liste et réessayez.",
+    "vacio": "Aucun ticket ou incident actif ne vous est assigné.",
+    "estados": {
+      "TODO": "À faire",
+      "IN_PROGRESS": "En cours",
+      "BLOCKED": "Bloqué",
+      "BLOCKED_QUESTION": "Question bloquante",
+      "REDIRECTED": "Redirigé",
+      "REPORTED": "Signalé",
+      "ASSIGNED": "Assigné",
+      "INVESTIGATING": "En investigation",
+      "MITIGATED": "Atténué",
+      "IN_REVIEW": "En révision",
+      "REOPENED": "Rouvert"
+    }
+  },
   commercial: { plan: 'Offre commerciale', active: 'Actif', inactive: 'Inactif' },
   // ==========================================
   // SECTION: Actions communes et termes

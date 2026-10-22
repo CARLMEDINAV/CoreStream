@@ -145,7 +145,7 @@
               : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]',
           ]"
         >
-          {{ t('workbenchView.myTickets') }}
+          {{ t('trabajo.personal') }}
         </button>
         <button
           @click="activeView = 'epics'"
@@ -164,7 +164,7 @@
       <!-- TAB: Mis Tickets — Dashboard con cards y filtros            -->
       <!-- ============================================================ -->
       <div v-if="activeView === 'tickets'" class="flex-1 overflow-hidden">
-        <WorkbenchDashboard @ticketSelected="selectTicket" />
+        <WorkbenchDashboard :actualizacion="actualizacionTrabajo" @ticketSelected="selectTicket" />
       </div>
 
       <!-- ============================================================ -->
@@ -303,6 +303,7 @@ const createAppError = ref('')
 // Ticket Panel state
 const selectedTicketId = ref<string | null>(null)
 const selectedTicket = ref<Ticket | null>(null)
+const actualizacionTrabajo = ref(0)
 const isPanelOpen = ref(false)
 const teamMembers = ref<any[]>([])
 
@@ -375,6 +376,7 @@ const selectTicket = async (ticket: Ticket) => {
 
 // Refrescar ticket después de actualización
 const refreshTicket = async (ticketId: string) => {
+  actualizacionTrabajo.value++
   try {
     const updated = await api.tickets.getById(ticketId)
     selectedTicket.value = updated
