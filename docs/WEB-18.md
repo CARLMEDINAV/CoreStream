@@ -175,3 +175,14 @@ No se ejecutó un recorrido completo con sesión real, PostgreSQL y Redis. Las
 pruebas HTTP del backend sustituyen la autenticación por usuarios de prueba;
 no verifican JWT, auditoría ni despliegue. No se aplicaron migraciones ni se
 modificaron datos de la base de trabajo.
+
+## Corrección de pruebas de CI del 26 de octubre de 2026
+
+Se corrigieron los dos fallos del frontend descritos arriba: una llave sobrante
+en authStore.spec.ts y una espera insuficiente en useDragDrop.spec.ts.
+La prueba de arrastre ahora avanza los dos frames con el reloj simulado de Vitest
+y limpia los temporizadores entre casos. Las pruebas de autenticación aíslan el
+WebSocket y simulan explícitamente el rechazo de una renovación sin sesión.
+No se cambió el comportamiento de la aplicación ni se omitieron pruebas.
+La suite completa terminó con 93 pruebas aprobadas en siete archivos;
+la comprobación de tipos y la compilación de producción también pasaron.

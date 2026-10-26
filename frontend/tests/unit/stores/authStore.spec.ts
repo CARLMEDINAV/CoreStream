@@ -32,6 +32,10 @@ vi.mock('@/stores/theme', () => ({
   useThemeStore: () => ({ applyTheme: vi.fn() }),
 }))
 
+vi.mock('@/composables/useWebSocket', () => ({
+  useWebSocket: () => ({ connect: vi.fn(), disconnect: vi.fn() }),
+}))
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 import { useAuthStore } from '@/stores/auth'
@@ -326,9 +330,11 @@ describe('useAuthStore', () => {
   // ── refreshToken ────────────────────────────────────────────────────────
   describe('refreshToken', () => {
     it('lanza error si no hay sesión', async () => {
+      vi.mocked(api.auth.refresh).mockRejectedValueOnce(new Error('Sin sesion'))
       const store = useAuthStore()
-      // sin accessToken, refresh limpia sesión y lanza
-      await expect(store.refreshToken()).rejects.toThrow()
+      await expect(store.refreshToken()).rejects.toThrow('Sin sesion')
+      expect(store.accessToken).toBeNull()
+      expect(store.isAuthenticated).toBe(false)
     })
 
     it('actualiza accessToken tras refresh exitoso', async () => {
@@ -341,6 +347,5 @@ describe('useAuthStore', () => {
       await store.refreshToken()
       expect(store.accessToken).toBe('new.header.payload')
     })
-  })
   })
 })
