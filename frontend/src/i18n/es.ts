@@ -5,6 +5,46 @@
  */
 
 export default {
+  trabajo: {
+    grupos: 'Grupos de trabajo',
+    estadoExacto: 'Estado específico',
+    "personal": "Mi trabajo",
+    "equipo": "Trabajo del equipo",
+    "active": "Trabajo activo",
+    "in_progress": "En progreso",
+    "blocked": "Bloqueado",
+    "completed_last_7_days": "Completado en los últimos 7 días",
+    "tickets": "Tickets",
+    "incidents": "Incidencias",
+    "ticket": "Ticket",
+    "incident": "Incidencia",
+    "tipo": "Tipo de trabajo",
+    "pendientes": "Pendiente de iniciar",
+    "estimada": "Resolución estimada",
+    "vencimiento": "Vencimiento",
+    "sinFecha": "Sin fecha",
+    "alcancePersonal": "Tickets e incidencias activos asignados a ti. Los conteos incluyen todo tu trabajo, independientemente de los filtros del listado.",
+    "alcanceEquipo": "Todo el cliente, incluido el trabajo sin responsable. Este resumen no cambia con los filtros por aplicación o período de abajo.",
+    "reglas": "En progreso y bloqueado forman parte del trabajo activo. Los completados corresponden a los últimos siete días móviles. Las incidencias no tienen estado de bloqueo.",
+    "orden": "Ordenado por vencimiento, sin fecha al final. En incidencias, la fecha estimada se calcula desde la creación y el tiempo estimado de resolución.",
+    "errorResumen": "No se pudo cargar el resumen. Comprueba tu acceso e inténtalo de nuevo.",
+    "errorLista": "No se pudo cargar tu trabajo.",
+    "errorDetalle": "No se pudo abrir el detalle. Puede que el recurso ya no esté disponible; actualiza la lista e inténtalo de nuevo.",
+    "vacio": "No tienes tickets ni incidencias activos asignados.",
+    "estados": {
+      "TODO": "Por hacer",
+      "IN_PROGRESS": "En progreso",
+      "BLOCKED": "Bloqueado",
+      "BLOCKED_QUESTION": "Pregunta bloqueante",
+      "REDIRECTED": "Redirigido",
+      "REPORTED": "Reportado",
+      "ASSIGNED": "Asignado",
+      "INVESTIGATING": "En investigación",
+      "MITIGATED": "Mitigado",
+      "IN_REVIEW": "En revisión",
+      "REOPENED": "Reabierto"
+    }
+  },
   commercial: { plan: 'Plan comercial', active: 'Activo', inactive: 'Inactivo' },
   // ==========================================
   // SECCIÓN: Acciones y términos comunes

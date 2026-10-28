@@ -33,10 +33,20 @@ from app.models import (
     UserRole,
 )
 from app.schemas.analytics import SupportSummarySchema
+from app.schemas.work_summary import ResumenTrabajo
 from app.services.analytics_service import analytics_service
+from app.services.work_summary import resumen_trabajo
 
 # Router para analíticas
 router = APIRouter(tags=["Analíticas"])
+
+
+@router.get("/work-summary", response_model=ResumenTrabajo, summary="Trabajo agregado del equipo")
+async def obtener_resumen_trabajo(
+    usuario: User = Depends(require_role([UserRole.ADMIN, UserRole.TEAM_LEADER])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await resumen_trabajo(db, usuario.client_id)
 
 
 @router.get(

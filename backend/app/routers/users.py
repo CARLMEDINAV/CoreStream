@@ -25,7 +25,10 @@ from app.database import get_db
 from app.middleware.auth import TokenPayload, get_current_user, require_role
 from app.models import Role, Ticket, TicketEvent, TicketStatus, User, UserRole
 from app.schemas import AdminPasswordResetResponse, UserCreate, UserResponse, UserUpdate
+from app.schemas.work_summary import TrabajoPersonal
 from app.services.auth_service import AuthService
+from app.services.ticket_permissions import is_admin_or_leader
+from app.services.work_summary import banco_trabajo, resumen_trabajo
 
 logger = logging.getLogger(__name__)
 
@@ -623,21 +626,29 @@ async def change_user_role(
         )
 
 
+@router.get("/me/workbench", response_model=list[TrabajoPersonal], summary="Trabajo activo personal")
+async def obtener_banco_trabajo(
+    usuario: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await banco_trabajo(db, usuario.client_id, usuario.id)
+
+
 @router.get(
     "/{user_id}/stats",
     summary="Obtener estadísticas del usuario",
     description="Retorna métricas de desempeño y actividad del usuario"
 )
 async def get_user_stats(
-    user_id: str,
+    user_id: UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
-) -> dict[str, int | str | None]:
+) -> dict:
     """
     Obtiene estadísticas y métricas de un usuario.
 
     Args:
-        user_id (int): ID del usuario del cual obtener estadísticas
+        user_id (UUID): ID del usuario del cual obtener estadísticas
         current_user (User): Usuario autenticado
         db (AsyncSession): Sesión asíncrona de base de datos
 
@@ -647,8 +658,12 @@ async def get_user_stats(
     Raises:
         HTTPException: Si el usuario no existe (404)
     """
-    # Verificar que el usuario existe
-    result = await db.execute(select(User).where(User.id == user_id))
+    if user_id != current_user.id and not is_admin_or_leader(current_user):
+        raise HTTPException(status_code=403, detail="Solo puedes consultar tus propias estadisticas")
+    # verifica que el usuario pertenece al cliente
+    result = await db.execute(select(User).where(
+        User.id == user_id, User.client_id == current_user.client_id,
+    ))
     user = result.scalar_one_or_none()
 
     if not user:
@@ -661,6 +676,7 @@ async def get_user_stats(
     completed_result = await db.execute(
         select(func.count(Ticket.id)).where(
             Ticket.assignee_id == user_id,
+            Ticket.client_id == current_user.client_id,
             Ticket.status == TicketStatus.COMPLETED
         )
     )
@@ -670,6 +686,7 @@ async def get_user_stats(
     in_progress_result = await db.execute(
         select(func.count(Ticket.id)).where(
             Ticket.assignee_id == user_id,
+            Ticket.client_id == current_user.client_id,
             Ticket.status == TicketStatus.IN_PROGRESS
         )
     )
@@ -679,7 +696,8 @@ async def get_user_stats(
     blocked_result = await db.execute(
         select(func.count(Ticket.id)).where(
             Ticket.assignee_id == user_id,
-            Ticket.status == TicketStatus.BLOCKED
+            Ticket.client_id == current_user.client_id,
+            Ticket.status.in_((TicketStatus.BLOCKED, TicketStatus.BLOCKED_QUESTION))
         )
     )
     blocked_count = int(blocked_result.scalar() or 0)
@@ -687,7 +705,8 @@ async def get_user_stats(
     # Contar eventos (actividad) del usuario
     activity_result = await db.execute(
         select(func.count(TicketEvent.id)).where(
-            TicketEvent.user_id == user_id
+            TicketEvent.user_id == user_id,
+            TicketEvent.client_id == current_user.client_id,
         )
     )
     activity_count = int(activity_result.scalar() or 0)
@@ -698,7 +717,8 @@ async def get_user_stats(
         "in_progress_tickets": in_progress_count,
         "blocked_tickets": blocked_count,
         "total_activity": activity_count,
-        "join_date": user.created_at.isoformat() if user.created_at else None
+        "join_date": user.created_at.isoformat() if user.created_at else None,
+        "work_summary": await resumen_trabajo(db, current_user.client_id, user.id),
     }
 
 

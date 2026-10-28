@@ -5,6 +5,46 @@
  */
 
 export default {
+  trabajo: {
+    grupos: 'Arbeitsgruppen',
+    estadoExacto: 'Bestimmter Status',
+    "personal": "Meine Arbeit",
+    "equipo": "Teamarbeit",
+    "active": "Aktive Arbeit",
+    "in_progress": "In Bearbeitung",
+    "blocked": "Blockiert",
+    "completed_last_7_days": "In den letzten 7 Tagen abgeschlossen",
+    "tickets": "Tickets",
+    "incidents": "Vorfälle",
+    "ticket": "Ticket",
+    "incident": "Vorfall",
+    "tipo": "Art der Arbeit",
+    "pendientes": "Noch nicht begonnen",
+    "estimada": "Geschätzte Lösung",
+    "vencimiento": "Fälligkeit",
+    "sinFecha": "Kein Datum",
+    "alcancePersonal": "Ihnen zugewiesene aktive Tickets und Vorfälle. Die Zähler umfassen Ihre gesamte Arbeit unabhängig von den Listenfiltern.",
+    "alcanceEquipo": "Der gesamte Mandant einschließlich nicht zugewiesener Arbeit. Diese Übersicht ist unabhängig von den Anwendungs- und Zeitraumfiltern darunter.",
+    "reglas": "Arbeit in Bearbeitung und blockierte Arbeit sind Teil der aktiven Arbeit. Abschlüsse beziehen sich auf die letzten sieben Tage. Vorfälle haben keinen blockierten Status.",
+    "orden": "Nach Fälligkeit sortiert, ohne Datum am Ende. Vorfalldaten werden aus Erstellungszeit und geschätzter Lösungsdauer berechnet.",
+    "errorResumen": "Die Übersicht konnte nicht geladen werden. Prüfen Sie Ihren Zugriff und versuchen Sie es erneut.",
+    "errorLista": "Ihre Arbeit konnte nicht geladen werden.",
+    "errorDetalle": "Details konnten nicht geöffnet werden. Der Eintrag ist möglicherweise nicht mehr verfügbar; aktualisieren Sie die Liste.",
+    "vacio": "Ihnen sind keine aktiven Tickets oder Vorfälle zugewiesen.",
+    "estados": {
+      "TODO": "Zu erledigen",
+      "IN_PROGRESS": "In Bearbeitung",
+      "BLOCKED": "Blockiert",
+      "BLOCKED_QUESTION": "Blockierende Frage",
+      "REDIRECTED": "Weitergeleitet",
+      "REPORTED": "Gemeldet",
+      "ASSIGNED": "Zugewiesen",
+      "INVESTIGATING": "In Untersuchung",
+      "MITIGATED": "Abgemildert",
+      "IN_REVIEW": "In Prüfung",
+      "REOPENED": "Wiedereröffnet"
+    }
+  },
   commercial: { plan: 'Tarif', active: 'Aktiv', inactive: 'Inaktiv' },
   // ==========================================
   // SECTION: Häufige Aktionen und Begriffe

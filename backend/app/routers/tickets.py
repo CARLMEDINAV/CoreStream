@@ -213,7 +213,7 @@ async def get_epic_tickets(
     "/my-workbench",
     response_model=List[TicketResponse],
     summary="Obtener banco de trabajo personal",
-    description="Retorna todos los tickets asignados al usuario actual ordenados por prioridad"
+    description="Retorna todos los tickets asignados al usuario actual ordenados por vencimiento"
 )
 async def get_my_workbench(
     status_filter: Optional[str] = Query(None),
@@ -231,7 +231,7 @@ async def get_my_workbench(
         db (AsyncSession): Sesión asíncrona de base de datos
 
     Returns:
-        List[TicketResponse]: Tickets asignados al usuario ordenados por prioridad
+        List[TicketResponse]: Tickets asignados al usuario ordenados por vencimiento
     """
     try:
         # Construir consulta para obtener tickets asignados
@@ -251,9 +251,9 @@ async def get_my_workbench(
         if priority_filter:
             query = query.where(Ticket.priority == priority_filter)
 
-        # Ordenar por fecha de creación descendente
+        # ordena por vencimiento y deja los tickets sin fecha al final
         result = await db.execute(
-            query.order_by(Ticket.created_at.desc())
+            query.order_by(Ticket.due_date.asc().nulls_last(), Ticket.id)
         )
         tickets = result.scalars().all()
 

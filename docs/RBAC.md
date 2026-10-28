@@ -214,6 +214,17 @@ concretos detectados en la auditoría original quedan verificados:
 - `POST /api/epics/` como DEVELOPER → **403** (antes: 201).
 
 
+## Analítica agregada de trabajo (WEB-18)
+
+`GET /api/users/me/workbench` devuelve solo trabajo asignado al usuario autenticado.
+`GET /api/users/{user_id}/stats` permite a DEVELOPER consultar únicamente sus propias
+estadísticas; ADMIN y TEAM_LEADER pueden consultar otras personas del mismo cliente.
+Estas consultas conservan el acceso de Basico.
+
+`GET /api/analytics/work-summary` requiere ADMIN o TEAM_LEADER y un plan Pro o
+Enterprise. Incluye el trabajo del cliente completo, también el no asignado.
+Ver [WEB-18](./WEB-18.md) para los estados y las reglas de los últimos siete días.
+
 ## Control comercial (TRV-02)
 
 Los permisos anteriores también requieren que el plan del cliente incluya la
