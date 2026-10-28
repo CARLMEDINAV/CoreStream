@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID as PyUUID
 
-from sqlalchemy import JSON, Boolean, ForeignKey, String
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, String, Text, false
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -11,6 +12,7 @@ if TYPE_CHECKING:
     from app.models.application import Application
     from app.models.client import Client
     from app.models.document import Document
+    from app.models.mfa import UserIdentity, UserRecoveryCode
     from app.models.notification import Notification
     from app.models.role import Role
     from app.models.ticket import Ticket
@@ -35,6 +37,19 @@ class User(Base, BaseEntity, TenantMixin):
     must_change_password: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
     )
+
+    # --- 2FA / TOTP (NEW-08) ---------------------------------------------
+    # El secreto se guarda CIFRADO (Fernet). Mientras totp_enabled sea False,
+    # un secreto presente significa "enrolamiento iniciado, sin confirmar".
+    totp_secret_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    totp_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
+    totp_enabled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Último paso de 30 s aceptado: un código ya usado no vale dos veces.
+    totp_last_used_step: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
     role_id: Mapped[PyUUID] = mapped_column(
         UUID(as_uuid=True),
@@ -73,4 +88,15 @@ class User(Base, BaseEntity, TenantMixin):
     uploaded_documents: Mapped[list["Document"]] = relationship(
         lazy="raise_on_sql",
         back_populates="uploaded_by"
+    )
+
+    recovery_codes: Mapped[list["UserRecoveryCode"]] = relationship(
+        lazy="raise_on_sql",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    identities: Mapped[list["UserIdentity"]] = relationship(
+        lazy="raise_on_sql",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )

@@ -42,3 +42,8 @@ python-docx==1.2.0
 
 # Observabilidad (plan fase 8)
 prometheus-fastapi-instrumentator==8.1.0
+
+
+
+pyotp==2.9.0
+qrcode==8.2

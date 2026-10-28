@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, String
+from sqlalchemy import Boolean, String, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 if TYPE_CHECKING:
@@ -26,6 +26,12 @@ class Client(Base, BaseEntity):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
     commercial_plan: Mapped[str] = mapped_column(
         String(20), default="Basico", server_default="Basico", nullable=False
+    )
+
+    # NEW-08: si es True, todos los usuarios del cliente deben tener 2FA por
+    # TOTP para iniciar sesión con contraseña. Lo activa un ADMIN del cliente.
+    require_2fa: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
     )
 
     users: Mapped[list["User"]] = relationship(lazy="raise_on_sql", back_populates="client")

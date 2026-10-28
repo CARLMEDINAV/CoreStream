@@ -170,6 +170,35 @@ class Settings(BaseSettings):
     # on-premise donde el destino sea de confianza.
     WEBHOOK_ALLOW_PRIVATE_URLS: bool = False
 
+    # --- 2FA por TOTP y SSO (NEW-08) ------------------------------------
+    # Clave Fernet (32 bytes en base64 urlsafe) con la que se cifran los
+    # secretos TOTP en la base de datos. Generar con:
+    #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    # En desarrollo, si se deja vacía, se deriva de SECRET_KEY para no estorbar.
+    # En producción es OBLIGATORIA y debe ser distinta de SECRET_KEY: si se
+    # pierde, nadie puede validar su TOTP (habría que resetear el 2FA de todos).
+    MFA_ENCRYPTION_KEY: str = ""
+    # Nombre que la app autenticadora muestra junto a la cuenta.
+    MFA_ISSUER: str = "CoreStream"
+    # Vida del token intermedio entre "contraseña correcta" y "código TOTP".
+    MFA_CHALLENGE_TTL_SECONDS: int = 300
+
+    # SSO. Cada proveedor es opcional: sin client_id y secret, no se ofrece.
+    # URL pública DEL BACKEND (a donde el proveedor devuelve al usuario). Debe
+    # coincidir con el redirect URI registrado en Google/Microsoft:
+    #   {SSO_PUBLIC_BASE_URL}/api/auth/sso/google/callback
+    SSO_PUBLIC_BASE_URL: str = "http://localhost:8000"
+    # URL pública DEL FRONTEND, a donde se envía al usuario tras el login SSO.
+    SSO_FRONTEND_URL: str = "http://localhost:5173"
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    MICROSOFT_CLIENT_ID: str = ""
+    MICROSOFT_CLIENT_SECRET: str = ""
+    # "common"/"organizations" aceptan cuentas de cualquier organización, pero
+    # entonces el correo que declara Microsoft NO es de fiar para enlazar
+    # usuarios. Con el GUID del tenant de la empresa sí lo es (ver sso_service).
+    MICROSOFT_TENANT: str = "common"
+
     # Configuración de Pydantic Settings
     class Config:
         """
@@ -223,6 +252,27 @@ class Settings(BaseSettings):
 
         if self.DEBUG:
             raise ValueError("DEBUG no puede ser True con ENVIRONMENT=production")
+
+        # NEW-08: sin una clave propia, los secretos TOTP quedarían cifrados con
+        # algo derivado de SECRET_KEY, y rotar una arrastraría a la otra.
+        try:
+            from cryptography.fernet import Fernet
+
+            Fernet(self.MFA_ENCRYPTION_KEY.encode())
+        except Exception:
+            raise ValueError(
+                "MFA_ENCRYPTION_KEY inválida o ausente en producción. Generar una con: "
+                'python -c "from cryptography.fernet import Fernet; '
+                'print(Fernet.generate_key().decode())"'
+            )
+        if self.MFA_ENCRYPTION_KEY == self.SECRET_KEY:
+            raise ValueError("MFA_ENCRYPTION_KEY debe ser distinta de SECRET_KEY")
+
+        sso_on = (self.GOOGLE_CLIENT_ID and self.GOOGLE_CLIENT_SECRET) or (
+            self.MICROSOFT_CLIENT_ID and self.MICROSOFT_CLIENT_SECRET
+        )
+        if sso_on and not self.SSO_PUBLIC_BASE_URL.startswith("https://"):
+            raise ValueError("SSO_PUBLIC_BASE_URL debe ser https:// en producción")
 
         if "*" in self.ALLOWED_ORIGINS:
             raise ValueError(

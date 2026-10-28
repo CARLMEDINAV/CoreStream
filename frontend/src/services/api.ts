@@ -25,6 +25,8 @@ import type {
   AuthTokens,
   ApiResponse,
   LoginRequest,
+  LoginOutcome,
+  MfaSetupData,
   TicketFilters,
   PaginatedResponse,
   Incident,
@@ -226,7 +228,7 @@ const createApiClient = (): AxiosInstance => {
     (response) => response,
     async (error: AxiosError) => {
       const originalRequest = error.config as any
-      if (error.response?.status === 401 && !originalRequest._retry) {
+      if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.skipAuthRefresh) {
         originalRequest._retry = true
         try {
           const d = await performRefresh()
@@ -313,6 +315,16 @@ function mapTokenResponse(d: Record<string, unknown>): AuthTokens {
   }
 }
 
+function mapLoginResponse(d: Record<string, unknown>): LoginOutcome {
+  if (d.mfa_required === true && typeof d.mfa_token === 'string') {
+    return { kind: 'mfa_required', mfaToken: d.mfa_token }
+  }
+  if (d.mfa_setup_required === true && typeof d.mfa_token === 'string') {
+    return { kind: 'mfa_setup_required', mfaToken: d.mfa_token }
+  }
+  return { kind: 'session', tokens: mapTokenResponse(d) }
+}
+
 function toUserPerformance(raw: any): UserPerformance {
   return {
     userId: String(raw.user_id ?? ''),
@@ -374,12 +386,13 @@ const toWebhookDelivery = (raw: any): WebhookDelivery => ({
 
 const realApi = {
   auth: {
-    login: async (credentials: LoginRequest): Promise<{ tokens: AuthTokens }> => {
+    login: async (credentials: LoginRequest): Promise<LoginOutcome> => {
       const response = await apiClient.post<Record<string, unknown>>(
         '/auth/login',
-        credentials
+        credentials,
+        { skipAuthRefresh: true } as any
       )
-      return { tokens: mapTokenResponse((response.data ?? {}) as Record<string, unknown>) }
+      return mapLoginResponse((response.data ?? {}) as Record<string, unknown>)
     },
 
     refresh: async (): Promise<AuthTokens> => {
@@ -456,7 +469,108 @@ const realApi = {
     }): Promise<void> => {
       throw new Error('Recuperación de contraseña no implementada')
     }
+  },                       
+
+  mfa: {
+    verify: async (mfaToken: string, code: string): Promise<AuthTokens> => {
+      const response = await apiClient.post<Record<string, unknown>>(
+        '/auth/mfa/verify',
+        { mfa_token: mfaToken, code },
+        { skipAuthRefresh: true } as any
+      )
+      return mapTokenResponse((response.data ?? {}) as Record<string, unknown>)
+    },
+
+    // setupToken: solo cuando el cliente obliga a activar 2FA y aún no hay sesión
+    setup: async (setupToken?: string): Promise<MfaSetupData> => {
+      const cfg = setupToken
+        ? ({ headers: { Authorization: `Bearer ${setupToken}` }, skipAuthRefresh: true } as any)
+        : undefined
+      const response = await apiClient.post<Record<string, unknown>>('/auth/mfa/setup', undefined, cfg)
+      const d = (response.data ?? {}) as Record<string, unknown>
+      return {
+        secret: String(d.secret ?? ''),
+        otpauthUri: String(d.otpauth_uri ?? ''),
+        qrSvg: String(d.qr_svg ?? ''),
+      }
+
+    },
+
+    confirm: async (
+      code: string,
+      setupToken?: string
+    ): Promise<{ recoveryCodes: string[]; tokens?: AuthTokens }> => {
+      const cfg = setupToken
+        ? ({ headers: { Authorization: `Bearer ${setupToken}` }, skipAuthRefresh: true } as any)
+        : undefined
+      const response = await apiClient.post<Record<string, unknown>>('/auth/mfa/confirm', { code }, cfg)
+      const d = (response.data ?? {}) as Record<string, unknown>
+      return {
+        recoveryCodes: Array.isArray(d.recovery_codes) ? d.recovery_codes.map(String) : [],
+        tokens: d.access_token ? mapTokenResponse(d) : undefined,
+      }
+    },
+
+    status: async (): Promise<MfaStatus> => {
+      const response = await apiClient.get<Record<string, unknown>>('/auth/mfa/status')
+      const d = (response.data ?? {}) as Record<string, unknown>
+      return {
+        totpEnabled: Boolean(d.totp_enabled),
+        recoveryCodesRemaining: Number(d.recovery_codes_remaining ?? 0),
+        clientRequires2fa: Boolean(d.client_requires_2fa),
+        ssoLinked: Boolean(d.sso_linked),
+      }
+    },
+
+    disable: async (password: string, code: string): Promise<void> => {
+      await apiClient.post('/auth/mfa/disable', { password, code })
+    },
+
+    regenerateRecoveryCodes: async (password: string, code: string): Promise<string[]> => {
+      const response = await apiClient.post<Record<string, unknown>>(
+        '/auth/mfa/recovery-codes/regenerate',
+        { password, code }
+      )
+      const d = (response.data ?? {}) as Record<string, unknown>
+      return Array.isArray(d.recovery_codes) ? d.recovery_codes.map(String) : []
+    },
+
+    // Solo ADMIN. El backend exige que el ADMIN tenga su propio 2FA antes de exigirlo.
+    setPolicy: async (requireTwoFactor: boolean): Promise<void> => {
+      await apiClient.put('/auth/mfa/policy', { require_2fa: requireTwoFactor })
+    },
+
+    // Solo ADMIN, mismo cliente. Borra el 2FA de un usuario (p. ej. perdió su móvil).
+    resetUser: async (userId: string): Promise<void> => {
+      await apiClient.delete(`/auth/mfa/users/${encodeURIComponent(userId)}`)
+    },
+
+
+
+
   },
+
+  sso: {
+    // Proveedores de SSO configurados en el backend (vacío = no mostrar botones)
+    providers: async (): Promise<string[]> => {
+      const response = await apiClient.get<Record<string, unknown>>(
+        '/auth/sso/providers',
+        { skipAuthRefresh: true } as any
+      )
+      const list = (response.data as { providers?: unknown })?.providers
+      if (!Array.isArray(list)) return []
+      return list
+        .map((p) =>
+          typeof p === 'string' ? p : String(p?.name ?? p?.id ?? p?.provider ?? '')
+        )
+        .filter((p) => p === 'google' || p === 'microsoft')
+    },
+
+    
+  },
+
+
+
 
   invitations: {
     create: async (data: { email: string; role: string }): Promise<{
@@ -1417,6 +1531,10 @@ const realApi = {
     }
   },
 }
+
+/** URL a la que navega el botón de SSO (no es una llamada XHR). */
+export const ssoLoginUrl = (provider: string): string =>
+  `${BASE_URL}/auth/sso/${encodeURIComponent(provider)}/login`
 
 export const setAuthTokens = (tokens: AuthTokens): void => {
   authState.accessToken = tokens.accessToken

@@ -88,6 +88,7 @@
 
       <!-- Card del formulario -->
       <form
+        v-if="!pending"
         class="rounded-2xl p-10 space-y-5 transition-colors duration-300"
         :class="isDark
           ? 'bg-[#142730] shadow-[0_20px_60px_rgba(0,0,0,0.4)]'
@@ -164,7 +165,204 @@
           <Icon v-if="authStore.isLoading" icon="mdi:loading" class="animate-spin text-lg" />
           {{ authStore.isLoading ? t('login.submitting') : t('login.submit') }}
         </button>
+
+        <!-- SSO: solo se muestra si el backend tiene proveedores configurados -->
+        <div v-if="ssoProviders.length > 0" class="space-y-3">
+          <div class="flex items-center gap-3">
+            <span class="flex-1 h-px" :class="isDark ? 'bg-[#2A4A55]' : 'bg-[#D0D4D6]'" />
+            <span class="text-xs" :class="mutedClass">{{ tsso('or') }}</span>
+            <span class="flex-1 h-px" :class="isDark ? 'bg-[#2A4A55]' : 'bg-[#D0D4D6]'" />
+          </div>
+          <button
+            v-for="p in ssoProviders"
+            :key="p"
+            type="button"
+            class="w-full py-3 px-4 rounded-xl border text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
+            :class="isDark
+              ? 'border-[#2A4A55] text-white hover:bg-[#1E3A45]'
+              : 'border-[#D0D4D6] text-[#142730] hover:bg-[#F0F9F9]'"
+            @click="startSso(p)"
+          >
+            <Icon :icon="ssoIcons[p]" class="text-lg" />
+            {{ tsso('continueWith') }} {{ ssoNames[p] }}
+          </button>
+        </div>
       </form>
+
+      <!-- 2FA · Paso: ingresar el código (TOTP o código de recuperación) -->
+      <form
+        v-else-if="pending.kind === 'verify'"
+        class="rounded-2xl p-10 space-y-5 transition-colors duration-300"
+        :class="cardClass"
+        @submit.prevent="onVerify"
+      >
+        <div>
+          <h2 class="text-xl font-bold mb-1" :class="titleClass">{{ tm('verifyTitle') }}</h2>
+          <p class="text-sm" :class="mutedClass">
+            {{ useRecovery ? tm('recoveryHint') : tm('verifyHint') }}
+          </p>
+        </div>
+
+        <div>
+          <label for="mfa-code" class="block text-sm font-medium mb-2" :class="mutedClass">
+            {{ useRecovery ? tm('recoveryLabel') : tm('codeLabel') }}
+          </label>
+          <input
+            id="mfa-code"
+            v-model="mfaCode"
+            v-focus
+            type="text"
+            :inputmode="useRecovery ? 'text' : 'numeric'"
+            autocomplete="one-time-code"
+            :maxlength="useRecovery ? 32 : 7"
+            :placeholder="useRecovery ? 'XXXXX-XXXXX' : '000000'"
+            :class="[inputBase, inputClass, 'text-center text-lg font-mono tracking-widest']"
+          />
+        </div>
+
+        <p v-if="errorMessage" class="text-sm text-[#DC2626] bg-[#FEE2E2] px-4 py-3 rounded-lg">
+          {{ errorMessage }}
+        </p>
+
+        <button type="submit" :disabled="authStore.isLoading || !canSubmitVerify" :class="primaryBtnClass">
+          <Icon v-if="authStore.isLoading" icon="mdi:loading" class="animate-spin text-lg" />
+          {{ authStore.isLoading ? tm('verifying') : tm('verifySubmit') }}
+        </button>
+
+        <div class="flex flex-col items-center gap-2 text-sm">
+          <button type="button" class="text-[#06B7B2] hover:underline" @click="toggleRecovery">
+            {{ useRecovery ? tm('useTotp') : tm('useRecovery') }}
+          </button>
+          <button type="button" class="hover:underline" :class="mutedClass" @click="backToLogin">
+            {{ tm('back') }}
+          </button>
+        </div>
+      </form>
+
+      <!-- 2FA · Enrolamiento obligatorio por política del cliente -->
+      <div
+        v-else
+        class="rounded-2xl p-10 space-y-5 transition-colors duration-300"
+        :class="cardClass"
+      >
+        <!-- Paso 1: QR + código de confirmación -->
+        <form v-if="!showCodes" class="space-y-5" @submit.prevent="onConfirmSetup">
+          <div>
+            <h2 class="text-xl font-bold mb-1" :class="titleClass">{{ tm('setupTitle') }}</h2>
+            <p class="text-sm" :class="mutedClass">{{ tm('setupHint') }}</p>
+          </div>
+
+          <div v-if="setupData" class="flex flex-col items-center gap-3">
+            <!-- El SVG lo genera nuestro propio backend (/auth/mfa/setup) -->
+            <div
+              class="bg-white p-3 rounded-xl w-48 h-48 [&_svg]:w-full [&_svg]:h-full"
+              v-html="setupData.qrSvg"
+            />
+            <p class="text-xs text-center" :class="mutedClass">{{ tm('cantScan') }}</p>
+            <code
+              class="text-xs font-mono break-all select-all px-3 py-2 rounded-lg"
+              :class="isDark ? 'bg-[#0A1A20] text-[#ADEA4B]' : 'bg-[#F0F9F9] text-[#046B74]'"
+            >{{ setupData.secret }}</code>
+          </div>
+          <p v-else-if="!errorMessage" class="text-sm text-center" :class="mutedClass">
+            {{ tm('loadingQr') }}
+          </p>
+
+          <div v-if="setupData">
+            <label for="mfa-confirm" class="block text-sm font-medium mb-2" :class="mutedClass">
+              {{ tm('confirmLabel') }}
+            </label>
+            <input
+              id="mfa-confirm"
+              v-model="mfaCode"
+              v-focus
+              type="text"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              maxlength="7"
+              placeholder="000000"
+              :class="[inputBase, inputClass, 'text-center text-lg font-mono tracking-widest']"
+            />
+          </div>
+
+          <p v-if="errorMessage" class="text-sm text-[#DC2626] bg-[#FEE2E2] px-4 py-3 rounded-lg">
+            {{ errorMessage }}
+          </p>
+
+          <button
+            v-if="setupData"
+            type="submit"
+            :disabled="authStore.isLoading || !canConfirmSetup"
+            :class="primaryBtnClass"
+          >
+            <Icon v-if="authStore.isLoading" icon="mdi:loading" class="animate-spin text-lg" />
+            {{ authStore.isLoading ? tm('verifying') : tm('confirmSubmit') }}
+          </button>
+
+          <div class="flex justify-center text-sm">
+            <button type="button" class="hover:underline" :class="mutedClass" @click="backToLogin">
+              {{ tm('back') }}
+            </button>
+          </div>
+        </form>
+
+        <!-- Paso 2: códigos de recuperación (se muestran una sola vez) -->
+        <div v-else class="space-y-5">
+          <div>
+            <h2 class="text-xl font-bold mb-1" :class="titleClass">{{ tm('codesTitle') }}</h2>
+            <p class="text-sm" :class="mutedClass">{{ tm('codesHint') }}</p>
+          </div>
+
+          <ul
+            class="grid grid-cols-2 gap-2 font-mono text-sm rounded-xl p-4 select-all"
+            :class="isDark ? 'bg-[#0A1A20] text-[#ADEA4B]' : 'bg-[#F0F9F9] text-[#046B74]'"
+          >
+            <li v-for="c in recoveryCodes" :key="c" class="text-center">{{ c }}</li>
+          </ul>
+
+          <div class="flex gap-2">
+            <button
+              type="button"
+              class="flex-1 py-2 rounded-xl border text-sm font-medium transition-colors"
+              :class="isDark
+                ? 'border-[#2A4A55] text-[#A1A9AC] hover:text-white'
+                : 'border-[#D0D4D6] text-[#5A686E] hover:text-[#142730]'"
+              @click="copyCodes"
+            >
+              {{ copied ? tm('copied') : tm('copy') }}
+            </button>
+            <button
+              type="button"
+              class="flex-1 py-2 rounded-xl border text-sm font-medium transition-colors"
+              :class="isDark
+                ? 'border-[#2A4A55] text-[#A1A9AC] hover:text-white'
+                : 'border-[#D0D4D6] text-[#5A686E] hover:text-[#142730]'"
+              @click="downloadCodes"
+            >
+              {{ tm('download') }}
+            </button>
+          </div>
+
+          <label class="flex items-start gap-2 text-sm cursor-pointer" :class="mutedClass">
+            <input v-model="codesSaved" type="checkbox" class="mt-0.5 accent-[#06B7B2]" />
+            <span>{{ tm('savedCheck') }}</span>
+          </label>
+
+          <p v-if="errorMessage" class="text-sm text-[#DC2626] bg-[#FEE2E2] px-4 py-3 rounded-lg">
+            {{ errorMessage }}
+          </p>
+
+          <button
+            type="button"
+            :disabled="!codesSaved || authStore.isLoading"
+            :class="primaryBtnClass"
+            @click="onFinishSetup"
+          >
+            <Icon v-if="authStore.isLoading" icon="mdi:loading" class="animate-spin text-lg" />
+            {{ tm('continue') }}
+          </button>
+        </div>
+      </div>
 
       <!-- Footer -->
       <p class="text-xs text-center mt-8 transition-colors" :class="isDark ? 'text-[#2A4A55]' : 'text-[#A1A9AC]'">
@@ -175,13 +373,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores'
-import { UserRole } from '@/types'
+import { UserRole, type MfaSetupData } from '@/types'
+import { loginMfaMessages, type LoginMfaKey } from '@/i18n/loginMfa'
+import { loginSsoMessages, SSO_ERROR_CODES, type LoginSsoKey } from '@/i18n/loginSso'
+import { api, ssoLoginUrl } from '@/services/api'
 import logoUrl from '@/assets/logo-corestream.jpeg'
 
 const route = useRoute()
@@ -214,22 +415,232 @@ function toggleDark() {
   themeStore.toggleTheme()
 }
 
+// ---- Estado del flujo 2FA --------------------------------------------------
+const pending = computed(() => authStore.pendingMfa)
+const mfaCode = ref('')
+const useRecovery = ref(false)
+const setupData = ref<MfaSetupData | null>(null)
+const showCodes = ref(false)
+const recoveryCodes = ref<string[]>([])
+const codesSaved = ref(false)
+const copied = ref(false)
+
+// Enfoca el campo de código al mostrarse (directiva local v-focus)
+const vFocus = { mounted: (el: HTMLElement) => el.focus() }
+
+// Textos del flujo 2FA (módulo propio, 5 idiomas)
+const tm = (key: LoginMfaKey): string =>
+  (loginMfaMessages[currentLocale.value] ?? loginMfaMessages.es)[key]
+
+// Clases compartidas por las pantallas 2FA (mismos colores que el formulario)
+const cardClass = computed(() =>
+  isDark.value
+    ? 'bg-[#142730] shadow-[0_20px_60px_rgba(0,0,0,0.4)]'
+    : 'bg-white shadow-[0_20px_60px_rgba(6,183,178,0.15),0_4px_16px_rgba(0,0,0,0.08)]'
+)
+const titleClass = computed(() => (isDark.value ? 'text-white' : 'text-[#142730]'))
+const mutedClass = computed(() => (isDark.value ? 'text-[#A1A9AC]' : 'text-[#5A686E]'))
+const inputBase =
+  'w-full rounded-xl border px-4 py-3 placeholder-[#A1A9AC] focus:outline-none focus:ring-2 transition-all'
+const inputClass = computed(() =>
+  isDark.value
+    ? 'bg-[#0A1A20] border-[#2A4A55] text-white focus:border-[#06B7B2] focus:ring-[#06B7B2]/20'
+    : 'bg-white border-[#D0D4D6] text-[#142730] focus:border-[#06B7B2] focus:ring-[#06B7B2]/20'
+)
+const primaryBtnClass =
+  'w-full py-3 px-4 rounded-xl bg-[#ADEA4B] text-[#142730] text-base font-bold hover:bg-[#B5EC5D] active:bg-[#BDEE6F] disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 flex items-center justify-center gap-2'
+
+// Un TOTP son 6 dígitos (se toleran espacios); un código de recuperación es XXXXX-XXXXX
+const cleanCode = computed(() =>
+  useRecovery.value ? mfaCode.value.trim() : mfaCode.value.replace(/\s/g, '')
+)
+const canSubmitVerify = computed(() =>
+  useRecovery.value ? cleanCode.value.length >= 10 : /^\d{6}$/.test(cleanCode.value)
+)
+const canConfirmSetup = computed(() => /^\d{6}$/.test(mfaCode.value.replace(/\s/g, '')))
+
+function resetMfaUi() {
+  mfaCode.value = ''
+  useRecovery.value = false
+  setupData.value = null
+  showCodes.value = false
+  recoveryCodes.value = []
+  codesSaved.value = false
+  copied.value = false
+}
+
+async function redirectAfterLogin() {
+  const user = authStore.user
+  let redirect = typeof route.query.redirect === 'string' ? route.query.redirect : null
+  try {
+    // Tras un login SSO la URL pierde el ?redirect=..., se guardó antes de salir
+    if (!redirect) redirect = sessionStorage.getItem(SSO_REDIRECT_KEY)
+    sessionStorage.removeItem(SSO_REDIRECT_KEY)
+  } catch {
+    /* sessionStorage no disponible */
+  }
+  if (redirect && redirect.startsWith('/')) {
+    await router.replace(redirect)
+    return
+  }
+  if (user?.role === UserRole.ADMIN) {
+    await router.replace({ path: '/admin/builder' })
+  } else {
+    await router.replace({ path: '/dev/workbench' })
+  }
+}
+
+// ---- Paso 1: correo y contraseña -------------------------------------------
 async function onSubmit() {
   try {
-    await authStore.login(email.value.trim(), password.value)
-    const user = authStore.user
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : null
-    if (redirect && redirect.startsWith('/')) {
-      await router.replace(redirect)
+    const user = await authStore.login(email.value.trim(), password.value)
+    if (user) {
+      await redirectAfterLogin()
       return
     }
-    if (user?.role === UserRole.ADMIN) {
-      await router.replace({ path: '/admin/builder' })
-    } else {
-      await router.replace({ path: '/dev/workbench' })
-    }
+    // Falta un segundo paso: authStore.pendingMfa indica cuál
+    resetMfaUi()
+    if (authStore.pendingMfa?.kind === 'setup') await loadSetup()
   } catch {
     /* mensaje en store */
   }
 }
+
+// ---- Paso 2a: código del segundo factor ------------------------------------
+async function onVerify() {
+  if (!canSubmitVerify.value) return
+  try {
+    await authStore.verifyMfa(cleanCode.value)
+    resetMfaUi()
+    await redirectAfterLogin()
+  } catch {
+    mfaCode.value = '' // mensaje en store
+  }
+}
+
+function toggleRecovery() {
+  useRecovery.value = !useRecovery.value
+  mfaCode.value = ''
+  authStore.error = null
+}
+
+// ---- Paso 2b: enrolamiento obligatorio ------------------------------------
+async function loadSetup() {
+  setupData.value = null
+  try {
+    setupData.value = await authStore.beginMfaSetup()
+  } catch {
+    /* mensaje en store */
+  }
+}
+
+async function onConfirmSetup() {
+  if (!canConfirmSetup.value) return
+  try {
+    recoveryCodes.value = await authStore.confirmMfaSetup(mfaCode.value.replace(/\s/g, ''))
+    mfaCode.value = ''
+    showCodes.value = true
+  } catch {
+    mfaCode.value = '' // mensaje en store
+  }
+}
+
+async function copyCodes() {
+  try {
+    await navigator.clipboard.writeText(recoveryCodes.value.join('\n'))
+    copied.value = true
+    setTimeout(() => (copied.value = false), 2000)
+  } catch {
+    /* sin permiso de portapapeles: queda la opción de descargar */
+  }
+}
+
+function downloadCodes() {
+  const text = `CoreStream - ${tm('codesTitle')}\n\n${recoveryCodes.value.join('\n')}\n`
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'corestream-recovery-codes.txt'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+async function onFinishSetup() {
+  try {
+    await authStore.finishMfaSetup()
+    resetMfaUi()
+    await redirectAfterLogin()
+  } catch {
+    authStore.error = tm('finishError')
+  }
+}
+
+function backToLogin() {
+  authStore.cancelMfa()
+  resetMfaUi()
+  password.value = ''
+}
+
+// ---- SSO (Google / Microsoft) ---------------------------------------------
+const SSO_REDIRECT_KEY = 'corestream-sso-redirect'
+const ssoProviders = ref<string[]>([])
+const ssoIcons: Record<string, string> = {
+  google: 'logos:google-icon',
+  microsoft: 'logos:microsoft-icon',
+}
+const ssoNames: Record<string, string> = { google: 'Google', microsoft: 'Microsoft' }
+
+const tsso = (key: LoginSsoKey): string =>
+  (loginSsoMessages[currentLocale.value] ?? loginSsoMessages.es)[key]
+
+function ssoErrorText(code: string): string {
+  return (SSO_ERROR_CODES as readonly string[]).includes(code)
+    ? tsso(code as LoginSsoKey)
+    : tsso('genericError')
+}
+
+// El botón NAVEGA (no es una petición XHR): el proveedor responde con redirecciones
+function startSso(provider: string) {
+  const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+  try {
+    if (redirect.startsWith('/')) sessionStorage.setItem(SSO_REDIRECT_KEY, redirect)
+    else sessionStorage.removeItem(SSO_REDIRECT_KEY)
+  } catch {
+    /* sessionStorage no disponible */
+  }
+  window.location.assign(ssoLoginUrl(provider))
+}
+
+// Retorno del SSO: el backend ya dejó las cookies de sesión; el guard del router
+// las usa en /auth/refresh (ensureInitialized), así que aquí solo se espera y se redirige.
+async function finishSsoLogin() {
+  await authStore.ensureInitialized()
+  if (authStore.isAuthenticated) {
+    await redirectAfterLogin()
+  } else {
+    authStore.error = tsso('sessionFailed')
+  }
+}
+
+onMounted(async () => {
+  const ssoError = route.query.sso_error
+  const ssoResult = route.query.sso
+  if (typeof ssoError === 'string') {
+    authStore.error = ssoErrorText(ssoError)
+    await router.replace({ path: route.path })
+  } else if (ssoResult === 'success') {
+    await router.replace({ path: route.path })
+    await finishSsoLogin()
+  }
+  try {
+    ssoProviders.value = await api.sso.providers()
+  } catch {
+    ssoProviders.value = [] // sin SSO el login por contraseña sigue funcionando
+  }
+})
+
+// Si se abandona la pantalla a mitad del flujo, se descarta el desafío pendiente
+onBeforeUnmount(() => {
+  if (authStore.pendingMfa) authStore.cancelMfa()
+})
 </script>

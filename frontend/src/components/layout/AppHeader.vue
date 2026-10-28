@@ -177,6 +177,15 @@
               <p class="text-sm font-medium text-[var(--text-primary)]">Exportar Datos</p>
               <p class="text-xs text-[var(--text-secondary)]">Descarga tus datos</p>
             </button>
+
+            <button @click="goToMoreSettings" type="button" class="group col-span-2 p-4 rounded-xl text-left border border-violet-500/20 bg-violet-500/10 hover:bg-violet-500/20 transition-all flex items-center gap-4">
+              <span class="text-3xl group-hover:scale-110 transition-transform origin-left">⚙️</span>
+              <div>
+                <p class="text-sm font-medium text-[var(--text-primary)]">Más ajustes</p>
+                <p class="text-xs text-[var(--text-secondary)]">Seguridad y verificación en dos pasos</p>
+              </div>
+            </button>
+            
           </div>
         </section>
 
@@ -468,6 +477,13 @@ const openSettingsModal = async () => {
 const cancelSettings = () => {
   themeStore.applyTheme(originalTheme.value)
   showSettingsModal.value = false
+}
+
+// Cierra el panel (descartando cambios de tema sin guardar) y abre la página
+// completa de ajustes, donde está la seguridad y la verificación en dos pasos.
+const goToMoreSettings = async () => {
+  cancelSettings()
+  await router.push({ name: authStore.user?.role === 'ADMIN' ? 'AdminSettings' : 'DevSettings' })
 }
 
 const saveSettings = async () => {

@@ -1200,6 +1200,25 @@ export interface LoginRequest {
   password: string
 }
 
+/** Resultado del login: sesión directa, o falta un segundo paso (2FA). */
+export type LoginOutcome =
+  | { kind: 'session'; tokens: AuthTokens }
+  | { kind: 'mfa_required'; mfaToken: string }
+  | { kind: 'mfa_setup_required'; mfaToken: string }
+
+export interface MfaSetupData {
+  secret: string
+  otpauthUri: string
+  qrSvg: string
+}
+
+export interface MfaStatus {
+  totpEnabled: boolean
+  recoveryCodesRemaining: number
+  clientRequires2fa: boolean
+  ssoLinked: boolean
+}
+
 /**
  * Datos de registro de nuevo usuario
  */

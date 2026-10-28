@@ -19,6 +19,17 @@ import { api, setAuthTokens, clearAuthTokens } from '@/services/api'
 import { useThemeStore } from '@/stores/theme'
 import { useWebSocket } from '@/composables/useWebSocket'
 
+const describeError = (err: unknown, fallback: string): string => {
+  const e = err as any
+  if (e?.response?.status === 429) {
+    return 'Demasiados intentos. Espera unos minutos antes de volver a intentarlo.'
+  }
+  const detail = e?.response?.data?.detail
+  if (typeof detail === 'string') return detail
+  return e?.response?.data?.message || (err instanceof Error ? err.message : fallback)
+}
+
+
 export const useAuthStore = defineStore('auth', () => {
   // ========== ESTADO REACTIVO ==========
 
@@ -39,6 +50,9 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = ref(false)
   const isLoading = ref(false)
   const error = ref<string | null>(null)
+  // Segundo paso pendiente tras un login correcto (2FA)
+  const pendingMfa = ref<{ kind: 'verify' | 'setup'; token: string } | null>(null)
+  let setupTokens: AuthTokens | undefined
 
   // ========== GETTERS COMPUTADOS ==========
 
@@ -127,29 +141,102 @@ export const useAuthStore = defineStore('auth', () => {
   /**
    * Autentica al usuario con email y contraseña.
    */
-  const login = async (email: string, password: string): Promise<User> => {
-    isLoading.value = true
-    error.value = null
-
-    try {
-      const response = await api.auth.login({ email, password })
-      applyTokens(response.tokens)
+  const startSession = async (tokens: AuthTokens): Promise<User> => {
+      applyTokens(tokens)
       isAuthenticated.value = true
-
       await fetchMe()
       connectRealtime()
-
       return user.value!
+    }
+
+  /**
+   * Devuelve el usuario si la sesión quedó abierta, o null si falta un
+   * segundo paso (ver pendingMfa).
+   */
+  const login = async (email: string, password: string): Promise<User | null> => {
+    isLoading.value = true
+    error.value = null
+    pendingMfa.value = null
+
+    try {
+      const outcome = await api.auth.login({ email, password })
+      if (outcome.kind === 'mfa_required') {
+        pendingMfa.value = { kind: 'verify', token: outcome.mfaToken }
+        return null
+      }
+      if (outcome.kind === 'mfa_setup_required') {
+        pendingMfa.value = { kind: 'setup', token: outcome.mfaToken }
+        return null
+      }
+      return await startSession(outcome.tokens)
     } catch (err) {
-      const message = (err as any)?.response?.data?.detail
-        || (err as any)?.response?.data?.message
-        || (err instanceof Error ? err.message : 'Error al iniciar sesión')
       clearSession()
-      error.value = message
+      error.value = describeError(err, 'Error al iniciar sesión')
       throw err
     } finally {
       isLoading.value = false
     }
+  }
+
+  const verifyMfa = async (code: string): Promise<User> => {
+    const pending = pendingMfa.value
+    if (!pending || pending.kind !== 'verify') throw new Error('No hay verificación pendiente')
+    isLoading.value = true
+    error.value = null
+    try {
+      const tokens = await api.mfa.verify(pending.token, code.trim())
+      pendingMfa.value = null
+      return await startSession(tokens)
+    } catch (err) {
+      error.value = describeError(err, 'Código incorrecto')
+      throw err
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  const beginMfaSetup = async () => {
+    const pending = pendingMfa.value
+    if (!pending || pending.kind !== 'setup') throw new Error('No hay enrolamiento pendiente')
+    error.value = null
+    try {
+      return await api.mfa.setup(pending.token)
+    } catch (err) {
+      error.value = describeError(err, 'No se pudo iniciar la configuración')
+      throw err
+    }
+  }
+
+  /** Confirma el código y devuelve los códigos de recuperación (se muestran una sola vez). */
+  const confirmMfaSetup = async (code: string): Promise<string[]> => {
+    const pending = pendingMfa.value
+    if (!pending || pending.kind !== 'setup') throw new Error('No hay enrolamiento pendiente')
+    isLoading.value = true
+    error.value = null
+    try {
+      const result = await api.mfa.confirm(code.trim(), pending.token)
+      setupTokens = result.tokens
+      return result.recoveryCodes
+    } catch (err) {
+      error.value = describeError(err, 'Código incorrecto')
+      throw err
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  /** Se llama cuando el usuario ya guardó sus códigos de recuperación. */
+  const finishMfaSetup = async (): Promise<User> => {
+    const tokens = setupTokens ?? (await api.auth.refresh())
+    setupTokens = undefined
+    pendingMfa.value = null
+    return await startSession(tokens)
+  }
+
+  const cancelMfa = (): void => {
+    pendingMfa.value = null
+    setupTokens = undefined
+    error.value = null
   }
 
   /**
@@ -305,6 +392,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     isLoading,
     error,
+    pendingMfa,
     // Getters
     isAdmin,
     isDeveloper,
@@ -325,5 +413,10 @@ export const useAuthStore = defineStore('auth', () => {
     clearSession,
     requestPasswordReset,
     confirmPasswordReset,
+    verifyMfa,
+    beginMfaSetup,
+    confirmMfaSetup,
+    finishMfaSetup,
+    cancelMfa
   }
 })

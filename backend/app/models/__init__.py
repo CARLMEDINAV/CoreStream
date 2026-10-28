@@ -6,6 +6,7 @@ from .document import Document, DocumentType
 from .epic import Epic
 from .incident import AffectedEnvironment, Incident, IncidentSeverity, IncidentStatus
 from .invitation import Invitation
+from .mfa import UserIdentity, UserRecoveryCode
 from .meeting import AttendanceStatus, Meeting, MeetingAttendance, MeetingType
 from .notification import Notification, NotificationType
 from .role import Role, UserRole
@@ -27,6 +28,8 @@ __all__ = [
     "Role",
     "UserRole",
     "User",
+    "UserIdentity",
+    "UserRecoveryCode",
     "Client", 
     "Application",
     "Epic",

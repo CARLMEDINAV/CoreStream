@@ -30,7 +30,7 @@ from app.database import get_db
 from app.middleware.auth import get_current_user, verify_token
 from app.middleware.commercial import get_commercial_profile
 from app.middleware.rate_limit import rate_limit_login
-from app.models import Role, User
+from app.models import Client, Role, User
 from app.redis_client import consume_jti, create_ws_ticket, revoke_jti
 from app.schemas import (
     LogoutRequest,
@@ -42,7 +42,9 @@ from app.schemas import (
     UserUpdate,
 )
 from app.schemas.commercial import CommercialProfile
+from app.schemas.mfa import LoginResponse
 from app.schemas.user import PasswordChange
+from app.services import mfa_service
 from app.services.auth_service import AuthService
 
 router = APIRouter(tags=["Autenticación"])
@@ -142,6 +144,26 @@ def _remaining_seconds(exp: int) -> int:
     return max(0, exp - int(datetime.now(timezone.utc).timestamp()))
 
 
+def issue_session(response: Response, user: User, role_name: str) -> TokenResponse:
+    """
+    Emite la sesión completa: refresh token + CSRF en cookies y access token
+    en el cuerpo. Es el ÚNICO sitio que crea una sesión; lo usan el login con
+    contraseña, la verificación del segundo factor y el login SSO. `response`
+    puede ser también un RedirectResponse.
+    """
+    access_token = AuthService.create_access_token(user, role_name=role_name)
+    refresh_token = AuthService.create_refresh_token(user, role_name=role_name)
+    csrf_token = secrets.token_urlsafe(32)
+    _set_auth_cookies(response, refresh_token=refresh_token, csrf_token=csrf_token)
+
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=get_settings().ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        must_change_password=user.must_change_password,
+    )
+
+
 async def _to_user_response(db: AsyncSession, user: User) -> UserResponse:
     """Construye UserResponse evitando lazy-load async de user.role."""
     role_name = "DEVELOPER"
@@ -167,7 +189,7 @@ async def _to_user_response(db: AsyncSession, user: User) -> UserResponse:
 
 @router.post(
     "/login",
-    response_model=TokenResponse,
+    response_model=LoginResponse,
     status_code=status.HTTP_200_OK,
     summary="Iniciar sesión",
     description="Autentica un usuario, entrega el access token en el cuerpo y el refresh token en una cookie httpOnly",
@@ -177,9 +199,17 @@ async def login(
     request: Request,
     response: Response,
     db: AsyncSession = Depends(get_db),
-) -> TokenResponse:
+) -> LoginResponse:
     """
     Autentica un usuario y genera tokens de acceso.
+
+    NEW-08 — tres desenlaces tras una contraseña correcta:
+      1. El usuario tiene 2FA: no hay sesión todavía. Se devuelve
+         mfa_required=true y un mfa_token de vida corta que solo sirve en
+         POST /auth/mfa/verify junto con el código.
+      2. El cliente exige 2FA y el usuario aún no lo configuró: se devuelve
+         mfa_setup_required=true y un mfa_token que solo permite enrolarse.
+      3. Resto: sesión normal, como siempre.
 
     El refresh_token YA NO viaja en el cuerpo de la respuesta (plan 3.2):
     se entrega como cookie HttpOnly, así que un script en la página nunca
@@ -217,19 +247,27 @@ async def login(
     set_audit_actor(
         user_id=user.id, email=user.email, role=role_name, client_id=user.client_id
     )
-    access_token = AuthService.create_access_token(user, role_name=role_name)
-    refresh_token = AuthService.create_refresh_token(user)
-    csrf_token = secrets.token_urlsafe(32)
-
-    _set_auth_cookies(response, refresh_token=refresh_token, csrf_token=csrf_token)
-
     settings = get_settings()
-    return TokenResponse(
-        access_token=access_token,
-        token_type="bearer",
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        must_change_password=user.must_change_password,
-    )
+
+    if user.totp_enabled:
+        return LoginResponse(
+            mfa_required=True,
+            mfa_token=mfa_service.create_challenge_token(user, role_name),
+            expires_in=settings.MFA_CHALLENGE_TTL_SECONDS,
+            must_change_password=user.must_change_password,
+        )
+
+    policy = await db.execute(select(Client.require_2fa).where(Client.id == user.client_id))
+    if policy.scalar_one_or_none():
+        return LoginResponse(
+            mfa_setup_required=True,
+            mfa_token=mfa_service.create_setup_token(user, role_name),
+            expires_in=mfa_service.SETUP_TOKEN_TTL_SECONDS,
+            must_change_password=user.must_change_password,
+        )
+
+    session = issue_session(response, user, role_name)
+    return LoginResponse(**session.model_dump())
 
 
 @router.post(

@@ -43,6 +43,8 @@ from app.routers import (
     users,
     webhooks,
     websocket,
+    mfa,
+    sso,
 )
 from app.services.notification_service import set_arq_pool
 from app.tenant_scope import register_tenant_scope
@@ -269,6 +271,10 @@ app.include_router(
     ],
 )
 
+#NEW 08
+
+app.include_router(mfa.router)
+app.include_router(sso.router)
 
 # Endpoint raíz de salud — Railway lo usa como healthcheck en /health
 @app.get("/health", tags=["Health"], include_in_schema=False)

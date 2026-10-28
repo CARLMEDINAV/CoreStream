@@ -162,6 +162,17 @@
                     ✏️
                   </button>
 
+                  <!-- Reset 2FA Button -->
+                  <button
+                    v-if="member.id !== authStore.user?.id && authStore.user?.role === 'ADMIN'"
+                    @click="resetMemberMfa(member.id, member.fullName)"
+                    :disabled="isLoading"
+                    class="px-3 py-1 bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 hover:bg-violet-200 dark:hover:bg-violet-900/50 rounded text-xs font-medium transition-colors disabled:opacity-50"
+                    title="Resetear verificación en dos pasos (2FA)"
+                  >
+                    🔑 2FA
+                  </button>
+
                   <!-- Delete Button -->
                   <button
                     v-if="member.id !== authStore.user?.id && authStore.user?.role === 'ADMIN'"
@@ -573,6 +584,25 @@ const demoteLeader = async (userId: string) => {
     isLoading.value = false
   }
 }
+
+const resetMemberMfa = async (userId: string, memberName: string) => {
+  if (!(await dialogStore.confirm(
+    `¿Resetear la verificación en dos pasos de ${memberName}? Deberá configurarla de nuevo.`
+  ))) {
+    return
+  }
+
+  isLoading.value = true
+  try {
+    await api.mfa.resetUser(userId)
+    dialogStore.alert(`Se reseteó la verificación en dos pasos de ${memberName}.`)
+  } catch (error: any) {
+    dialogStore.alert('Error al resetear el 2FA: ' + (error?.response?.data?.detail || error.message))
+  } finally {
+    isLoading.value = false
+  }
+}
+
 
 // Variable para controlar el modal de eliminación
 const memberToDelete = ref<{ id: string; name: string } | null>(null)

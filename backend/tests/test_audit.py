@@ -946,6 +946,7 @@ _PROD = {
     "DEBUG": False,
     "SECRET_KEY": "a" * 64,
     "ALLOWED_ORIGINS": ["https://corestream.example"],
+    "MFA_ENCRYPTION_KEY": "5A1w_tRELD17uumouz6GYv6i1__ZvO5q8NghLtHpM3I=",
 }
 
 
