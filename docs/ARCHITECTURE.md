@@ -37,10 +37,11 @@ graph TD
 El frontend es una Single Page Application (SPA) construida con la Composition API de Vue 3 y empaquetada con Vite. En producción se sirve como build estática detrás de un Nginx dedicado dentro de su propio contenedor (no el servidor de desarrollo de Vite, que rechaza hosts no incluidos en su allowlist).
 
 - **Gestión de estado**: Pinia (`authStore`, `ticketsStore`, etc.).
-- **Enrutamiento**: Vue Router, con un guard `beforeEach` asíncrono que espera a `authStore.ensureInitialized()` antes de decidir si redirigir.
+- **Enrutamiento**: Vue Router, con un guard `beforeEach` asíncrono que espera a `authStore.ensureInitialized()` antes de decidir si redirigir. El router usa modo hash (`/#/ruta`); `frontend/index.html` convierte `/login?...` en `/#/login?...` para que el retorno del SSO (`/login?sso=...`) llegue a la vista de login.
 - **Estilos**: Tailwind CSS.
-- **Cliente HTTP**: Axios (`services/api.ts`), con `withCredentials: true` para la cookie de refresh y un interceptor que renueva el access token en un 401.
+- **Cliente HTTP**: Axios (`services/api.ts`), con `withCredentials: true` para la cookie de refresh y un interceptor que renueva el access token en un 401.  Excepción: las peticiones de login y de verificación/enrolamiento del 2FA se marcan con `skipAuthRefresh`; allí un 401 significa "contraseña o código incorrectos", no "sesión caducada", y no debe forzar un refresh.
 - **Tiempo real**: composable `useWebSocket` (estado a nivel de módulo, no por instancia) que abre la conexión tras obtener un ticket de un solo uso — ver sección de seguridad.
+- **Textos (i18n)**: las pantallas del 2FA/SSO y la página de Configuración usan módulos `src/i18n/*.ts` con un diccionario por idioma (es, en, pt, fr, de), elegido según `i18n.locale`.
 
 ## 2. Backend (FastAPI)
 
@@ -63,6 +64,8 @@ Entidades clave:
 - `notifications`
 - `webhooks`, `webhook_deliveries` (integraciones salientes y su auditoría — NEW-12)
 - `incidents`, `meetings` (soporte operativo y ceremonias de equipo)
+- 'user_recovery_codes'.
+- 'user_identities'.
 
 Y, en un esquema aparte de `public`:
 
@@ -85,14 +88,19 @@ El WebSocket usa dos tareas de larga vida coordinadas (una escuchando Redis, otr
 
 ## 5. Seguridad y autenticación
 
-- **Tokens**: JWT de acceso (corta duración, en memoria del store de Pinia — nunca en `localStorage`) y de refresco (httpOnly, `SameSite=Strict`, solo viaja a `/api/auth/refresh`). Llevan un claim `type` (`access`/`refresh`) y un `jti` para poder revocarlos individualmente en logout.
+- **Tokens**: JWT de acceso (corta duración, en memoria del store de Pinia — nunca en `localStorage`) y de refresco (httpOnly, `SameSite=Strict`, solo viaja a `/api/auth/refresh`). Llevan un claim `type` (`access`/`refresh`) y un `jti` para poder revocarlos individualmente en logout. Existen además dos tokens intermedios del 2FA —`mfa_challenge` (entre la contraseña y el código, 5 min, un solo uso) y `mfa_setup` (enrolamiento obligatorio, 10 min)— que solo sirven para sus endpoints y no como token de acceso.
 - **CSRF**: patrón de doble envío (cookie legible `csrf_token` + cabecera `X-CSRF-Token`) en toda mutación que dependa de la cookie de refresh.
 - **WebSocket**: se autentica con un ticket de un solo uso de 15s (`POST /api/auth/ws-ticket`), no con el JWT en el query string — evita que el token quede en los logs de acceso de un proxy.
 - **Autorización (RBAC)**: `ADMIN`, `TEAM_LEADER`, `DEVELOPER`. Además de rol, hay comprobación de pertenencia (`app/services/ticket_permissions.py`): un `DEVELOPER` solo actúa sobre tickets que tiene asignados. Matriz completa en [`RBAC.md`](./RBAC.md).
 - **Contraseñas**: bcrypt con un pre-hash SHA-256 (evita el límite de 72 bytes de bcrypt sin truncar la contraseña real).
-- **Rate limiting**: contador en Redis por IP y por cuenta sobre `/auth/login`.
-- **Alta de usuarios**: sin registro público — el primer ADMIN se crea con un script de un solo uso (`app/scripts/create_admin.py`); el resto, por invitación.
+- **Rate limiting:** contadores en Redis sobre `/auth/login`, `/auth/mfa/verify` y el SSO. El límite por IP es holgado (freno de inundación); la barrera real es por cuenta y, en el 2FA, por desafío. Si Redis falla, los límites por IP y por correo dejan pasar y los del 2FA responden 503.
+- **Alta de usuarios**: sin registro público — el primer ADMIN se crea con un script de un solo uso (`app/scripts/create_admin.py`); el resto, por invitación. El SSO nunca crea usuarios: solo deja entrar a quienes ya existen y están activos.
 - **Auditoría**: `app/middleware/audit.py` escribe una entrada en `audit.audit_logs` por cada mutación, cada 401/403/429 y cada llamada a `/api/auth/*`, y emite el mismo evento como línea JSON por el logger `corestream.audit.event`. No depende de ningún servicio externo: el almacén especializado es el esquema `audit` de PostgreSQL. La IP solo es prueba si `FORWARDED_ALLOW_IPS` apunta al proxy real; con `*` la dicta el cliente y el arranque lo advierte.
+- **2FA (TOTP):** segundo factor opcional por usuario, obligatorio si el ADMIN lo exige a su cliente (`clients.require_2fa`). El secreto se cifra en reposo (Fernet, `MFA_ENCRYPTION_KEY`); los códigos de recuperación se guardan como HMAC; un código TOTP no puede reutilizarse. Detalle en `DOCUMENTACION_NEW08_2FA_SSO.md`.
+- **SSO (Google / Microsoft):** OpenID Connect con PKCE; solo entran usuarios que ya existen y están activos; rol y cliente salen de la cuenta de CoreStream. Se ofrece únicamente si hay proveedores configurados.
+
+
+
 
 ## 6. Empaquetado y despliegue
 

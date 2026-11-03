@@ -63,6 +63,8 @@ coordinación que hacer.
    - `DATABASE_URL` con el usuario/contraseña creados en el paso 1
    - `REDIS_URL` (el default de `.env.example` ya apunta a la instancia
      compartida, solo falta la IP si cambia)
+   - `MFA_ENCRYPTION_KEY`Debe ser **distinta** de `SECRET_KEY`; el backend aborta el arranque si son iguales o si falta.
+   - Variables de SSO (`SSO_PUBLIC_BASE_URL`, `SSO_FRONTEND_URL`, `GOOGLE_*`, `MICROSOFT_*`): **solo cuando se vaya a activar**. Sin ellas el login con Google/Microsoft simplemente no se ofrece. Procedimiento en `DOCUMENTACION_NEW08_2FA_SSO.md`.
 3. `docker compose up -d --build` en la raíz (usa solo `docker-compose.yml`,
    **sin** `docker-compose.dev.yml` — ese overlay es solo para desarrollo
    local, con su propio Postgres/Redis descartables).
@@ -86,6 +88,8 @@ coordinación que hacer.
      de llegar a la app.
    - No exponer `/metrics` al dominio público — es solo para scraping
      interno.
+   - **IP real del cliente:** el proxy debe enviar `X-Forwarded-For`; `FORWARDED_ALLOW_IPS` (y `--forwarded-allow-ips` en `backend/Dockerfile`) debe ser la IP o el CIDR del proxy, no `*`; y los puertos 8010/8080 no deben ser accesibles desde fuera del proxy. Verificar que `audit.audit_logs` guarda la IP pública del usuario.
+   
 9. Backup ejecutado una vez (`./backend/scripts/backup_db.sh`) y
    restauración ensayada en una base limpia
    (`./backend/scripts/restore_db.sh <dump>`), ver más abajo.
@@ -95,6 +99,10 @@ coordinación que hacer.
     ```bash
     docker compose exec backend pytest tests/integration -q
     ```
+11. `MFA_ENCRYPTION_KEY` generada con
+     `docker compose exec backend python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
+     (obligatoria en producción: el backend aborta el arranque sin ella; guardar una copia fuera del repositorio — si se pierde hay que resetear el 2FA de todos).
+   
 
 ## Backups
 
@@ -106,6 +114,8 @@ sugerido en la VM:
 ```cron
 0 3 * * * cd /ruta/a/Corestream && ./backend/scripts/backup_db.sh >> /var/log/corestream-backup.log 2>&1
 ```
+
+`MFA_ENCRYPTION_KEY` es parte del respaldo.** Los secretos del 2FA se guardan cifrados en la base de datos; un dump restaurado sin la misma clave no se puede descifrar y obligaría a resetear el 2FA de todos los usuarios. Guardar la clave en un gestor de contraseñas, **separada** de los dumps y fuera del repositorio.
 
 `backend/scripts/restore_db.sh <dump>` restaura (pide confirmación
 explícita — sobrescribe la base actual). Ensayar la restauración contra una

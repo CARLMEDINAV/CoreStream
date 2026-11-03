@@ -9,17 +9,11 @@ reflejarse aquí en el mismo commit.
 Definidos en `app/models/role.py` (`UserRole`) y reflejados en la tabla
 `roles` (seedeada por la migración `a2b3c4d5e6f7_seed_base_roles`):
 
-- **ADMIN** — el único que administra usuarios (invitar, cambiar roles,
-  resetear contraseñas) y la estructura completa del sistema (aplicaciones,
-  épicas, tickets). No ejecuta trabajo operativo sobre tickets (no puede
-  iniciar/completar/preguntar) — ver nota sobre `require_non_admin` más
-  abajo.
-- **TEAM_LEADER** — gestiona el trabajo de su equipo: puede hacer todo lo que
-  hace un DEVELOPER sobre tickets propios, más las acciones de gestión
-  (crear/editar/borrar/reasignar tickets y épicas, crear/editar/borrar
-  aplicaciones, resolver preguntas bloqueantes ajenas, redirigir tickets,
-  gestionar reuniones e incidentes). No puede invitar usuarios, cambiar
-  roles ni resetear contraseñas — eso queda exclusivo de ADMIN.
+- **ADMIN** — el único que administra usuarios (invitar, cambiar roles, resetear contraseñas),
+ **gestiona la política de 2FA de su cliente y resetea el 2FA de otros usuarios**, y la estructura
+  completa del sistema.
+- **TEAM_LEADER** — No puede invitar usuarios, cambiar roles, resetear contraseñas 
+**ni gestionar el 2FA de la organización** — eso queda exclusivo de ADMIN.
 - **DEVELOPER** — ejecuta el trabajo: solo puede actuar sobre tickets/
   subtareas/documentos que le pertenecen (asignado o autor de la carga).
 Las listas de roles válidos derivan de `UserRole` en los sitios que las usan
@@ -419,3 +413,25 @@ conoce la IP del proxy, sirve acotar a los rangos privados
 | `app/services/audit_service.py` | Lo que habla con la base de datos: registrar, purgar, consultar |
 | `app/services/audit_export.py` | Exportación en CSV |
 | `app/routers/audit_logs.py` | HTTP: consulta y exportación |
+
+
+
+
+### Verificación en dos pasos y SSO (`/api/auth/mfa`, `/api/auth/sso`)
+
+
+| Acción | ADMIN | TEAM_LEADER | DEVELOPER |
+|---|---|---|---|
+| Consultar su estado de 2FA y regenerar sus códigos | ✅ | ✅ | ✅ |
+| Activar / desactivar su propio 2FA desde la interfaz | ✅ | ❌ | ❌ |
+| Exigir o quitar la política de 2FA del cliente (`PUT /mfa/policy`) | ✅ | ❌ | ❌ |
+| Resetear el 2FA de otro usuario (`DELETE /mfa/users/{id}`) | ✅ (solo su cliente) | ❌ | ❌ |
+| Iniciar sesión por SSO | ✅ | ✅ | ✅ (si ya tienen cuenta) |
+
+
+Notas:
+- La restricción de activar/desactivar el 2FA propio a ADMIN es de **interfaz**; la API lo permite a cualquier autenticado si la política no lo impide.
+- `/mfa/verify`, `/mfa/setup` y `/mfa/confirm` aceptan un token intermedio (`mfa_challenge` / `mfa_setup`) que no sirve como token de acceso.
+- Un ADMIN no puede exigir 2FA al cliente sin tener el suyo activo.
+- El reseteo es 404 si el usuario pertenece a otro cliente.
+
