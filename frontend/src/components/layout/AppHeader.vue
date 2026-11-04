@@ -80,6 +80,14 @@
         </button>
       </div>
     </div>
+    <nav v-if="authStore.accesoPlataforma" class="px-4 pb-3 flex justify-end" :aria-label="textosPlataforma.entry">
+      <RouterLink
+        to="/platform/plans"
+        class="px-3 py-2 rounded-lg text-sm font-medium text-[var(--text-primary)] border border-[var(--teal)] hover:bg-[var(--bg-panel)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--teal)]"
+      >
+        {{ textosPlataforma.entry }} · {{ textosPlataforma.title }}
+      </RouterLink>
+    </nav>
   </header>
   <!-- ========================================== -->
   <!-- MODAL DE CONFIGURACIÓN (CS-043)            -->
@@ -259,6 +267,7 @@ import { api } from '@/services/api'
 import NotificationBell from '@/components/shared/NotificationBell.vue'
 import logoUrl from '@/assets/logo-corestream.jpeg'
 import { eventBus } from '@/utils/eventBus'
+import { platformMessages } from '@/i18n/platform'
 
 // ============================================================================
 // ESTADOS REACTIVOS
@@ -274,6 +283,7 @@ const themeStore = useThemeStore()
 const dialogStore = useDialogStore()
 const i18n = useI18n()
 const { t } = i18n
+const textosPlataforma = computed(() => platformMessages[i18n.locale.value] ?? platformMessages.es)
 const router = useRouter()
 
 

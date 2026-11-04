@@ -80,11 +80,21 @@ AUDIT_RETENTION_DAYS: dict[str, int] = {
 DEFAULT_RETENTION_DAYS = min(AUDIT_RETENTION_DAYS.values())
 
 
-def features_for(plan: str | None, *, is_active: bool = True) -> frozenset[str]:
+def features_for(
+    plan: str | None, *, is_active: bool = True,
+    overrides: dict[str, bool] | None = None,
+) -> frozenset[str]:
     """Banderas habilitadas. Un cliente inactivo no tiene ninguna."""
-    if not is_active:
+    if not is_active or plan not in PLAN_FEATURES:
         return frozenset()
-    return PLAN_FEATURES.get(plan or "", frozenset())
+    habilitadas = set(PLAN_FEATURES[plan])
+    for bandera, activa in (overrides or {}).items():
+        if bandera in ALL_FEATURES:
+            if activa is True:
+                habilitadas.add(bandera)
+            else:
+                habilitadas.discard(bandera)
+    return frozenset(habilitadas)
 
 
 def is_known_feature(feature_flag: str) -> bool:

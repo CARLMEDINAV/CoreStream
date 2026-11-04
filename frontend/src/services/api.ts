@@ -27,6 +27,7 @@ import type {
   LoginRequest,
   LoginOutcome,
   MfaSetupData,
+  MfaStatus,
   TicketFilters,
   PaginatedResponse,
   Incident,
@@ -388,6 +389,10 @@ const toWebhookDelivery = (raw: any): WebhookDelivery => ({
 
 const realApi = {
   auth: {
+    getPlatformAccess: async (): Promise<boolean> => {
+      const respuesta = await apiClient.get<{ allowed: boolean }>('/platform/access')
+      return respuesta.data.allowed === true
+    },
     login: async (credentials: LoginRequest): Promise<LoginOutcome> => {
       const response = await apiClient.post<Record<string, unknown>>(
         '/auth/login',

@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import UUID as PyUUID
 from uuid import uuid4
 
-from sqlalchemy import DateTime, Integer, SmallInteger, String, func
+from sqlalchemy import JSON, DateTime, Integer, SmallInteger, String, func
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -85,3 +85,5 @@ class AuditLog(Base):
     ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    feature_flag: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    commercial_detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)

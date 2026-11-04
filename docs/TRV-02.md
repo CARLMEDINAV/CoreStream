@@ -105,9 +105,9 @@ TRV-01 es la dependencia necesaria y ya existe en esta copia: aporta `Client`,
 `client_id` y el aislamiento. La autenticación y WEB-02 también se reutilizan.
 No hace falta desarrollar otro requerimiento antes de TRV-02.
 
-NEW-11 es el futuro panel interno de administración de planes; depende de TRV-02,
-no al revés. No se añadió facturación, gestión de suscripciones ni edición
-individual de banderas por cliente.
+NEW-11 incorpora el panel interno de administración de planes y excepciones
+de banderas por cliente. Depende de TRV-02, no al revés. Consultar NEW-11.md
+para configurar el acceso interno. No se añadió facturación ni suscripciones.
 
 TRV-07 y TRV-08 quedaron fuera del cambio original de TRV-02 y se desarrollaron
 después, reutilizando este mismo mecanismo: TRV-08 depende de TRV-02 para leer el
@@ -128,7 +128,8 @@ entorno. Docker aplica las migraciones mediante su comando de arranque existente
 La migración nueva es `7e9ab80b3e68`, posterior a TRV-01 (`6d8fa79a2d57`). No se
 aplicó a la base local de trabajo durante este desarrollo.
 
-Hasta que exista NEW-11, el operador de la base puede asignar el plan por SQL.
+Con NEW-11 se recomienda asignar el plan desde la consola interna para conservar
+la auditoría del cambio. La alternativa histórica por SQL era la siguiente.
 Usar el identificador real del cliente que se quiere probar:
 
 ```sql

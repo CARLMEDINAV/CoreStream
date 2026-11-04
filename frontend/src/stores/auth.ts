@@ -35,6 +35,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   const user = ref<User | null>(null)
   const commercialProfile = ref<CommercialProfile | null>(null)
+  const accesoPlataforma = ref(false)
   const hasFeature = (flag: string): boolean =>
     commercialProfile.value?.is_active === true && commercialProfile.value.feature_flags[flag] === true
 
@@ -255,6 +256,13 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const userData = await api.auth.getMe()
       commercialProfile.value = await api.auth.getCommercialProfile()
+      accesoPlataforma.value = false
+      try {
+        accesoPlataforma.value = await api.auth.getPlatformAccess()
+      } catch {
+        // sin confirmacion del servidor, la entrada interna permanece oculta.
+        accesoPlataforma.value = false
+      }
       user.value = userData
 
       const savedTheme = userData.preferences?.theme
@@ -348,6 +356,7 @@ export const useAuthStore = defineStore('auth', () => {
   const clearSession = (): void => {
     disconnectRealtime()
     commercialProfile.value = null
+    accesoPlataforma.value = false
     user.value = null
     accessToken.value = null
     isAuthenticated.value = false
@@ -386,6 +395,7 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     // Estado
     commercialProfile,
+    accesoPlataforma,
     hasFeature,
     user,
     accessToken,

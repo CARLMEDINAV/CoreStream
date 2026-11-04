@@ -34,7 +34,10 @@ from app.routers import (
     incidents,
     invitations,
     meetings,
+    mfa,
     notifications,
+    platform,
+    sso,
     subtasks,
     support_tickets,
     ticket_redirection,
@@ -43,8 +46,6 @@ from app.routers import (
     users,
     webhooks,
     websocket,
-    mfa,
-    sso,
 )
 from app.services.notification_service import set_arq_pool
 from app.tenant_scope import register_tenant_scope
@@ -203,6 +204,7 @@ Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_sch
 # Estos routers se crearían en carpeta app/routers/
 
 app.include_router(auth.router, prefix="/api/auth")
+app.include_router(platform.router)
 app.include_router(
     users.router, prefix="/api/users",
     dependencies=[Depends(require_feature("team"))],

@@ -9,9 +9,10 @@ import AdminLayout from '@/layouts/AdminLayout.vue'
 import CodeDocsView from '@/views/admin/CodeDocsView.vue'
 import es from '@/i18n/es'
 import router from '@/router'
+import AppHeader from '@/components/layout/AppHeader.vue'
 
 vi.mock('@/services/api', () => ({
-  api: { auth: { login: vi.fn(), refresh: vi.fn(), getMe: vi.fn(), getCommercialProfile: vi.fn() } },
+  api: { auth: { login: vi.fn(), refresh: vi.fn(), getMe: vi.fn(), getCommercialProfile: vi.fn(), getPlatformAccess: vi.fn() } },
   setAuthTokens: vi.fn(), clearAuthTokens: vi.fn(),
 }))
 vi.mock('@/composables/useWebSocket', () => ({
@@ -37,12 +38,43 @@ beforeEach(() => {
   vi.resetAllMocks()
   vi.mocked(api.auth.getMe).mockResolvedValue({ id: 'user-a', role: 'ADMIN' } as any)
   vi.mocked(api.auth.getCommercialProfile).mockResolvedValue(profile())
+  vi.mocked(api.auth.getPlatformAccess).mockResolvedValue(false)
   vi.mocked(api.auth.login).mockResolvedValue({ tokens: { accessToken: 'token' } } as any)
   vi.mocked(api.auth.refresh).mockResolvedValue({ accessToken: 'token' } as any)
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
 })
 
 describe('TRV-02', () => {
+  it('muestra la entrada interna solo con permiso y lo limpia al cerrar sesion', async () => {
+    const auth = useAuthStore()
+    await auth.login('a@test.com', 'password')
+    const vista = shallowMount(AppHeader, { global: {
+      plugins: [router, createI18n({ legacy: false, locale: 'es', messages: { es } })],
+      stubs: { RouterLink: { props: ['to'], template: '<a :href="to"><slot /></a>' } },
+    } })
+    await router.isReady()
+    expect(vista.find('a[href="/platform/plans"]').exists()).toBe(false)
+    vi.mocked(api.auth.getPlatformAccess).mockClear()
+    vi.mocked(api.auth.getPlatformAccess).mockResolvedValue(true)
+    await auth.initialize()
+    expect(api.auth.getPlatformAccess).toHaveBeenCalledOnce()
+    expect(vista.get('a[href="/platform/plans"]').text()).toContain('Administración de plataforma')
+    auth.clearSession()
+    await nextTick()
+    expect(vista.find('a[href="/platform/plans"]').exists()).toBe(false)
+    vista.unmount()
+  })
+
+  it('oculta la entrada si el permiso se revoca o falla la consulta sin bloquear el login', async () => {
+    const auth = useAuthStore()
+    vi.mocked(api.auth.getPlatformAccess).mockResolvedValue(true)
+    await auth.login('a@test.com', 'password')
+    expect(auth.accesoPlataforma).toBe(true)
+    vi.mocked(api.auth.getPlatformAccess).mockRejectedValue(new Error('403'))
+    await auth.fetchMe()
+    expect(auth.accesoPlataforma).toBe(false)
+    expect(auth.isAuthenticated).toBe(true)
+  })
   it('consulta el perfil al iniciar y restaurar la sesión', async () => {
     const auth = useAuthStore()
     await auth.login('a@test.com', 'password')

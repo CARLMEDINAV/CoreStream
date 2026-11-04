@@ -69,6 +69,7 @@ def build_entry(
     ip: str | None = None,
     user_agent: str | None = None,
     duration_ms: int | None = None,
+    feature_flag: str | None = None,
 ) -> dict[str, Any]:
     """
     Entrada de auditoría para un acto que no atraviesa el middleware HTTP.
@@ -96,6 +97,7 @@ def build_entry(
         "ip": ip,
         "user_agent": user_agent,
         "duration_ms": duration_ms,
+        "feature_flag": feature_flag,
     }
 
 

@@ -29,6 +29,21 @@ import { useAuthStore } from '@/stores/auth'
  */
 const routes: RouteRecordRaw[] = [
   {
+    path: '/platform/plans',
+    name: 'PlatformPlans',
+    component: () => import('@/views/PlatformPlansView.vue'),
+    meta: { requiresAuth: true, title: 'CoreStream - Alloxentric' },
+    beforeEnter: async () => {
+      try {
+        const { apiClient } = await import('@/services/api')
+        await apiClient.get('/platform/access')
+        return true
+      } catch {
+        return '/'
+      }
+    },
+  },
+  {
     /**
      * Ruta raíz. Antes resolvía el destino con un `redirect(to)` síncrono
      * que leía accessToken de localStorage — funcionaba porque el token

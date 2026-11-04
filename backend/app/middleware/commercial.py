@@ -4,10 +4,17 @@ from fastapi import Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.context import get_audit_bucket
 from app.database import get_db
 from app.middleware.auth import get_current_user
 from app.models import Client, User
-from app.plans import ALL_FEATURES, features_for, is_known_feature
+from app.plans import (
+    ALL_FEATURES,
+    ENTERPRISE_FEATURES,
+    PREMIUM_FEATURES,
+    features_for,
+    is_known_feature,
+)
 from app.schemas.commercial import CommercialProfile
 
 
@@ -20,7 +27,9 @@ async def get_commercial_profile(
     if client is None:
         raise HTTPException(403, detail="Perfil comercial no disponible")
 
-    enabled = features_for(client.commercial_plan, is_active=client.is_active)
+    enabled = features_for(
+        client.commercial_plan, is_active=client.is_active, overrides=client.feature_overrides,
+    )
     return CommercialProfile(
         client_id=client.id, plan=client.commercial_plan, is_active=client.is_active,
         feature_flags={key: key in enabled for key in sorted(ALL_FEATURES)},
@@ -32,6 +41,9 @@ def require_feature(feature_flag: str):
         raise ValueError(f"Feature flag desconocida: {feature_flag}")
 
     async def check(profile: CommercialProfile = Depends(get_commercial_profile)) -> None:
+        contexto = get_audit_bucket()
+        if contexto is not None and feature_flag in PREMIUM_FEATURES | ENTERPRISE_FEATURES:
+            contexto["feature_flag"] = feature_flag
         if not profile.feature_flags.get(feature_flag, False):
             raise HTTPException(403, detail={
                 "code": "FEATURE_NOT_INCLUDED", "feature_flag": feature_flag,

@@ -118,6 +118,7 @@ def _build_entry(
         "ip": _client_ip(request),
         "user_agent": (request.headers.get("user-agent") or "")[:_MAX_USER_AGENT] or None,
         "duration_ms": duration_ms,
+        "feature_flag": bucket.get("feature_flag"),
     }
 
 
@@ -144,7 +145,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     request.method,
                     status_code,
                     request.url.path,
-                    audit_reads=get_settings().AUDIT_READS,
+                    audit_reads=get_settings().AUDIT_READS or bool(bucket.get("feature_flag")),
                     deferred=bool(bucket.get("deferred")),
                 ):
                     await record(

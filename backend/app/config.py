@@ -3,6 +3,7 @@
 
 from functools import lru_cache
 from typing import Union
+from uuid import UUID
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
@@ -36,6 +37,14 @@ class Settings(BaseSettings):
         env_file: Ruta del archivo .env para cargar variables de entorno
     """
     
+    PLATFORM_ADMIN_IDS: list[UUID] = []
+    PLATFORM_CLIENT_ID: UUID | None = None
+
+    @field_validator("PLATFORM_CLIENT_ID", mode="before")
+    @classmethod
+    def validar_cliente_interno(cls, valor):
+        return valor or None
+
     # Configuración de Base de Datos
     # URL para conectarse a PostgreSQL con soporte para operaciones asincrónicas
     # Railway genera postgresql:// — el validator lo convierte a postgresql+asyncpg://

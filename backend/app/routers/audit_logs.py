@@ -83,6 +83,7 @@ async def _record_export(
         ),
         route_template="/api/audit-logs/export",
         resource_type="audit_export",
+        feature_flag="audit_export",
         status_code=status_code,
         ip=request.client.host if request.client else None,
         user_agent=(request.headers.get("user-agent") or "")[:512] or None,

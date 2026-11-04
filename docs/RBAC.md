@@ -1,5 +1,7 @@
 # RBAC — Matriz de permisos
 
+NEW-11: /api/platform requiere una cuenta activa incluida en PLATFORM_ADMIN_IDS y perteneciente al cliente interno activo PLATFORM_CLIENT_ID. Este permiso no se deriva de ADMIN, TEAM_LEADER ni DEVELOPER y no se puede asignar mediante la API de usuarios. Permite consultar perfiles comerciales entre clientes, cambiar planes y excepciones, consultar uso premium y el historial comercial. Las cuentas deben pertenecer a una organización exclusiva de Alloxentric, administrada solamente por personal interno de confianza. El resto de los endpoints conserva su aislamiento por cliente. Detalles y preparación en docs/NEW-11.md.
+
 Este documento describe **quién puede hacer qué** en CoreStream. Es la
 referencia autoritativa: cualquier cambio de autorización en el backend debe
 reflejarse aquí en el mismo commit.
