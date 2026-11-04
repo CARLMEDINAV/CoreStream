@@ -6,8 +6,8 @@ from .document import Document, DocumentType
 from .epic import Epic
 from .incident import AffectedEnvironment, Incident, IncidentSeverity, IncidentStatus
 from .invitation import Invitation
-from .mfa import UserIdentity, UserRecoveryCode
 from .meeting import AttendanceStatus, Meeting, MeetingAttendance, MeetingType
+from .mfa import UserIdentity, UserRecoveryCode
 from .notification import Notification, NotificationType
 from .role import Role, UserRole
 from .subtask import Subtask

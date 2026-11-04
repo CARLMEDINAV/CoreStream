@@ -67,7 +67,7 @@ Pruebas automatizadas nuevas en backend/tests/test_platform.py: autorización in
 Suite de backend: 357 correctas y una omitida. Comando desde backend: ..\.venv\Scripts\python.exe -m pytest tests --ignore=tests/integration -q.
 Pruebas de frontend: 9 correctas entre tests/unit/platform.spec.ts y tests/unit/stores/commercial.spec.ts. Incluyen edición de planes, visibilidad de la entrada interna, restauración de permisos y limpieza de sesión.
 Compilación Vite correcta. Ruff correcto en todos los archivos Python modificados. Alembic tiene una sola cabeza y genera correctamente el SQL PostgreSQL de la migración.
-La revisión de tipos del frontend pasa. Se corrigió la importación de MfaStatus en services/api.ts: el tipo ya existía en types/index.ts y describe el estado de la verificación en dos pasos. El lint general del backend señala un orden de imports previo en app/models/__init__.py, fuera de este cambio.
+La revisión de tipos del frontend pasa. Se corrigió la importación de MfaStatus en services/api.ts: el tipo ya existía en types/index.ts y describe el estado de la verificación en dos pasos. También se corrigió el orden de imports en app/models/__init__.py que bloqueaba GitHub Actions. La validación completa ruff check app tests pasa con Ruff 0.16.1.
 No se aplicó la migración a la base de trabajo ni se ejecutó integración con PostgreSQL y Redis reales o un recorrido manual en navegador. La prueba manual anterior queda propuesta, no ejecutada.
 
 No se realizó commit, push ni despliegue.
