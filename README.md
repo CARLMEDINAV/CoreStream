@@ -8,6 +8,8 @@ El backend funciona con **FastAPI** (Python) utilizando PostgreSQL y Redis. El f
 
 Toda la documentación se ha consolidado en el directorio `docs/` para ayudarte a entender el *Cómo*, *Por qué* y *Qué* de CoreStream:
 
+- 📘 **[Manual de usuario](docs/manual/MANUAL_USUARIO.md)** - Uso de cada pantalla por rol, con capturas.
+- 🛠️ **[Manual de instalación](docs/manual/MANUAL_INSTALACION.md)** - Instalación local, producción, Kubernetes, copias y resolución de problemas.
 - 🏗️ **[Arquitectura](docs/ARCHITECTURE.md)** - Flujo del sistema, tecnologías e interacción de componentes.
 - ⚙️ **[Guía de Instalación](docs/SETUP.md)** - Instrucciones para ejecutar el proyecto localmente vía Docker o de forma manual.
 - 🔮 **[Trabajo Futuro](docs/FUTURE_WORK.md)** - Ideas y tareas planeadas para el desarrollo futuro.
