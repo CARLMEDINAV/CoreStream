@@ -1,5 +1,5 @@
 // NOTA: Requiere un ticket en estado IN_PROGRESS asignado al developer.
-// La sección "Levantar Pregunta" solo aparece en tickets IN_PROGRESS o TODO.
+// La sección "Levantar Pregunta" solo aparece en tickets IN_PROGRESS.
 
 describe('Levantar Pregunta', () => {
   before(() => {

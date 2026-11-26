@@ -21,6 +21,7 @@ class MeetingType(str, Enum):
     DAILY = "DAILY"
     PLANNING = "PLANNING"
     RETROSPECTIVE = "RETROSPECTIVE"
+    REFINEMENT = "REFINEMENT"
     OTHER = "OTHER"
 
 class AttendanceStatus(str, Enum):

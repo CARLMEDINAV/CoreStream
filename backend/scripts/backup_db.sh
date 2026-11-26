@@ -16,7 +16,8 @@
 #   RETENTION_DAYS     Días que se conservan los backups (default: 14)
 #
 # Pensado para un cron diario en la VM, por ejemplo:
-#   0 3 * * * cd /ruta/a/Corestream && ./backend/scripts/backup_db.sh >> /var/log/corestream-backup.log 2>&1
+#   0 3 * * * cd /ruta/a/Corestream && set -a && . /ruta/segura/corestream-backup.env && ./backend/scripts/backup_db.sh >> /var/log/corestream-backup.log 2>&1
+# (corestream-backup.env define POSTGRES_PASSWORD; permisos 600, fuera del repo)
 # =====================================================================
 set -eu
 

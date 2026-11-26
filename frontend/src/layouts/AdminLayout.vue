@@ -97,6 +97,15 @@
           </router-link>
         </template>
 
+        <!-- Vuelta al área de desarrollo del líder -->
+        <router-link
+          v-if="authStore.isTeamLeader"
+          to="/dev/workbench"
+          class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
+        >
+          {{ t('nav.development') }}
+        </router-link>
+
         <div v-if="isAdmin && authStore.commercialProfile" class="px-4 py-3 text-sm text-[var(--text-secondary)] border-t border-[var(--border-subtle)]">
           <p>{{ t('commercial.plan') }}: {{ authStore.commercialProfile.plan }}</p>
           <p>{{ t(authStore.commercialProfile.is_active ? 'commercial.active' : 'commercial.inactive') }}</p>

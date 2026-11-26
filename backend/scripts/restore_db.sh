@@ -3,7 +3,10 @@
 # Restauración de un backup de PostgreSQL para CoreStream (plan fase 7.3).
 #
 # Uso:
-#   POSTGRES_PASSWORD=... ./backend/scripts/restore_db.sh backups/corestream_20260101_030000.sql.gz
+#   POSTGRES_PASSWORD=... ./backend/scripts/restore_db.sh backups/corestream_20260101_030000.sql.gz [backups/corestream_storage_20260101_030000.tar.gz]
+#
+# El segundo fichero es opcional: repone los documentos del volumen de storage
+# (sobrescribe los que coincidan; no borra ninguno).
 #
 # ADVERTENCIA: esto SOBRESCRIBE la base de datos "corestream" en la
 # instancia de Postgres compartida de la VM (contenedor db-postgre, no un
@@ -19,7 +22,14 @@ POSTGRES_DB="${POSTGRES_DB:-corestream}"
 POSTGRES_USER="${POSTGRES_USER:-corestream}"
 : "${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD}"
 
-DUMP_FILE="${1:?Uso: restore_db.sh <ruta-al-dump.sql.gz>}"
+DUMP_FILE="${1:?Uso: restore_db.sh <ruta-al-dump.sql.gz> [<ruta-al-storage.tar.gz>]}"
+STORAGE_FILE="${2:-}"
+STORAGE_VOLUME="${STORAGE_VOLUME:-corestream_storage-data}"
+
+if [ -n "$STORAGE_FILE" ] && [ ! -f "$STORAGE_FILE" ]; then
+    echo "No existe el fichero: $STORAGE_FILE" >&2
+    exit 1
+fi
 
 if [ ! -f "$DUMP_FILE" ]; then
     echo "No existe el fichero: $DUMP_FILE" >&2
@@ -38,5 +48,10 @@ fi
 # para que la restauración sea idempotente incluso si la BD no está vacía.
 gunzip -c "$DUMP_FILE" | docker exec -i -e PGPASSWORD="$POSTGRES_PASSWORD" "$POSTGRES_CONTAINER" \
     pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner
+
+if [ -n "$STORAGE_FILE" ]; then
+    docker run --rm -i -v "$STORAGE_VOLUME":/data alpine tar xzf - -C /data < "$STORAGE_FILE"
+    echo "Storage restaurado en el volumen $STORAGE_VOLUME."
+fi
 
 echo "Restauración completa."

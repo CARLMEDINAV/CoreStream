@@ -43,6 +43,17 @@ services:
       ALGORITHM: ${ALGORITHM:-HS256}
       PLATFORM_ADMIN_IDS: ${PLATFORM_ADMIN_IDS:-[]}
       PLATFORM_CLIENT_ID: ${PLATFORM_CLIENT_ID:-}
+      # 2FA y SSO (NEW-08). La clave es obligatoria en producción.
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:-}
+      MFA_ISSUER: ${MFA_ISSUER:-CoreStream}
+      MFA_CHALLENGE_TTL_SECONDS: ${MFA_CHALLENGE_TTL_SECONDS:-300}
+      SSO_PUBLIC_BASE_URL: ${SSO_PUBLIC_BASE_URL:-http://localhost:8000}
+      SSO_FRONTEND_URL: ${SSO_FRONTEND_URL:-http://localhost:5173}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID:-}
+      MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET:-}
+      MICROSOFT_TENANT: ${MICROSOFT_TENANT:-common}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
       REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://CAMBIAR-en-.env}
@@ -141,6 +152,8 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-production}
       DEBUG: ${DEBUG:-false}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # El worker valida la misma configuración que la API al arrancar.
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:-}
       # La purga de retención se audita a sí misma, así que el worker también
       # escribe en el registro y necesita los mismos destinos que la API: si
       # aquí faltaran, el único evento que borra auditoría no se derivaría al

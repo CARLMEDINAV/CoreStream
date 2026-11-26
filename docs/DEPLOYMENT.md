@@ -75,7 +75,8 @@ coordinación que hacer.
 6. Ningún usuario `@example.com` en la base de datos (no debería haber
    ninguno — ya no existe ningún seeder que los cree).
 7. Primer ADMIN creado con `docker compose exec backend python -m
-   app.scripts.create_admin`, con una contraseña que no viva en ningún
+   app.scripts.create_admin --email <correo> --client-slug <slug>
+   --client-name <nombre>`, con una contraseña que no viva en ningún
    repositorio.
 8. Comunicarle a quien configure el enrutamiento público los dos puertos
    de arriba (8010 backend, 8080 frontend) — dos puntos que se olvidan
@@ -100,7 +101,7 @@ coordinación que hacer.
     docker compose exec backend pytest tests/integration -q
     ```
 11. `MFA_ENCRYPTION_KEY` generada con
-     `docker compose exec backend python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
+     `openssl rand -base64 32 | tr '+/' '-_'`
      (obligatoria en producción: el backend aborta el arranque sin ella; guardar una copia fuera del repositorio — si se pierde hay que resetear el 2FA de todos).
    
 
@@ -112,12 +113,16 @@ volumen de storage (documentos/adjuntos), con rotación configurable. Cron
 sugerido en la VM:
 
 ```cron
-0 3 * * * cd /ruta/a/Corestream && ./backend/scripts/backup_db.sh >> /var/log/corestream-backup.log 2>&1
+0 3 * * * cd /ruta/a/Corestream && set -a && . /ruta/segura/corestream-backup.env && ./backend/scripts/backup_db.sh >> /var/log/corestream-backup.log 2>&1
 ```
+
+`corestream-backup.env` (permisos 600, fuera del repositorio) define
+`POSTGRES_PASSWORD`; sin esa variable el script se detiene.
 
 `MFA_ENCRYPTION_KEY` es parte del respaldo.** Los secretos del 2FA se guardan cifrados en la base de datos; un dump restaurado sin la misma clave no se puede descifrar y obligaría a resetear el 2FA de todos los usuarios. Guardar la clave en un gestor de contraseñas, **separada** de los dumps y fuera del repositorio.
 
-`backend/scripts/restore_db.sh <dump>` restaura (pide confirmación
+`backend/scripts/restore_db.sh <dump> [<storage.tar.gz>]` restaura la base y,
+si se indica el segundo fichero, los documentos subidos (pide confirmación
 explícita — sobrescribe la base actual). Ensayar la restauración contra una
 base de datos limpia antes de necesitarla de verdad es parte del checklist,
 no un paso opcional.

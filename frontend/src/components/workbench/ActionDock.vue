@@ -90,7 +90,7 @@
     <!-- Ámbar (#F59E0B) -->
     <!-- Bloquea el ticket, requiere mínimo 10 caracteres -->
     <!-- ================================================================ -->
-    <div data-cy="pregunta-form" v-if="ticket.status === TicketStatus.IN_PROGRESS || ticket.status === TicketStatus.TODO" class="space-y-2">
+    <div data-cy="pregunta-form" v-if="ticket.status === TicketStatus.IN_PROGRESS" class="space-y-2">
       <!-- Label -->
       <label class="block text-xs font-semibold text-[var(--text-secondary)]">
         Levantar Pregunta

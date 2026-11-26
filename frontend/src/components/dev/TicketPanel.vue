@@ -141,11 +141,11 @@
           </p>
 
           <div class="grid grid-cols-2 gap-3">
-            <!-- Preguntar (activo en IN_PROGRESS y TODO) -->
+            <!-- Preguntar (solo en IN_PROGRESS: el backend rechaza el resto) -->
             <button
               @click="showQuestionForm = !showQuestionForm"
-              :disabled="ticket?.status !== 'IN_PROGRESS' && ticket?.status !== 'TODO'"
-              :class="ticket?.status === 'IN_PROGRESS' || ticket?.status === 'TODO'
+              :disabled="ticket?.status !== 'IN_PROGRESS'"
+              :class="ticket?.status === 'IN_PROGRESS'
                 ? 'bg-purple-500 text-white hover:bg-purple-600 cursor-pointer'
                 : 'bg-[var(--bg-panel)] text-[var(--text-muted)] border border-[var(--border-subtle)] cursor-not-allowed opacity-60'"
               class="w-full flex items-center justify-center gap-2 font-semibold py-2.5 rounded-xl transition-colors"
@@ -171,7 +171,7 @@
 
         <!-- Mini-form de pregunta -->
         <Transition name="slide-down">
-          <div v-if="showQuestionForm" data-cy="pregunta-form" class="mt-3 p-4 bg-[var(--bg-panel)] rounded-xl border border-[var(--border-subtle)]">
+          <div v-if="showQuestionForm && ticket?.status === 'IN_PROGRESS'" data-cy="pregunta-form" class="mt-3 p-4 bg-[var(--bg-panel)] rounded-xl border border-[var(--border-subtle)]">
             <label class="text-xs font-semibold text-[var(--text-secondary)] mb-2 block">¿Qué impide avanzar?</label>
             <textarea
               data-cy="pregunta-textarea"

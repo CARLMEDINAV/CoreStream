@@ -76,11 +76,14 @@ No existe ningún usuario por defecto ni seeder que cree uno: es deliberado
 recreaban en cada arranque). El primer ADMIN se crea a mano, una vez:
 
 ```bash
-docker compose exec backend python -m app.scripts.create_admin \
-    --email tu-email@empresa.com --password "unaClaveSegura123!"
+docker compose -f docker-compose.yml -f docker-compose.dev.yml exec backend \
+    python -m app.scripts.create_admin --email tu-email@empresa.com \
+    --client-slug empresa --client-name "Empresa"
 ```
 
-El script se niega a correr si ya existe un ADMIN. El resto de usuarios se
+`--client-slug` es obligatorio; `--client-name`, solo si el cliente aún no
+existe. Sin `--password`, genera una contraseña y la muestra una sola vez.
+El script se niega a correr si ese cliente ya tiene un ADMIN. El resto de usuarios se
 crean por invitación: como ADMIN, desde **Equipo → Invitar**, se genera un
 enlace de un solo uso que el invitado usa para elegir su propia contraseña.
 
@@ -109,7 +112,8 @@ se usará en la VM (sin el overlay de desarrollo):
 cp .env.example .env
 # Rellenar DATABASE_URL, REDIS_URL (una instancia de Postgres/Redis real,
 # aunque sea local — el perfil de producción no levanta la suya propia),
-# SECRET_KEY (openssl rand -hex 32), ALLOWED_ORIGINS, y dejar
+# SECRET_KEY (openssl rand -hex 32), MFA_ENCRYPTION_KEY
+# (openssl rand -base64 32 | tr '+/' '-_'), ALLOWED_ORIGINS, y dejar
 # ENVIRONMENT=production
 
 docker compose up -d --build
@@ -125,7 +129,7 @@ Con `ENVIRONMENT=production`, el backend **aborta el arranque** si
 
 ```bash
 ./backend/scripts/backup_db.sh        # backup de Postgres + volumen de storage
-./backend/scripts/restore_db.sh <ruta-al-dump.sql.gz>   # restauración (pide confirmación)
+./backend/scripts/restore_db.sh <ruta-al-dump.sql.gz> [<ruta-al-storage.tar.gz>]   # restauración (pide confirmación)
 ```
 
 Ver `DEPLOYMENT.md` para la configuración de cron en la VM.

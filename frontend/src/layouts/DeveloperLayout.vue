@@ -61,6 +61,15 @@
           {{ t('incidencias.titulo') }}
         </router-link>
 
+        <!-- El líder también gestiona proyectos, analítica y reuniones -->
+        <router-link
+          v-if="authStore.isTeamLeader"
+          to="/admin/builder"
+          class="block px-4 py-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-panel)]"
+        >
+          {{ t('nav.administration') }}
+        </router-link>
+
       </nav>
     </aside>
 
