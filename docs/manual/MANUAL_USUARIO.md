@@ -219,7 +219,7 @@ Las P1 y P2 abiertas aparecen en **Atención**. Todos los cambios quedan en **Hi
 
 ### Reuniones
 
-En **Reuniones**, pulsa **Agendar Ceremonia** e indica título, tipo, fecha y hora. Registra después la asistencia (Presente, Ausente o Justificado) y el acta, que admite Markdown.
+En **Reuniones**, pulsa **Agendar Ceremonia** e indica título, tipo, fecha, hora y duración en minutos (30 por defecto). Registra después la asistencia (Presente, Ausente o Justificado) y el acta, que admite Markdown.
 
 Los tipos disponibles son Daily Scrum, Sprint Planning, Retrospectiva, Refinamiento y Otra Ceremonia.
 

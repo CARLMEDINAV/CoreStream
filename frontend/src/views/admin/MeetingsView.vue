@@ -200,7 +200,7 @@ onMounted(() => {
                   <div>
                     <h4 class="font-semibold text-slate-900 dark:text-white">{{ meeting.title }}</h4>
                     <div class="flex items-center gap-3 text-sm text-slate-500 dark:text-[var(--text-muted)] mt-1">
-                      <span class="flex items-center gap-1"><Clock :size="14"/> {{ new Date(meeting.scheduledAt).toLocaleString('es', { hour: '2-digit', minute: '2-digit' }) }} ({{ meeting.durationMinutes }}m)</span>
+                      <span class="flex items-center gap-1"><Clock :size="14"/> {{ new Date(meeting.scheduledAt).toLocaleString('es', { hour: '2-digit', minute: '2-digit' }) }} ({{ meeting.durationMinutes }} min)</span>
                       <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border" :class="getMeetingTypeColor(meeting.meetingType)">
                         {{ getMeetingTypeLabel(meeting.meetingType) }}
                       </span>

@@ -28,6 +28,7 @@ class MeetingBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     meeting_type: MeetingType = Field(default=MeetingType.OTHER)
     scheduled_at: datetime
+    duration_minutes: int = Field(default=30, ge=5, le=480)
     summary_markdown: Optional[str] = Field(None, max_length=50_000)
     application_id: Optional[UUID] = None
 
@@ -38,6 +39,7 @@ class MeetingUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=255)
     meeting_type: Optional[MeetingType] = None
     scheduled_at: Optional[datetime] = None
+    duration_minutes: Optional[int] = Field(None, ge=5, le=480)
     summary_markdown: Optional[str] = Field(None, max_length=50_000)
     application_id: Optional[UUID] = None
 

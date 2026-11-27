@@ -94,14 +94,15 @@ async def create_user(
             detail="El email ya existe"
         )
 
-    dev_role_result = await db.execute(
-        select(Role).where(Role.name == UserRole.DEVELOPER.value)
+    # Antes se asignaba siempre DEVELOPER e ignoraba el rol pedido.
+    role_result = await db.execute(
+        select(Role).where(Role.name == user_data.role)
     )
-    dev_role = dev_role_result.scalar_one_or_none()
-    if not dev_role:
+    new_role = role_result.scalar_one_or_none()
+    if not new_role:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Rol DEVELOPER no encontrado en el sistema"
+            detail=f"Rol {user_data.role} no encontrado en el sistema"
         )
 
     new_user = User(
@@ -114,7 +115,7 @@ async def create_user(
         # liso y un usuario creado así nunca podría iniciar sesión — bug
         # preexistente en este endpoint, detectado al escribir create_admin.py.
         hashed_password=AuthService.hash_password(user_data.password),
-        role_id=dev_role.id,
+        role_id=new_role.id,
         client_id=current_user.client_id,
     )
 

@@ -37,6 +37,17 @@ class UserCreate(UserBase):
     password: str = Field(..., max_length=128)
     role: Optional[str] = "DEVELOPER"
 
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v: Optional[str]) -> str:
+        # ADMIN queda fuera a propósito: el primer administrador se crea con
+        # app.scripts.create_admin y los demás se promueven desde Equipo.
+        valid = {UserRole.DEVELOPER.value, UserRole.TEAM_LEADER.value}
+        role = v or UserRole.DEVELOPER.value
+        if role not in valid:
+            raise ValueError(f"Rol inválido. Roles válidos: {', '.join(sorted(valid))}")
+        return role
+
     @field_validator("password")
     @classmethod
     def validate_password_length(cls, v: str) -> str:

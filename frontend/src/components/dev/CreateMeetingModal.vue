@@ -16,13 +16,15 @@ const isSubmitting = ref(false)
 const form = reactive({
   title: '',
   meetingType: 'OTHER',
-  scheduledAt: ''
+  scheduledAt: '',
+  durationMinutes: 30
 })
 
 const resetForm = () => {
   form.title = ''
   form.meetingType = 'OTHER'
   form.scheduledAt = ''
+  form.durationMinutes = 30
 }
 
 const handleClose = () => {
@@ -45,7 +47,8 @@ const handleSubmit = async () => {
     const dataToSubmit = {
       title: form.title.trim(),
       meeting_type: form.meetingType,
-      scheduled_at: new Date(form.scheduledAt).toISOString()
+      scheduled_at: new Date(form.scheduledAt).toISOString(),
+      duration_minutes: form.durationMinutes
     }
     await api.meetings.create(dataToSubmit)
     emit('created')
@@ -118,6 +121,20 @@ const handleSubmit = async () => {
             type="datetime-local" 
             class="w-full px-4 py-2 bg-slate-50 dark:bg-[var(--bg-card)] border border-slate-200 dark:border-[var(--border-subtle)] rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all"
             required
+          >
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+            Duración (minutos)
+          </label>
+          <input
+            v-model.number="form.durationMinutes"
+            type="number"
+            min="5"
+            max="480"
+            step="5"
+            class="w-full px-4 py-2 bg-slate-50 dark:bg-[var(--bg-card)] border border-slate-200 dark:border-[var(--border-subtle)] rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all"
           >
         </div>
       </div>
